@@ -1,0 +1,36 @@
+# ─── Secrets — NEVER commit ───
+.env
+*.env
+.env.*
+backend/.env
+
+# ─── Python ───
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.Python
+
+# ─── Virtual environments ───
+venv/
+env/
+.venv/
+ENV/
+
+# ─── IDE ───
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Logs ───
+*.log
+logs/

@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+groq
+requests
+python-dotenv
+python-multipart
+beautifulsoup4
+scikit-learn
+numpy

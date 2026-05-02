@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark – AI Shopping Companion</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Outfit',sans-serif; }
+
+        html, body {
+            background: transparent;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #talk-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.45);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.6s ease;
+            z-index: 9990;
+        }
+        body.talking #talk-backdrop { opacity: 1; pointer-events: all; }
+
+        /* ══ WIDGET ══ */
+        #mark-widget {
+            position: fixed; width: 115px; height: 115px;
+            left: 5%; top: 70vh;
+            border-radius: 50%; overflow: hidden; cursor: grab;
+            z-index: 9999;
+            border: 3px solid rgba(102,126,234,0.95);
+            background: #080814;
+            box-shadow: 0 0 0 6px rgba(102,126,234,0.12), 0 0 25px rgba(102,126,234,0.7), 0 0 50px rgba(118,75,162,0.45);
+            transition: left 3.2s cubic-bezier(0.45,0,0.25,1), top 3.2s cubic-bezier(0.45,0,0.25,1),
+                        width 0.7s cubic-bezier(0.4,0,0.2,1), height 0.7s cubic-bezier(0.4,0,0.2,1),
+                        box-shadow 0.5s ease, border 0.5s ease, transform 0.6s cubic-bezier(0.4,0,0.2,1);
+        }
+        #mark-widget.dragging { cursor: grabbing; transition: width 0.7s, height 0.7s, transform 0.6s; }
+        #mark-widget.talking {
+            width: 320px !important; height: 320px !important;
+            left: 50% !important; top: 50% !important;
+            transform: translate(-50%, -55%) !important;
+            cursor: default !important;
+            border-color: rgba(168,85,247,0.95);
+            box-shadow: 0 0 0 8px rgba(168,85,247,0.18), 0 0 50px rgba(168,85,247,0.7), 0 0 100px rgba(102,126,234,0.5);
+            transition: all 0.7s cubic-bezier(0.4,0,0.2,1);
+        }
+        @media (max-width:768px) {
+            #mark-widget { width:95px; height:95px; }
+            #mark-widget.talking { width:260px !important; height:260px !important; }
+        }
+
+        #mark-hint {
+            position: absolute; bottom: calc(100% + 10px); left: 50%;
+            transform: translateX(-50%);
+            background: rgba(102,126,234,0.95); color: #fff;
+            font-size: 11px; font-weight: 700; padding: 5px 14px;
+            border-radius: 20px; white-space: nowrap; pointer-events: none;
+            box-shadow: 0 4px 14px rgba(102,126,234,0.5);
+            animation: hintBounce 1.8s ease-in-out infinite;
+        }
+        #mark-hint::after {
+            content:''; position:absolute; top:100%; left:50%;
+            transform:translateX(-50%); border:6px solid transparent;
+            border-top-color:rgba(102,126,234,0.95);
+        }
+        @keyframes hintBounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-7px)} }
+        body.talking #mark-hint { display: none; }
+
+        #three-container { position:absolute; top:0; left:0; width:100%; height:100%; }
+
+        /* ══ CHAT UI ══ */
+        .chat-ui { opacity:0; pointer-events:none; transition:opacity 0.5s ease 0.4s; }
+        body.talking .chat-ui { opacity:1; pointer-events:all; }
+
+        #live-caption {
+            position:fixed; top:50%; left:50%; transform:translate(-50%,-260px);
+            font-size:clamp(15px,2vw,20px); font-weight:500; color:#fff;
+            text-align:center; min-width:240px; max-width:600px;
+            background:rgba(20,20,35,0.85); backdrop-filter:blur(14px);
+            padding:14px 24px; border-radius:20px;
+            border:1px solid rgba(168,85,247,0.3);
+            box-shadow:0 8px 30px rgba(0,0,0,0.5);
+            z-index:10001; line-height:1.45; transition:opacity 0.4s ease;
+        }
+        @media(max-width:768px){ #live-caption{transform:translate(-50%,-210px);font-size:14px;padding:10px 18px} }
+
+        #thinking-indicator {
+            position:fixed; top:50%; left:50%; transform:translate(-50%,-260px);
+            z-index:10001; font-size:18px; font-weight:600;
+            color:rgba(168,85,247,0.95);
+            background:rgba(20,20,35,0.85); backdrop-filter:blur(14px);
+            padding:10px 22px; border-radius:20px;
+            border:1px solid rgba(168,85,247,0.3);
+            display:none; text-align:center;
+        }
+        #thinking-indicator.show { display:block; }
+        @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
+        #thinking-indicator::after { content:''; animation:dots 1.5s infinite; }
+        @media(max-width:768px){ #thinking-indicator{transform:translate(-50%,-210px);font-size:15px} }
+
+        #close-btn {
+            position:fixed; top:12%; right:8%;
+            width:42px; height:42px; border-radius:50%;
+            background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15);
+            color:rgba(255,255,255,0.7); font-size:20px; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+            z-index:10001; backdrop-filter:blur(8px); transition:all 0.2s ease;
+        }
+        #close-btn:hover { background:rgba(239,68,68,0.2); border-color:rgba(239,68,68,0.4); color:#ef4444; transform:scale(1.08); }
+
+        #mic-btn {
+            position:fixed; top:50%; left:50%; transform:translate(-50%,145px);
+            width:78px; height:78px; border-radius:50%;
+            background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+            border:none; color:white; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+            z-index:10001; box-shadow:0 10px 40px rgba(102,126,234,0.6);
+            user-select:none; -webkit-user-select:none; touch-action:none;
+            transition:all 0.25s ease;
+        }
+        #mic-btn.listening {
+            background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%);
+            transform:translate(-50%,145px) scale(1.12);
+            box-shadow:0 0 0 6px rgba(239,68,68,0.3),0 0 30px rgba(239,68,68,0.6);
+            animation:micPulse 1.2s ease-in-out infinite;
+        }
+        @keyframes micPulse {
+            0%,100%{box-shadow:0 0 0 6px rgba(239,68,68,0.3),0 0 30px rgba(239,68,68,0.6)}
+            50%{box-shadow:0 0 0 12px rgba(239,68,68,0.15),0 0 50px rgba(239,68,68,0.4)}
+        }
+        @media(max-width:768px){
+            #mic-btn{width:64px;height:64px;transform:translate(-50%,115px)}
+            #mic-btn.listening{transform:translate(-50%,115px) scale(1.12)}
+        }
+
+        #mic-hint {
+            position:fixed; top:50%; left:50%; transform:translate(-50%,230px);
+            color:rgba(255,255,255,0.7); font-size:12px; font-weight:500;
+            letter-spacing:0.05em; z-index:10001; text-align:center; white-space:nowrap;
+        }
+
+        /* ══ TEXT INPUT — alternative to voice ══ */
+        #text-input-area {
+            position:fixed; top:50%; left:50%; transform:translate(-50%,275px);
+            display:flex; gap:6px; z-index:10001; width:320px; max-width:90vw;
+        }
+        #text-input {
+            flex:1; padding:10px 16px; border-radius:25px;
+            border:1px solid rgba(168,85,247,0.3);
+            background:rgba(20,20,35,0.8); backdrop-filter:blur(10px);
+            color:#fff; font-size:14px; font-family:'Outfit',sans-serif;
+            outline:none; transition:border-color 0.3s ease;
+        }
+        #text-input::placeholder { color:rgba(255,255,255,0.35); }
+        #text-input:focus { border-color:rgba(168,85,247,0.7); }
+        #send-btn {
+            width:42px; height:42px; border-radius:50%;
+            background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+            border:none; color:white; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+            font-size:18px; transition:transform 0.2s ease;
+        }
+        #send-btn:hover { transform:scale(1.08); }
+        @media(max-width:768px){ #text-input-area{width:260px;transform:translate(-50%,250px)} }
+
+        .loading-overlay {
+            position:fixed; inset:0; background:rgba(0,0,0,0.92);
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            z-index:99999; transition:opacity 0.5s ease;
+        }
+        .loading-overlay.hidden { opacity:0; pointer-events:none; }
+        .loading-text { color:#fff; font-size:22px; font-weight:700; margin-bottom:18px; }
+        .loading-spinner { width:40px; height:40px; border:3px solid rgba(102,126,234,0.3); border-top-color:#667eea; border-radius:50%; animation:spin 0.9s linear infinite; }
+        @keyframes spin { to{transform:rotate(360deg)} }
+    </style>
+</head>
+
+<body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-text">Loading Mark…</div>
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div id="talk-backdrop"></div>
+
+    <div id="mark-widget">
+        <div id="mark-hint">Hi! Tap me</div>
+        <div id="three-container"></div>
+    </div>
+
+    <div id="live-caption" class="chat-ui"></div>
+    <div id="thinking-indicator" class="chat-ui">Mark is thinking</div>
+    <button id="close-btn" class="chat-ui" title="Close">&times;</button>
+
+    <button id="mic-btn" class="chat-ui" title="Hold to talk">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8"  y1="23" x2="16" y2="23"/>
+        </svg>
+    </button>
+    <div id="mic-hint" class="chat-ui">Hold to talk</div>
+
+    <!-- TEXT INPUT — type instead of speak -->
+    <div id="text-input-area" class="chat-ui">
+        <input type="text" id="text-input" placeholder="or type here..." autocomplete="off" />
+        <button id="send-btn" title="Send">&#10148;</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="mark-brain.js"></script>
+    <script src="mark-animator.js"></script>
+
+    <script>
+    /* ============================================================
+       CONFIG
+    ============================================================ */
+    const ROBOT_URL    = './robot.glb';
+    const WIDGET_PX    = 115;
+    const TALKING_PX   = 320;
+    const MOBILE_PX    = window.innerWidth <= 768 ? 95 : null;
+    const MOBILE_TPX   = window.innerWidth <= 768 ? 260 : null;
+    const IDLE_TIMEOUT_SHORT = 10000;
+    const IDLE_TIMEOUT_LONG  = 25000;
+    const WALK_INTERVAL = 5500;
+    const MEMORY_KEY   = 'mark_memory';
+
+    const W_CAM = { fov:50, x:0, y:0.5, z:3.4 };
+    const T_CAM = { fov:50, x:0, y:0.7, z:4.0 };
+
+    /* ============================================================
+       DOM
+    ============================================================ */
+    const markWidget     = document.getElementById('mark-widget');
+    const threeContainer = document.getElementById('three-container');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const micBtn         = document.getElementById('mic-btn');
+    const micHint        = document.getElementById('mic-hint');
+    const liveCaption    = document.getElementById('live-caption');
+    const markHint       = document.getElementById('mark-hint');
+    const closeBtn       = document.getElementById('close-btn');
+    const thinkingEl     = document.getElementById('thinking-indicator');
+    const textInput      = document.getElementById('text-input');
+    const sendBtn        = document.getElementById('send-btn');
+
+    /* ============================================================
+       STATE
+    ============================================================ */
+    let scene, camera, renderer, robot, mixer, clock;
+    let robotAnimations  = [];
+    let markState        = 'loading';
+    let walkTimer        = null;
+    let idleTimer        = null;
+    let detectedLanguage = 'en';
+    let languageLocked   = false;
+    let lastMarkText     = '';
+    let exchangeCount    = 0;
+    let currentAudio     = null;    // ElevenLabs audio element
+    let ttsAvailable     = false;   // set after checking backend
+
+    /* ============================================================
+       LOCALSTORAGE MEMORY — remember returning users
+    ============================================================ */
+    function loadMemory() {
+        try { return JSON.parse(localStorage.getItem(MEMORY_KEY)) || {}; }
+        catch { return {}; }
+    }
+
+    function saveMemory(data) {
+        try {
+            const existing = loadMemory();
+            existing.lastVisit = Date.now();
+            localStorage.setItem(MEMORY_KEY, JSON.stringify({ ...existing, ...data }));
+        } catch {}
+    }
+
+    function clearMemory() {
+        try { localStorage.removeItem(MEMORY_KEY); } catch {}
+    }
+
+    // Detect when user tells Mark their name — save it
+    function tryExtractName(text) {
+        const t = text.toLowerCase();
+        // Common patterns: "my name is X", "I'm X", "mera naam X hai", "X here", "call me X"
+        const patterns = [
+            /(?:my name is|i'm|i am|call me|this is)\s+([a-z]{2,15})/i,
+            /(?:mera naam|naam hai|naam)\s+([a-z]{2,15})/i,
+            /^([a-z]{2,15})(?:\s|$|,|!|\.|and)/i,  // just a first name at the start
+        ];
+        for (const p of patterns) {
+            const m = text.match(p);
+            if (m && m[1]) {
+                const name = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+                // Skip common words that aren't names
+                const skip = ['hello','hi','hey','yes','no','ok','sure','please','show','find','english','urdu','want','need','the','and','but'];
+                if (!skip.includes(name.toLowerCase())) return name;
+            }
+        }
+        return null;
+    }
+
+    /* ============================================================
+       THREE.JS INIT
+    ============================================================ */
+    function initThree() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(W_CAM.fov, 1, 0.1, 1000);
+        camera.position.set(W_CAM.x, W_CAM.y, W_CAM.z);
+
+        renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+        const px = MOBILE_PX || WIDGET_PX;
+        renderer.setSize(px, px);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x000000, 0);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        threeContainer.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.4));
+        const dir = new THREE.DirectionalLight(0x9bb0ff, 2.6);
+        dir.position.set(5, 10, 7); dir.castShadow = true; scene.add(dir);
+        const fill = new THREE.DirectionalLight(0x9b59ff, 1.4);
+        fill.position.set(-5, 5, -5); scene.add(fill);
+
+        clock = new THREE.Clock();
+
+        // Check if ElevenLabs TTS is available
+        fetch(`${BACKEND_URL}/api/status`).then(r => r.json()).then(d => {
+            ttsAvailable = d.tts_available || false;
+        }).catch(() => {});
+
+        loadRobot();
+    }
+
+    function loadRobot() {
+        const loader = new THREE.GLTFLoader();
+        loader.load(ROBOT_URL, (gltf) => {
+            robot = gltf.scene;
+            robot.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
+            robot.scale.set(1.1, 1.1, 1.1);
+            robot.position.set(0, -0.45, 0);
+            robot.rotation.y = 0;
+            scene.add(robot);
+
+            if (gltf.animations && gltf.animations.length > 0) {
+                mixer = new THREE.AnimationMixer(robot);
+                robotAnimations = gltf.animations;
+            }
+            markAnimator.init(robot, mixer, robotAnimations, scene);
+            markAnimator.play('idle');
+
+            loadingOverlay.classList.add('hidden');
+            markState = 'widget';
+            startWalking();
+            animate();
+        }, undefined, () => {
+            loadingOverlay.querySelector('.loading-text').textContent = 'Error loading. Refresh.';
+        });
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        markAnimator.update(clock.getDelta());
+        renderer.render(scene, camera);
+    }
+
+    /* ============================================================
+       WALKING
+    ============================================================ */
+    function startWalking() { clearTimeout(walkTimer); scheduleWalk(); }
+    function scheduleWalk() {
+        if (markState !== 'widget') return;
+        moveToRandomSpot();
+        walkTimer = setTimeout(scheduleWalk, WALK_INTERVAL + Math.random() * 2000);
+    }
+    function moveToRandomSpot() {
+        const w = MOBILE_PX || WIDGET_PX;
+        const padX = 30, padTopMin = 40;
+        markWidget.style.left = Math.max(padTopMin, padX + Math.random() * (window.innerWidth - w - padX*2)) + 'px';
+        markWidget.style.top  = Math.max(padTopMin, window.innerHeight*0.30 + Math.random() * (window.innerHeight*0.55 - w)) + 'px';
+    }
+    function stopWalking() {
+        clearTimeout(walkTimer);
+        const r = markWidget.getBoundingClientRect();
+        markWidget.style.left = r.left + 'px';
+        markWidget.style.top  = r.top  + 'px';
+    }
+
+    /* ============================================================
+       DRAGGING
+    ============================================================ */
+    let dragData = null, didDrag = false;
+    markWidget.addEventListener('pointerdown', (e) => {
+        if (markState !== 'widget') return;
+        e.preventDefault(); markWidget.setPointerCapture(e.pointerId);
+        stopWalking(); markWidget.classList.add('dragging');
+        const r = markWidget.getBoundingClientRect();
+        dragData = { startX:e.clientX, startY:e.clientY, widgetX:r.left, widgetY:r.top };
+        didDrag = false;
+    });
+    markWidget.addEventListener('pointermove', (e) => {
+        if (!dragData) return;
+        const dx = e.clientX - dragData.startX, dy = e.clientY - dragData.startY;
+        if (Math.abs(dx) + Math.abs(dy) > 8) didDrag = true;
+        if (didDrag) { markWidget.style.left = (dragData.widgetX+dx)+'px'; markWidget.style.top = (dragData.widgetY+dy)+'px'; }
+    });
+    markWidget.addEventListener('pointerup', (e) => {
+        if (!dragData) return;
+        markWidget.classList.remove('dragging');
+        try { markWidget.releasePointerCapture(e.pointerId); } catch(_){}
+        if (didDrag) { setTimeout(() => { if (markState==='widget') startWalking(); }, 2000); }
+        else { enterTalkingMode(); }
+        dragData = null; didDrag = false;
+    });
+
+    /* ============================================================
+       TALKING MODE
+    ============================================================ */
+    function enterTalkingMode() {
+        if (markState !== 'widget') return;
+        markState = 'talking'; exchangeCount = 0;
+        clearTimeout(walkTimer);
+        markHint.style.display = 'none';
+
+        document.body.classList.add('talking');
+        markWidget.classList.add('talking');
+
+        setTimeout(() => {
+            const px = MOBILE_TPX || TALKING_PX;
+            renderer.setSize(px, px);
+            camera.fov = T_CAM.fov;
+            camera.position.set(T_CAM.x, T_CAM.y, T_CAM.z);
+            camera.updateProjectionMatrix();
+        }, 720);
+
+        // Check if returning user
+        const mem = loadMemory();
+        if (mem.name && mem.language) {
+            detectedLanguage = mem.language;
+            languageLocked = true;
+            playCuteAyie(() => { sendReturningGreeting(mem.name, mem.language); });
+        } else {
+            playCuteAyie(() => { sendInitialGreeting(); });
+        }
+    }
+
+    function returnToWidget() {
+        if (markState !== 'talking') return;
+        stopSpeaking();
+        markState = 'widget'; exchangeCount = 0;
+        // DON'T clear languageLocked or memory here — memory persists across sessions
+
+        document.body.classList.remove('talking');
+        markWidget.classList.remove('talking');
+        liveCaption.style.opacity = '0';
+        hideThinking();
+        conversationHistory = [];
+
+        setTimeout(() => {
+            const px = MOBILE_PX || WIDGET_PX;
+            renderer.setSize(px, px);
+            camera.fov = W_CAM.fov;
+            camera.position.set(W_CAM.x, W_CAM.y, W_CAM.z);
+            camera.updateProjectionMatrix();
+            startWalking();
+        }, 720);
+    }
+
+    closeBtn.addEventListener('click', returnToWidget);
+    document.getElementById('talk-backdrop').addEventListener('click', returnToWidget);
+
+    function getIdleTimeout() { return exchangeCount >= 3 ? IDLE_TIMEOUT_LONG : IDLE_TIMEOUT_SHORT; }
+    function resetIdleTimer() { clearTimeout(idleTimer); idleTimer = setTimeout(returnToWidget, getIdleTimeout()); }
+    function cancelIdleTimer() { clearTimeout(idleTimer); }
+
+    /* ============================================================
+       THINKING STATE
+    ============================================================ */
+    function showThinking() {
+        liveCaption.style.opacity = '0';
+        thinkingEl.textContent = detectedLanguage === 'ur' ? 'Mark soch raha hai' : 'Mark is thinking';
+        thinkingEl.classList.add('show');
+        markAnimator.play('think');
+    }
+    function hideThinking() { thinkingEl.classList.remove('show'); }
+
+    /* ============================================================
+       GREETINGS
+    ============================================================ */
+    async function sendInitialGreeting() {
+        showThinking();
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/chat`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ messages:[{role:'user',content:'__INIT__'}], user_language:detectedLanguage })
+            });
+            const data = await res.json();
+            hideThinking();
+            if (data.response) {
+                conversationHistory.push({role:'assistant',content:data.response});
+                showCaption(data.response);
+                speak(data.response);
+            }
+        } catch(e) {
+            hideThinking();
+            const fb = "Hey hey! I'm Mark, your shopping buddy. What's your name — and shall we chat in English ya Urdu?";
+            showCaption(fb); speak(fb);
+        }
+    }
+
+    async function sendReturningGreeting(name, language) {
+        showThinking();
+        try {
+            const msg = `__RETURNING__:Name is ${name}. Language preference is ${language === 'ur' ? 'Roman Urdu' : 'English'}.`;
+            const res = await fetch(`${BACKEND_URL}/api/chat`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ messages:[{role:'user',content:msg}], user_language:language })
+            });
+            const data = await res.json();
+            hideThinking();
+            if (data.response) {
+                conversationHistory.push({role:'assistant',content:data.response});
+                showCaption(data.response);
+                speak(data.response);
+            }
+        } catch(e) {
+            hideThinking();
+            const fb = language === 'ur'
+                ? `${name}! Wapas aaye — bohat acha! Kya chahiye aaj?`
+                : `${name}! Welcome back — great to see you! What are you looking for today?`;
+            showCaption(fb); speak(fb);
+        }
+    }
+
+    /* ============================================================
+       LANGUAGE DETECTION
+    ============================================================ */
+    function detectLanguageAdvanced(text) {
+        const patterns = ['hai','kya','mujhe','kaise','acha','theek','batao','dikha',
+            'chahiye','hoon','ho','kar','ke','ki','ko','se','ne','aap','tum','main',
+            'yeh','woh','kaun','kahan','kab','kyun','kitna','sab','kuch','bhi',
+            'nahi','haan','naa','mein','par','liye','dena','lena','tha','thi','the',
+            'bohat','zyada','thora','assalam','salaam','adaab','naam','mera'];
+        let score = 0;
+        const lower = text.toLowerCase();
+        patterns.forEach(w => { if (new RegExp('\\b'+w+'\\b','i').test(lower)) score += 2; });
+        if (/[؀-ۿ]/.test(text)) score += 10;
+        if (/[ऀ-ॿ]/.test(text)) score += 10;
+        return score >= 3 ? 'ur' : 'en';
+    }
+
+    function detectLanguagePreference(text) {
+        const t = text.toLowerCase();
+        if (/\b(urdu|roman urdu|اردو|urdoo)\b/.test(t)) return 'ur';
+        if (/\b(english|angrezi|eng)\b/.test(t))         return 'en';
+        return null;
+    }
+
+    /* ============================================================
+       ECHO GUARD
+    ============================================================ */
+    function isEcho(userText) {
+        if (!lastMarkText) return false;
+        const a = userText.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+        const b = lastMarkText.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+        if (!a || !b) return false;
+        if (b.includes(a) && a.length > 10) return true;
+        const wordsA = a.split(/\s+/), wordsB = new Set(b.split(/\s+/));
+        const overlap = wordsA.filter(w => wordsB.has(w)).length;
+        return wordsA.length > 3 && (overlap / wordsA.length) > 0.6;
+    }
+
+    /* ============================================================
+       VOICE — ElevenLabs (primary) + Browser TTS (fallback)
+    ============================================================ */
+    const synth = window.speechSynthesis;
+
+    function stopSpeaking() {
+        clearInterval(typewriterTimer);
+        if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+        if (synth.speaking) synth.cancel();
+    }
+
+    function sanitizeForTTS(text) {
+        return text.replace(/[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿ऀ-ॿ]/g, '').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    function speak(text) {
+        stopSpeaking();
+
+        const anim = markSituationDetector.detect(text, 'mark');
+        if (anim) markAnimator.play(anim);
+
+        const cleanText = sanitizeForTTS(text);
+        if (!cleanText) { resetIdleTimer(); return; }
+        lastMarkText = cleanText;
+
+        cancelIdleTimer();
+
+        if (ttsAvailable) {
+            // Try ElevenLabs first
+            playElevenLabs(cleanText).catch(() => {
+                playBrowserTTS(cleanText);
+            });
+        } else {
+            playBrowserTTS(cleanText);
+        }
+    }
+
+    async function playElevenLabs(text) {
+        const res = await fetch(`${BACKEND_URL}/api/tts`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ text, language: detectedLanguage })
+        });
+        if (!res.ok) throw new Error('TTS failed');
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        currentAudio = new Audio(url);
+
+        currentAudio.onended = () => {
+            URL.revokeObjectURL(url);
+            currentAudio = null;
+            markAnimator.play('idle');
+            hideCaption();
+            resetIdleTimer();
+        };
+        currentAudio.onerror = () => {
+            URL.revokeObjectURL(url);
+            currentAudio = null;
+            playBrowserTTS(text); // fallback
+        };
+        await currentAudio.play();
+    }
+
+    function playBrowserTTS(text) {
+        const u = new SpeechSynthesisUtterance(text);
+        if (detectedLanguage === 'ur') { u.rate = 0.88; u.pitch = 0.95; }
+        else { u.rate = 0.97; u.pitch = 0.92; }
+        u.volume = 1.0;
+
+        const go = () => {
+            const v = pickVoice(detectedLanguage);
+            if (v) { u.voice = v; u.lang = v.lang; }
+            if (detectedLanguage === 'ur') u.lang = 'en-IN';
+            u.onend = () => { markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
+            synth.speak(u);
+        };
+        synth.getVoices().length > 0 ? go() : (synth.onvoiceschanged = go);
+    }
+
+    function pickVoice(language) {
+        const voices = synth.getVoices();
+        if (language === 'ur') {
+            return voices.find(v => v.name.includes('Microsoft Ravi'))
+                || voices.find(v => v.lang === 'en-IN')
+                || voices.find(v => v.lang.startsWith('hi'))
+                || voices.find(v => v.lang.startsWith('en'));
+        }
+        return voices.find(v => v.name.includes('Microsoft Mark'))
+            || voices.find(v => v.name.includes('Microsoft David'))
+            || voices.find(v => v.name.includes('Google UK English Male'))
+            || voices.find(v => v.lang === 'en-US')
+            || voices.find(v => v.lang.startsWith('en'));
+    }
+
+    function playCuteAyie(callback) {
+        synth.cancel();
+        const u = new SpeechSynthesisUtterance('Ayie!');
+        u.pitch = 2.0; u.rate = 0.85; u.volume = 1.0;
+        const go = () => {
+            const voices = synth.getVoices();
+            const v = voices.find(x => x.name.includes('Samantha'))
+                  || voices.find(x => x.name.includes('Microsoft Zira'))
+                  || voices.find(x => x.lang.startsWith('en'));
+            if (v) { u.voice = v; u.lang = v.lang; }
+            u.onend = () => { if (callback) setTimeout(callback, 280); };
+            synth.speak(u);
+        };
+        synth.getVoices().length > 0 ? go() : (synth.onvoiceschanged = go);
+    }
+
+    /* ============================================================
+       CAPTIONS — typewriter for Mark, instant for user
+    ============================================================ */
+    let typewriterTimer = null;
+    function showCaption(text, typewriter = true) {
+        clearInterval(typewriterTimer);
+        liveCaption.style.opacity = '1';
+        if (!typewriter || text.length < 20) { liveCaption.textContent = text; return; }
+        const words = text.split(' ');
+        let shown = 0;
+        liveCaption.textContent = '';
+        typewriterTimer = setInterval(() => {
+            shown++;
+            liveCaption.textContent = words.slice(0, shown).join(' ');
+            if (shown >= words.length) clearInterval(typewriterTimer);
+        }, 70);
+    }
+    function hideCaption() { setTimeout(() => { liveCaption.style.opacity = '0.3'; }, 4000); }
+
+    /* ============================================================
+       HOLD-TO-RECORD MIC
+    ============================================================ */
+    let mediaRecorder = null, audioChunks = [], isRecording = false;
+    let conversationHistory = [];
+
+    async function startRecording() {
+        if (markState !== 'talking' || isRecording) return;
+        cancelIdleTimer(); stopSpeaking();
+        markAnimator.play('listen');
+        liveCaption.style.opacity = '0.3';
+        hideThinking();
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioChunks = [];
+            const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+            mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+            mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach(t => t.stop());
+                if (audioChunks.length === 0) { resetIdleTimer(); return; }
+                await transcribeAndProcess(new Blob(audioChunks, { type: mime }), mime);
+            };
+            await new Promise(r => setTimeout(r, 250));
+            mediaRecorder.start();
+            isRecording = true;
+            micBtn.classList.add('listening');
+            micHint.textContent = detectedLanguage === 'ur' ? 'Chor do bhejne ke liye' : 'Release to send';
+        } catch (err) {
+            micHint.textContent = detectedLanguage === 'ur' ? 'Mic nahi mila' : 'Mic access denied';
+        }
+    }
+
+    function stopRecording() {
+        if (!isRecording) return;
+        isRecording = false;
+        micBtn.classList.remove('listening');
+        micHint.textContent = detectedLanguage === 'ur' ? 'Suno...' : 'Processing...';
+        markAnimator.play('idle');
+        try { mediaRecorder.stop(); } catch(_){}
+    }
+
+    micBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); startRecording(); });
+    micBtn.addEventListener('pointerup',   (e) => { e.preventDefault(); stopRecording(); });
+    micBtn.addEventListener('pointerleave',() => { if (isRecording) stopRecording(); });
+    micBtn.addEventListener('pointercancel',()=> { if (isRecording) stopRecording(); });
+
+    /* ============================================================
+       TEXT INPUT — type instead of voice
+    ============================================================ */
+    function handleTextSubmit() {
+        const text = textInput.value.trim();
+        if (!text || markState !== 'talking') return;
+        textInput.value = '';
+        cancelIdleTimer(); stopSpeaking();
+        processTextInput(text);
+    }
+
+    sendBtn.addEventListener('click', handleTextSubmit);
+    textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); handleTextSubmit(); }
+        cancelIdleTimer(); // typing resets idle timer
+    });
+
+    async function processTextInput(text) {
+        showCaption(text, false);
+
+        // Language detection & lock
+        const langPref = detectLanguagePreference(text);
+        if (langPref && !languageLocked) { detectedLanguage = langPref; languageLocked = true; }
+        else if (!languageLocked) { detectedLanguage = detectLanguageAdvanced(text); }
+
+        // Save name if detected
+        const name = tryExtractName(text);
+        if (name) saveMemory({ name });
+        if (languageLocked) saveMemory({ language: detectedLanguage });
+
+        const userAnim = markSituationDetector.detect(text, 'user');
+        if (userAnim && userAnim !== 'speak') markAnimator.play(userAnim);
+
+        setTimeout(showThinking, 400);
+        await processUserMessage(text);
+        micHint.textContent = detectedLanguage === 'ur' ? 'Dabao aur bolo' : 'Hold to talk';
+    }
+
+    /* ============================================================
+       TRANSCRIBE + PROCESS (voice path)
+    ============================================================ */
+    async function transcribeAndProcess(blob, mime) {
+        try {
+            showThinking();
+            const form = new FormData();
+            form.append('audio', blob, mime.includes('ogg') ? 'audio.ogg' : 'audio.webm');
+            const res = await fetch(`${BACKEND_URL}/api/transcribe`, {method:'POST', body:form});
+            const data = await res.json();
+            const text = data.text ? data.text.trim() : '';
+
+            if (!text) { hideThinking(); micHint.textContent = detectedLanguage==='ur'?'Dabao aur bolo':'Hold to talk'; resetIdleTimer(); return; }
+            if (isEcho(text)) { hideThinking(); micHint.textContent = detectedLanguage==='ur'?'Dabao aur bolo':'Hold to talk'; resetIdleTimer(); return; }
+
+            hideThinking();
+            showCaption(text, false);
+
+            // Language
+            const langPref = detectLanguagePreference(text);
+            if (langPref && !languageLocked) { detectedLanguage = langPref; languageLocked = true; }
+            else if (!languageLocked) { detectedLanguage = detectLanguageAdvanced(text); }
+
+            // Memory
+            const name = tryExtractName(text);
+            if (name) saveMemory({ name });
+            if (languageLocked) saveMemory({ language: detectedLanguage });
+
+            const userAnim = markSituationDetector.detect(text, 'user');
+            if (userAnim && userAnim !== 'speak') markAnimator.play(userAnim);
+
+            setTimeout(showThinking, 800);
+            await processUserMessage(text);
+            micHint.textContent = detectedLanguage==='ur'?'Dabao aur bolo':'Hold to talk';
+        } catch(e) {
+            hideThinking();
+            showCaption(detectedLanguage==='ur'?'Connection nahi mila. Server chalu hai?':'Could not connect. Is server running?');
+            micHint.textContent = detectedLanguage==='ur'?'Dabao aur bolo':'Hold to talk';
+            resetIdleTimer();
+        }
+    }
+
+    // Called by mark-brain.js for chat (after RAG check)
+    async function processWithOpenAI(userInput) {
+        conversationHistory.push({ role:'user', content:userInput });
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/chat`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ messages:conversationHistory, user_language:detectedLanguage })
+            });
+            const data = await res.json();
+            hideThinking();
+            if (data.response) {
+                const reply = data.response.trim();
+                conversationHistory.push({ role:'assistant', content:reply });
+                exchangeCount++;
+                if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
+
+                showCaption(reply, true);
+                speak(reply);
+            }
+        } catch(e) {
+            hideThinking();
+            showCaption(detectedLanguage==='ur'?'Connection problem.':'Error connecting.');
+            resetIdleTimer();
+        }
+    }
+
+    /* ============================================================
+       BOOT
+    ============================================================ */
+    window.addEventListener('load', initThree);
+    window.addEventListener('resize', () => {
+        if (markState === 'widget') {
+            const r = markWidget.getBoundingClientRect();
+            const w = MOBILE_PX || WIDGET_PX;
+            if (r.left+w > window.innerWidth) markWidget.style.left = (window.innerWidth-w-30)+'px';
+            if (r.top+w > window.innerHeight) markWidget.style.top = (window.innerHeight-w-30)+'px';
+        }
+    });
+    </script>
+</body>
+</html>
