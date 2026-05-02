@@ -34,3 +34,8 @@ desktop.ini
 # ─── Logs ───
 *.log
 logs/
+
+# ─── Database ───
+*.db
+*.db-wal
+*.db-shm

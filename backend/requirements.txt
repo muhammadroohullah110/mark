@@ -7,3 +7,4 @@ python-multipart
 beautifulsoup4
 scikit-learn
 numpy
+aiofiles
