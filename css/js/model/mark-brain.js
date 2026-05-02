@@ -4,7 +4,10 @@
 // Falls back to conversational AI when no navigation match
 // ============================================================
 
-const BACKEND_URL = 'http://localhost:8000';
+// Auto-detect: if running on webnsofts.com use production URL, otherwise localhost
+const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8000'
+    : window.location.origin + '/mark-api';
 
 // Navigation intent keywords (English + Roman Urdu)
 const NAV_KEYWORDS = [
