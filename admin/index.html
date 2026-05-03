@@ -6,7 +6,7 @@
     <title>Mark AI — Admin Panel</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com?plugins=forms,containerQueries"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -91,8 +91,8 @@
 
         /* Screen transitions */
         .screen { transition: opacity 0.3s ease, transform 0.3s ease; }
-        .screen-hidden { opacity: 0; transform: translateY(8px); pointer-events: none; position: absolute; }
-        .screen-visible { opacity: 1; transform: translateY(0); pointer-events: auto; position: relative; }
+        .screen-hidden { display: none !important; }
+        .screen-visible { }
 
         /* Sidebar active indicator */
         .nav-item.active { background: rgba(0, 119, 255, 0.12); border-left: 3px solid #4f8eff; }
@@ -178,7 +178,7 @@
 <!-- ============================================ -->
 <!-- AUTH SCREEN                                  -->
 <!-- ============================================ -->
-<div id="authScreen" class="screen screen-visible flex items-center justify-center min-h-screen px-4">
+<div id="authScreen" class="flex items-center justify-center min-h-screen px-4">
     <div class="ice-glass rounded-xl p-8 sm:p-12 w-full max-w-md">
         <div class="text-center mb-8">
             <div class="inline-flex items-center justify-center w-16 h-16 rounded-xl gradient-bg-purple mb-4">
@@ -219,7 +219,7 @@
 <!-- ============================================ -->
 <!-- MAIN APP LAYOUT (Sidebar + Content)          -->
 <!-- ============================================ -->
-<div id="appLayout" class="screen screen-hidden flex min-h-screen">
+<div id="appLayout" class="flex min-h-screen" style="display:none">
 
     <!-- Mobile sidebar overlay -->
     <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
@@ -342,7 +342,7 @@
         <main class="flex-1 p-4 sm:p-6">
 
             <!-- DASHBOARD SCREEN -->
-            <div id="dashboardScreen" class="screen screen-visible">
+            <div id="dashboardScreen">
                 <!-- Welcome -->
                 <div class="mb-6">
                     <p class="text-on-surface-variant text-body-md">Welcome back, <span id="dashUser" class="text-secondary font-medium">admin</span></p>
@@ -399,7 +399,7 @@
             </div>
 
             <!-- STORE DETAIL SCREEN -->
-            <div id="storeDetailScreen" class="screen screen-hidden">
+            <div id="storeDetailScreen" style="display:none">
                 <!-- Back button -->
                 <button onclick="navigateTo('dashboard')" class="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors mb-6">
                     <span class="material-symbols-outlined text-xl">arrow_back</span>
@@ -834,27 +834,27 @@ function showToast(message, type) {
 
 // ── Screen Router ───────────────────────────────────────
 function showScreen(name) {
-    // Auth screen
     var authEl = document.getElementById('authScreen');
     var appEl = document.getElementById('appLayout');
     var dashEl = document.getElementById('dashboardScreen');
     var detailEl = document.getElementById('storeDetailScreen');
 
-    if (name === 'auth') {
-        authEl.className = 'screen screen-visible flex items-center justify-center min-h-screen px-4';
-        appEl.className = 'screen screen-hidden flex min-h-screen';
-    } else {
-        authEl.className = 'screen screen-hidden flex items-center justify-center min-h-screen px-4';
-        appEl.className = 'screen screen-visible flex min-h-screen';
+    // Hide all first
+    authEl.style.display = 'none';
+    appEl.style.display = 'none';
+    dashEl.style.display = 'none';
+    detailEl.style.display = 'none';
 
+    if (name === 'auth') {
+        authEl.style.display = 'flex';
+    } else {
+        appEl.style.display = 'flex';
         if (name === 'dashboard') {
-            dashEl.className = 'screen screen-visible';
-            detailEl.className = 'screen screen-hidden';
+            dashEl.style.display = 'block';
             document.getElementById('topBarTitle').textContent = 'Mark AI Dashboard';
             setActiveNav('dashboard');
         } else if (name === 'storeDetail') {
-            dashEl.className = 'screen screen-hidden';
-            detailEl.className = 'screen screen-visible';
+            detailEl.style.display = 'block';
             document.getElementById('topBarTitle').textContent = currentStoreName || 'Store Detail';
         }
     }
@@ -962,7 +962,7 @@ async function boot() {
             }
         }
 
-        var setup = await api('POST', '/admin/check-setup');
+        var setup = await api('GET', '/admin/check-setup');
         if (setup.admin_exists) {
             document.getElementById('authTitle').textContent = 'Login to Mark AI';
             document.getElementById('authSub').textContent = 'Enter your admin credentials to continue';
