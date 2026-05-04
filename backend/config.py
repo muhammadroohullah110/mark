@@ -6,7 +6,7 @@
 # ============================================================
 
 # ── Website URL ──────────────────────────────────────────────
-CLIENT_WEBSITE_URL = "https://webnsofts.com"
+CLIENT_WEBSITE_URL = "https://webnsoft.com"
 MAX_CRAWL_PAGES = 120
 
 # ── CORS ─────────────────────────────────────────────────────
@@ -22,16 +22,20 @@ RATE_CHAT = 30
 RATE_RAG = 40
 RATE_TTS = 20
 
-# ── ElevenLabs TTS ───────────────────────────────────────────
-# Voice ID: use ElevenLabs dashboard to pick a voice
-# Default "Adam" = warm, friendly male — perfect for Mark
-ELEVENLABS_VOICE_ID = "pNInz6obpgDQGcFmaJgB"
-ELEVENLABS_MODEL = "eleven_multilingual_v2"
-
-# Voice tuning (0.0 to 1.0)
-VOICE_STABILITY = 0.50      # lower = more expressive, higher = more stable
-VOICE_SIMILARITY = 0.78     # how close to the original voice
-VOICE_STYLE = 0.35          # style exaggeration (multilingual v2 only)
+# ── Edge TTS (FREE — no API key needed) ─────────────────────
+# Uses Microsoft Edge's Read Aloud voices — high quality, multilingual
+# Voice list: https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list
+EDGE_TTS_VOICES = {
+    "en_male":   "en-US-GuyNeural",        # Warm, natural male (default for Mark)
+    "en_female": "en-US-AriaNeural",        # Natural female
+    "ur_male":   "ur-PK-AsadNeural",        # Urdu male — very natural
+    "ur_female": "ur-PK-UzmaNeural",        # Urdu female
+    "hi_male":   "hi-IN-MadhurNeural",      # Hindi male
+    "hi_female": "hi-IN-SwaraNeural",       # Hindi female
+}
+DEFAULT_EDGE_VOICE = "en-US-GuyNeural"      # Mark's default voice
+EDGE_TTS_RATE = "+0%"                        # Speed: -50% to +100%
+EDGE_TTS_PITCH = "+0Hz"                      # Pitch adjustment
 
 # ── Conversation Logging ────────────────────────────────────
 ENABLE_LOGGING = True        # log conversations for analytics

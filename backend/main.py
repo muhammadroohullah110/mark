@@ -17,13 +17,14 @@ from typing import List, Optional
 from dotenv import load_dotenv
 from groq import Groq
 
+import edge_tts
+
 from config import (
     CLIENT_WEBSITE_URL, MAX_CRAWL_PAGES,
     ALLOWED_ORIGINS,
     MAX_AUDIO_MB, MAX_MESSAGE_LENGTH,
     RATE_TRANSCRIBE, RATE_CHAT, RATE_RAG, RATE_TTS,
-    ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL,
-    VOICE_STABILITY, VOICE_SIMILARITY, VOICE_STYLE,
+    EDGE_TTS_VOICES, DEFAULT_EDGE_VOICE, EDGE_TTS_RATE, EDGE_TTS_PITCH,
     ENABLE_LOGGING, LOG_DIR,
     STORE_CONFIG,
 )
@@ -35,7 +36,6 @@ load_dotenv()
 
 # ── Default keys from .env (fallback when no tenant) ─────────
 DEFAULT_GROQ_KEY = os.getenv("GROQ_API_KEY", "")
-DEFAULT_ELEVENLABS_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 
 client = Groq(api_key=DEFAULT_GROQ_KEY)
 
@@ -71,6 +71,11 @@ if admin_dir.exists():
 
 
 # ── Rate Limiter ─────────────────────────────────────────────
+
+@app.get("/")
+async def root():
+    return {"message": "MarkAI Backend is running successfully!"}
+
 
 class RateLimiter:
     def __init__(self, max_requests: int, window_seconds: int = 60):
@@ -139,8 +144,17 @@ def get_rag(tenant: dict | None) -> MarkRAG:
         return _rag_instances[sid]
 
 
-def get_elevenlabs_key(tenant: dict | None) -> str:
-    return (tenant or {}).get("elevenlabs_api_key") or DEFAULT_ELEVENLABS_KEY
+def get_edge_voice(tenant: dict | None, language: str = "en") -> str:
+    """Pick the right Edge TTS voice based on tenant config and language."""
+    if tenant:
+        custom_voice = tenant.get("tts_voice", "")
+        if custom_voice:
+            return custom_voice
+
+    # Auto-select by language
+    if language in ("ur", "hi"):
+        return EDGE_TTS_VOICES.get(f"{language}_male", DEFAULT_EDGE_VOICE)
+    return EDGE_TTS_VOICES.get("en_male", DEFAULT_EDGE_VOICE)
 
 
 # ── Conversation Logger ─────────────────────────────────────
@@ -409,56 +423,40 @@ async def transcribe_audio(request: Request, audio: UploadFile = File(...),
 
 
 @app.post("/api/tts")
-def text_to_speech(request: Request, body: TTSRequest):
+async def text_to_speech(request: Request, body: TTSRequest):
     ip = get_ip(request)
     if not tts_limiter.is_allowed(ip):
         raise HTTPException(status_code=429, detail="Too many requests.")
 
     tenant = resolve_tenant(body.store_id)
-    el_key = get_elevenlabs_key(tenant)
-
-    if not el_key:
-        raise HTTPException(status_code=503, detail="TTS not configured. Add ELEVENLABS_API_KEY.")
-
-    voice_id = (tenant or {}).get("elevenlabs_voice_id") or ELEVENLABS_VOICE_ID
-    model_id = (tenant or {}).get("elevenlabs_model") or ELEVENLABS_MODEL
-    stability = (tenant or {}).get("voice_stability") or VOICE_STABILITY
-    similarity = (tenant or {}).get("voice_similarity") or VOICE_SIMILARITY
-    style = (tenant or {}).get("voice_style") or VOICE_STYLE
-
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-    headers = {
-        "xi-api-key": el_key,
-        "Content-Type": "application/json",
-        "Accept": "audio/mpeg",
-    }
-    payload = {
-        "text": body.text,
-        "model_id": model_id,
-        "voice_settings": {
-            "stability": stability,
-            "similarity_boost": similarity,
-            "style": style,
-            "use_speaker_boost": True,
-        }
-    }
+    voice = get_edge_voice(tenant, body.language or "en")
+    rate = (tenant or {}).get("tts_rate") or EDGE_TTS_RATE
+    pitch = (tenant or {}).get("tts_pitch") or EDGE_TTS_PITCH
 
     try:
-        response = http_requests.post(url, json=payload, headers=headers, timeout=15)
-        if response.status_code != 200:
-            print(f"ElevenLabs error {response.status_code}: {response.text[:200]}")
-            raise HTTPException(status_code=502, detail="TTS generation failed.")
+        communicate = edge_tts.Communicate(
+            text=body.text,
+            voice=voice,
+            rate=rate,
+            pitch=pitch,
+        )
+        audio_data = b""
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data += chunk["data"]
+
+        if not audio_data:
+            raise HTTPException(status_code=502, detail="TTS generated no audio.")
+
         return StreamingResponse(
-            io.BytesIO(response.content),
+            io.BytesIO(audio_data),
             media_type="audio/mpeg",
             headers={"Cache-Control": "no-cache"}
         )
-    except http_requests.Timeout:
-        raise HTTPException(status_code=504, detail="TTS timeout.")
     except HTTPException:
         raise
     except Exception as e:
-        print(f"TTS error: {e}")
+        print(f"Edge TTS error: {e}")
         raise HTTPException(status_code=500, detail="TTS failed.")
 
 
@@ -555,14 +553,13 @@ async def reindex_endpoint():
 async def status_endpoint(x_store_id: Optional[str] = Header(None)):
     tenant = resolve_tenant(x_store_id)
     if tenant:
-        el_key = get_elevenlabs_key(tenant)
         rag_inst = get_rag(tenant)
         products = get_products(tenant)
         return {
             "rag_ready": rag_inst.ready,
             "pages_indexed": len(rag_inst.pages),
             "products_loaded": len(products),
-            "tts_available": bool(el_key),
+            "tts_available": True,  # Edge TTS is always available (free)
             "assistant_name": tenant.get("assistant_name", "Mark"),
             "store_config": {
                 "assistant_name": tenant.get("assistant_name", "Mark"),
@@ -580,10 +577,29 @@ async def status_endpoint(x_store_id: Optional[str] = Header(None)):
         "rag_ready": rag.ready,
         "pages_indexed": len(rag.pages),
         "products_loaded": len(cached_products),
-        "tts_available": bool(DEFAULT_ELEVENLABS_KEY),
+        "tts_available": True,  # Edge TTS is always free
         "assistant_name": STORE_CONFIG.get("assistant_name", "Mark"),
         "store_config": STORE_CONFIG,
     }
+
+
+@app.get("/api/tts/voices")
+async def list_tts_voices():
+    """List available Edge TTS voices — for admin panel voice picker."""
+    try:
+        voices = await edge_tts.list_voices()
+        # Return simplified list grouped by language
+        simplified = []
+        for v in voices:
+            simplified.append({
+                "id": v["ShortName"],
+                "name": v["FriendlyName"],
+                "language": v["Locale"],
+                "gender": v["Gender"],
+            })
+        return {"voices": simplified}
+    except Exception as e:
+        return {"voices": [], "error": str(e)}
 
 
 @app.get("/api/analytics")

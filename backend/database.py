@@ -55,13 +55,11 @@ def init_db():
                 walking_enabled INTEGER NOT NULL DEFAULT 1,
                 sound_effects INTEGER NOT NULL DEFAULT 1,
 
-                -- Voice settings
-                elevenlabs_api_key TEXT DEFAULT '',
-                elevenlabs_voice_id TEXT DEFAULT 'pNInz6obpgDQGcFmaJgB',
-                elevenlabs_model TEXT DEFAULT 'eleven_multilingual_v2',
-                voice_stability REAL DEFAULT 0.50,
-                voice_similarity REAL DEFAULT 0.78,
-                voice_style REAL DEFAULT 0.35,
+                -- Voice settings (Edge TTS — free, no API key needed)
+                tts_voice TEXT DEFAULT 'en-US-GuyNeural',
+                tts_voice_urdu TEXT DEFAULT 'ur-PK-AsadNeural',
+                tts_rate TEXT DEFAULT '+0%',
+                tts_pitch TEXT DEFAULT '+0Hz',
 
                 -- Groq settings
                 groq_api_key TEXT DEFAULT '',

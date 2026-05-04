@@ -48,7 +48,6 @@ class StoreCreateRequest(BaseModel):
     website_url: str
     assistant_name: Optional[str] = "Mark"
     groq_api_key: Optional[str] = ""
-    elevenlabs_api_key: Optional[str] = ""
 
 
 class StoreUpdateRequest(BaseModel):
@@ -64,13 +63,11 @@ class StoreUpdateRequest(BaseModel):
     walking_enabled: Optional[bool] = None
     sound_effects: Optional[bool] = None
 
-    # Voice
-    elevenlabs_api_key: Optional[str] = None
-    elevenlabs_voice_id: Optional[str] = None
-    elevenlabs_model: Optional[str] = None
-    voice_stability: Optional[float] = None
-    voice_similarity: Optional[float] = None
-    voice_style: Optional[float] = None
+    # Voice (Edge TTS — free)
+    tts_voice: Optional[str] = None
+    tts_voice_urdu: Optional[str] = None
+    tts_rate: Optional[str] = None
+    tts_pitch: Optional[str] = None
 
     # AI
     groq_api_key: Optional[str] = None
@@ -179,7 +176,6 @@ def create_store_endpoint(body: StoreCreateRequest, user: dict = Depends(get_cur
         website_url=body.website_url,
         assistant_name=body.assistant_name or "Mark",
         groq_api_key=body.groq_api_key or "",
-        elevenlabs_api_key=body.elevenlabs_api_key or "",
     )
     return {"store_id": store_id, "message": "Store created!"}
 
@@ -192,8 +188,6 @@ def list_stores(user: dict = Depends(get_current_user)):
     for s in stores:
         if s.get("groq_api_key"):
             s["groq_api_key"] = s["groq_api_key"][:8] + "..." + s["groq_api_key"][-4:]
-        if s.get("elevenlabs_api_key"):
-            s["elevenlabs_api_key"] = s["elevenlabs_api_key"][:8] + "..." + s["elevenlabs_api_key"][-4:]
     return {"stores": stores}
 
 
