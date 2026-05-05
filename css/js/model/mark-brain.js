@@ -4,10 +4,12 @@
 // Falls back to conversational AI when no navigation match
 // ============================================================
 
-// Auto-detect: if running on webnsoft.com use production URL, otherwise localhost
-const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:8000'
-    : window.location.origin + '/mark-api';
+// Auto-detect backend URL — configurable via markAIConfig (set by WP plugin)
+const BACKEND_URL = (typeof markAIConfig !== 'undefined' && markAIConfig.backendUrl)
+    ? markAIConfig.backendUrl
+    : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? 'http://localhost:8000'
+        : window.location.origin + '/mark-api';
 
 // Navigation intent keywords (English + Roman Urdu)
 const NAV_KEYWORDS = [

@@ -1,0 +1,83 @@
+/* ============================================================
+   Mark AI — Frontend Chatbot Widget Styles
+   ============================================================ */
+
+#mark-ai-chatbot-root {
+    position: fixed;
+    z-index: 99999;
+    font-family: 'Inter', -apple-system, sans-serif;
+}
+
+#mark-ai-chatbot-root[data-position="bottom-right"] {
+    bottom: 20px;
+    right: 20px;
+}
+
+#mark-ai-chatbot-root[data-position="bottom-left"] {
+    bottom: 20px;
+    left: 20px;
+}
+
+/* 3D Robot Container */
+.mark-robot-container {
+    width: 180px;
+    height: 180px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.mark-robot-container:hover {
+    transform: scale(1.05);
+}
+
+/* Chat Bubble */
+.mark-chat-bubble {
+    position: absolute;
+    bottom: 190px;
+    right: 0;
+    background: rgba(16, 20, 21, 0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(174, 198, 255, 0.15);
+    border-radius: 16px 16px 4px 16px;
+    padding: 16px;
+    max-width: 300px;
+    min-width: 200px;
+    color: #e0e3e5;
+    font-size: 14px;
+    line-height: 1.5;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.mark-chat-bubble.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+/* Listening indicator */
+.mark-listening {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 0;
+}
+
+.mark-listening-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #aec6ff;
+    animation: markListeningPulse 1.4s ease-in-out infinite;
+}
+
+.mark-listening-dot:nth-child(2) { animation-delay: 0.2s; }
+.mark-listening-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes markListeningPulse {
+    0%, 100% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.5); opacity: 1; }
+}

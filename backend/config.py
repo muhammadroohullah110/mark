@@ -1,13 +1,13 @@
 # ============================================================
 # MARK CONFIGURATION
-#
-# New client? Change ONLY the values in this file.
-# Everything else is automatic.
+# All settings configurable via environment variables
 # ============================================================
 
-# ── Website URL ──────────────────────────────────────────────
-CLIENT_WEBSITE_URL = "https://webnsoft.com"
-MAX_CRAWL_PAGES = 120
+import os
+
+# ── Website URL (set via env var or admin panel per-store) ───
+CLIENT_WEBSITE_URL = os.environ.get("CLIENT_WEBSITE_URL", "")
+MAX_CRAWL_PAGES = int(os.environ.get("MAX_CRAWL_PAGES", "120"))
 
 # ── CORS ─────────────────────────────────────────────────────
 ALLOWED_ORIGINS = ["*"]
@@ -23,32 +23,30 @@ RATE_RAG = 40
 RATE_TTS = 20
 
 # ── Edge TTS (FREE — no API key needed) ─────────────────────
-# Uses Microsoft Edge's Read Aloud voices — high quality, multilingual
-# Voice list: https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list
 EDGE_TTS_VOICES = {
-    "en_male":   "en-US-GuyNeural",        # Warm, natural male (default for Mark)
-    "en_female": "en-US-AriaNeural",        # Natural female
-    "ur_male":   "ur-PK-AsadNeural",        # Urdu male — very natural
-    "ur_female": "ur-PK-UzmaNeural",        # Urdu female
-    "hi_male":   "hi-IN-MadhurNeural",      # Hindi male
-    "hi_female": "hi-IN-SwaraNeural",       # Hindi female
+    "en_male":   "en-US-GuyNeural",
+    "en_female": "en-US-AriaNeural",
+    "ur_male":   "ur-PK-AsadNeural",
+    "ur_female": "ur-PK-UzmaNeural",
+    "hi_male":   "hi-IN-MadhurNeural",
+    "hi_female": "hi-IN-SwaraNeural",
 }
-DEFAULT_EDGE_VOICE = "en-US-GuyNeural"      # Mark's default voice
-EDGE_TTS_RATE = "+0%"                        # Speed: -50% to +100%
-EDGE_TTS_PITCH = "+0Hz"                      # Pitch adjustment
+DEFAULT_EDGE_VOICE = "en-US-GuyNeural"
+EDGE_TTS_RATE = "+0%"
+EDGE_TTS_PITCH = "+0Hz"
 
 # ── Conversation Logging ────────────────────────────────────
-ENABLE_LOGGING = True        # log conversations for analytics
-LOG_DIR = "logs"             # directory for conversation logs
+ENABLE_LOGGING = True
+LOG_DIR = "logs"
 
-# ── Store Customization (for future admin panel) ────────────
+# ── Store Customization ─────────────────────────────────────
 STORE_CONFIG = {
     "assistant_name": "Mark",
-    "personality": "friendly",       # friendly | professional | playful
-    "greeting_style": "casual",      # casual | formal
-    "languages": ["en", "ur"],       # supported languages
+    "personality": "friendly",
+    "greeting_style": "casual",
+    "languages": ["en", "ur"],
     "primary_language": "en",
-    "idle_timeout": 10,              # seconds before returning to widget
+    "idle_timeout": 10,
     "walking_enabled": True,
     "sound_effects": True,
 }

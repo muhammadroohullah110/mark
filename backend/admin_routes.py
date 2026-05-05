@@ -256,17 +256,16 @@ def get_embed_code(store_id: str, user: dict = Depends(get_current_user)):
     # The embed code that store owners paste on their website
     embed_code = f"""<!-- Mark AI Shopping Companion -->
 <div id="mark-ai-widget" data-store-id="{store_id}"></div>
-<script src="YOUR_DOMAIN/widget/mark-widget.js"></script>
+<script>
+  // Set your Mark AI backend URL here
+  var markAIConfig = {{ backendUrl: 'YOUR_BACKEND_URL', storeId: '{store_id}' }};
+</script>
+<script src="YOUR_SITE/wp-content/plugins/mark-ai-chatbot/public/js/chatbot.js"></script>
 <!-- End Mark AI -->"""
 
     embed_iframe = f"""<!-- Mark AI Shopping Companion (iframe) -->
-<iframe
-  src="YOUR_DOMAIN/widget/?store={store_id}"
-  style="position:fixed;bottom:0;left:0;width:200px;height:200px;border:none;z-index:99999;background:transparent;"
-  allow="microphone"
-  title="{store.get('assistant_name', 'Mark')} AI Assistant">
-</iframe>
-<!-- End Mark AI -->"""
+<!-- For non-WordPress sites, contact admin for embed setup -->
+<!-- Store ID: {store_id} | Assistant: {store.get('assistant_name', 'Mark')} -->"""
 
     return {
         "store_id": store_id,

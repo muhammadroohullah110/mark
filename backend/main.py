@@ -44,8 +44,9 @@ _rag_instances: dict[str, MarkRAG] = {}
 _rag_lock = threading.Lock()
 
 # Default RAG for backward compatibility (single-tenant mode)
-rag = MarkRAG(CLIENT_WEBSITE_URL, max_pages=MAX_CRAWL_PAGES)
-threading.Thread(target=rag.initialize, daemon=True).start()
+rag = MarkRAG(CLIENT_WEBSITE_URL, max_pages=MAX_CRAWL_PAGES) if CLIENT_WEBSITE_URL else None
+if rag:
+    threading.Thread(target=rag.initialize, daemon=True).start()
 
 # Conversation logs directory
 if ENABLE_LOGGING:
@@ -130,10 +131,10 @@ def get_groq_client(tenant: dict | None) -> Groq:
     return Groq(api_key=key)
 
 
-def get_rag(tenant: dict | None) -> MarkRAG:
+def get_rag(tenant: dict | None) -> MarkRAG | None:
     """Get RAG instance — tenant-specific or default."""
     if not tenant:
-        return rag
+        return rag  # may be None if no CLIENT_WEBSITE_URL set
 
     sid = tenant["store_id"]
     with _rag_lock:
@@ -244,7 +245,7 @@ class RAGSearchRequest(BaseModel):
 
 # ── Product Management ────────────────────────────────────────
 
-PRODUCTS_URL = f"{CLIENT_WEBSITE_URL.rstrip('/')}/wp-json/sparknest/v1/products"
+PRODUCTS_URL = f"{CLIENT_WEBSITE_URL.rstrip('/')}/wp-json/wc/v3/products" if CLIENT_WEBSITE_URL else ""
 cached_products = []
 _products_last_fetched = 0
 
@@ -267,7 +268,8 @@ def fetch_products(url: str = None) -> list:
         print(f"Product fetch error: {e}")
         return []
 
-fetch_products()
+if PRODUCTS_URL:
+    fetch_products()
 
 def get_products(tenant: dict | None) -> list:
     """Get products — tenant-specific or default."""
@@ -282,7 +284,7 @@ def get_products(tenant: dict | None) -> list:
         return cache.get("products", [])
 
     # Fetch and cache
-    url = f"{tenant['website_url'].rstrip('/')}/wp-json/sparknest/v1/products"
+    url = f"{tenant['website_url'].rstrip('/')}/wp-json/wc/v3/products"
     products = fetch_products(url)
     _tenant_products[sid] = {"products": products, "fetched_at": time.time()}
     return products
@@ -546,7 +548,8 @@ async def refresh_products_endpoint():
 
 @app.get("/api/reindex")
 async def reindex_endpoint():
-    rag.reindex()
+    if rag:
+        rag.reindex()
     return {"status": "reindexing"}
 
 @app.get("/api/status")
@@ -574,10 +577,10 @@ async def status_endpoint(x_store_id: Optional[str] = Header(None)):
         }
 
     return {
-        "rag_ready": rag.ready,
-        "pages_indexed": len(rag.pages),
+        "rag_ready": rag.ready if rag else False,
+        "pages_indexed": len(rag.pages) if rag else 0,
         "products_loaded": len(cached_products),
-        "tts_available": True,  # Edge TTS is always free
+        "tts_available": True,
         "assistant_name": STORE_CONFIG.get("assistant_name", "Mark"),
         "store_config": STORE_CONFIG,
     }

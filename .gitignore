@@ -39,3 +39,14 @@ logs/
 *.db
 *.db-wal
 *.db-shm
+
+# ─── Junk files ───
+backend/pip
+*.zip
+*.mp4
+
+# ─── Old admin panel (replaced by WP plugin) ───
+admin/
+
+# ─── Node ───
+node_modules/

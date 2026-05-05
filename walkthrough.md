@@ -1,28 +1,41 @@
-# Mark - Python Backend Migration Complete
+# Mark AI — Shopping Companion
 
-I have successfully migrated Mark's logic to a Python backend to prevent hallucinations and secure your API key. The frontend has been fully restored and connected to the new brain.
+AI-powered 3D robot shopping companion. Voice-first, multilingual (English + Urdu), friend-first salesman.
 
-## ✅ Current Status
-- **Python Installed**: Python 3.11 is set up.
-- **Dependencies Installed**: All required libraries are ready.
-- **Server Running**: The backend brain is currently active in the background.
-- **Frontend Fixed**: `index.html` has been restored and debugged.
+## Architecture
 
-## 🚀 How to Test
-1.  **Refresh your browser** where Mark is open.
-2.  **Allow Microphone Access** if prompted.
-3.  **Say "Hello"** or ask "Tell me about the Scar shirt".
-4.  Mark should respond intelligently using real product data from SparkNest.
+```
+WordPress Plugin (mark-ai-chatbot/)  ←→  FastAPI Backend (backend/)
+    - Admin dashboard                      - Chat AI (Groq API)
+    - Store management                     - Voice TTS (Edge TTS - FREE)
+    - Conversation tracking                - RAG navigation (TF-IDF)
+    - Widget injection                     - STT (Whisper via Groq)
+```
 
-## 🛠️ How to Start Manually (If you restart your computer)
-1.  Open `cmd` or `PowerShell` in the `Ai Sales WebSystem` folder.
-2.  Run the backend:
-    ```bash
-    python backend/main.py
-    ```
-3.  Open `css/js/model/index.html` in your browser.
+## Quick Start (Local Dev)
 
-## 🛡️ Improvements
--   **No Hallucinations**: Mark now checks `sparknest.com` products before speaking.
--   **Security**: Your API Key is hidden in `.env` (not visible to users).
--   **Smarter**: Logic is now handled by a robust Python server.
+```bash
+cd backend
+pip install -r requirements.txt
+python main.py
+```
+
+Backend runs at `http://localhost:8000`
+
+## Deploy Backend (Render.com)
+
+1. Push to GitHub
+2. Render > New Web Service > Connect repo
+3. Root Directory: `backend`
+4. Build: `pip install -r requirements.txt`
+5. Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+6. Add env var: `GROQ_API_KEY=your_key`
+
+## WordPress Plugin
+
+1. ZIP the `mark-ai-chatbot/` folder
+2. WordPress > Plugins > Upload > Activate
+3. Mark AI > Settings > Enter backend URL + Groq API key
+4. Mark AI > Dashboard > Add Store
+
+## Created by Muhammad Roohullah
