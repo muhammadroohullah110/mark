@@ -100,7 +100,6 @@ class Mark_AI_Activator {
      */
     private static function set_defaults() {
         $defaults = [
-            'backend_url'      => 'http://localhost:8000',
             'groq_api_key'     => '',
             'default_voice'    => 'en-US-GuyNeural',
             'default_voice_ur' => 'ur-PK-AsadNeural',

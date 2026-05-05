@@ -36,7 +36,8 @@ class Mark_AI_Widget {
         // Pass config to chatbot
         $settings = get_option('mark_ai_settings', []);
         wp_localize_script('mark-ai-chatbot', 'markAIConfig', [
-            'backendUrl'  => $settings['backend_url'] ?? 'http://localhost:8000',
+            'restUrl'     => rest_url('mark-ai/v1/'),
+            'nonce'       => wp_create_nonce('wp_rest'),
             'pluginUrl'   => MARK_AI_URL,
             'language'    => $settings['primary_language'] ?? 'en',
             'autoGreet'   => !empty($settings['auto_greet']),

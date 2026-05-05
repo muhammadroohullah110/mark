@@ -1,0 +1,74 @@
+/* ============================================================
+   MARK AI -- Admin Panel Styles
+   Arctic Sovereign / Boreal Futurism Design System
+
+   Most styles are inline in admin.js for WordPress admin
+   isolation. This file provides base resets and keyframes.
+   ============================================================ */
+
+/* ── Google Fonts (loaded via PHP enqueue, fallback here) ──── */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+/* ── Reset WP Admin Styles Inside Our App ─────────────────── */
+#mark-ai-app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #e0e3e5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.6;
+}
+
+#mark-ai-app *,
+#mark-ai-app *::before,
+#mark-ai-app *::after {
+    box-sizing: border-box;
+}
+
+#mark-ai-app h1,
+#mark-ai-app h2,
+#mark-ai-app h3,
+#mark-ai-app h4 {
+    font-family: 'Space Grotesk', sans-serif;
+    color: #e0e3e5;
+    line-height: 1.2;
+}
+
+#mark-ai-app a {
+    text-decoration: none;
+}
+
+#mark-ai-app button {
+    font-family: inherit;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+#mark-ai-app ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+#mark-ai-app ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#mark-ai-app ::-webkit-scrollbar-thumb {
+    background: #45464d;
+    border-radius: 3px;
+}
+
+#mark-ai-app ::-webkit-scrollbar-thumb:hover {
+    background: #909097;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 782px) {
+    #mark-ai-app .mark-ai-app-root {
+        margin: -10px -10px 0 -2px !important;
+        padding: 0 !important;
+    }
+
+    #mark-ai-app #mark-page-content {
+        padding: 16px !important;
+    }
+}

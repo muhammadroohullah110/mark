@@ -46,7 +46,10 @@ backend/pip
 *.mp4
 
 # ─── Old admin panel (replaced by WP plugin) ───
-admin/
+/admin/
+
+# ─── Binaries ───
+cloudflared*
 
 # ─── Node ───
 node_modules/

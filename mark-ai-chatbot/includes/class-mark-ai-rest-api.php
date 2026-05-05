@@ -1,7 +1,8 @@
 <?php
 /**
  * Mark AI — WordPress REST API
- * All REST endpoints for admin dashboard (stores CRUD, analytics, settings).
+ * All REST endpoints for admin dashboard.
+ * NO external backend — Groq API called directly from PHP.
  */
 
 defined('ABSPATH') || exit;
@@ -12,19 +13,16 @@ class Mark_AI_Rest_API {
         add_action('rest_api_init', [$this, 'register_routes']);
     }
 
-    /**
-     * Register all REST routes under /wp-json/mark-ai/v1/
-     */
     public function register_routes() {
 
-        // ── Dashboard ─────────────────────────────────
+        // Dashboard
         register_rest_route('mark-ai/v1', '/dashboard', [
             'methods'             => 'GET',
             'callback'            => [$this, 'get_dashboard'],
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
-        // ── Settings ──────────────────────────────────
+        // Settings
         register_rest_route('mark-ai/v1', '/settings', [
             'methods'             => 'GET',
             'callback'            => [$this, 'get_settings'],
@@ -36,7 +34,7 @@ class Mark_AI_Rest_API {
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
-        // ── Stores CRUD ───────────────────────────────
+        // Stores CRUD
         register_rest_route('mark-ai/v1', '/stores', [
             'methods'             => 'GET',
             'callback'            => [$this, 'list_stores'],
@@ -63,35 +61,36 @@ class Mark_AI_Rest_API {
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
-        // ── Store Analytics ───────────────────────────
+        // Analytics
         register_rest_route('mark-ai/v1', '/stores/(?P<store_id>[a-zA-Z0-9]+)/analytics', [
             'methods'             => 'GET',
             'callback'            => [$this, 'get_store_analytics'],
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
-        // ── Conversations ─────────────────────────────
+        // Conversations
         register_rest_route('mark-ai/v1', '/stores/(?P<store_id>[a-zA-Z0-9]+)/conversations', [
             'methods'             => 'GET',
             'callback'            => [$this, 'get_conversations'],
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
-        // ── Embed Code ────────────────────────────────
+        // Embed Code
         register_rest_route('mark-ai/v1', '/stores/(?P<store_id>[a-zA-Z0-9]+)/embed', [
             'methods'             => 'GET',
             'callback'            => [$this, 'get_embed_code'],
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
-        // ── Backend Health Check ──────────────────────
-        register_rest_route('mark-ai/v1', '/health', [
-            'methods'             => 'GET',
-            'callback'            => [$this, 'health_check'],
+        // Test Groq API connection
+        register_rest_route('mark-ai/v1', '/test-connection', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'test_connection'],
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
-        // ── Test Voice (calls backend TTS) ────────────
+        // Test Voice (uses browser SpeechSynthesis — no server call needed)
+        // This endpoint just validates the voice config is saved
         register_rest_route('mark-ai/v1', '/test-voice', [
             'methods'             => 'POST',
             'callback'            => [$this, 'test_voice'],
@@ -99,9 +98,6 @@ class Mark_AI_Rest_API {
         ]);
     }
 
-    /**
-     * Permission check — must be logged-in admin.
-     */
     public function admin_check() {
         return current_user_can('manage_options');
     }
@@ -112,7 +108,6 @@ class Mark_AI_Rest_API {
         $stats = Mark_AI_Database::get_dashboard_stats();
         $stores = Mark_AI_Database::get_stores();
 
-        // Add analytics to each store
         $store_list = [];
         foreach ($stores as $store) {
             $store_list[] = [
@@ -132,10 +127,13 @@ class Mark_AI_Rest_API {
 
     public function get_settings() {
         $settings = get_option('mark_ai_settings', []);
-        // Mask the Groq API key for security
+        // Mask Groq key
         if (!empty($settings['groq_api_key'])) {
             $key = $settings['groq_api_key'];
             $settings['groq_api_key_masked'] = substr($key, 0, 8) . '...' . substr($key, -4);
+            $settings['has_groq_key'] = true;
+        } else {
+            $settings['has_groq_key'] = false;
         }
         return new WP_REST_Response($settings, 200);
     }
@@ -144,9 +142,8 @@ class Mark_AI_Rest_API {
         $body = $request->get_json_params();
         $current = get_option('mark_ai_settings', []);
 
-        // Whitelist allowed settings
         $allowed = [
-            'backend_url', 'groq_api_key', 'default_voice', 'default_voice_ur',
+            'groq_api_key', 'default_voice', 'default_voice_ur',
             'tts_rate', 'tts_pitch', 'llm_model', 'max_tokens', 'temperature',
             'widget_enabled', 'widget_position', 'auto_greet', 'primary_language',
         ];
@@ -165,14 +162,11 @@ class Mark_AI_Rest_API {
 
     public function list_stores() {
         $stores = Mark_AI_Database::get_stores();
-
-        // Mask API keys
         foreach ($stores as &$s) {
             if (!empty($s['groq_api_key'])) {
                 $s['groq_api_key'] = substr($s['groq_api_key'], 0, 8) . '...' . substr($s['groq_api_key'], -4);
             }
         }
-
         return new WP_REST_Response(['stores' => $stores], 200);
     }
 
@@ -183,15 +177,10 @@ class Mark_AI_Rest_API {
             return new WP_REST_Response(['message' => 'Store name and website URL are required.'], 400);
         }
 
-        // Use global Groq key if not provided per-store
-        $settings = get_option('mark_ai_settings', []);
-        $groq_key = !empty($body['groq_api_key']) ? $body['groq_api_key'] : ($settings['groq_api_key'] ?? '');
-
         $data = [
             'store_name'     => sanitize_text_field($body['store_name']),
             'website_url'    => esc_url_raw($body['website_url']),
             'assistant_name' => sanitize_text_field($body['assistant_name'] ?? 'Mark'),
-            'groq_api_key'   => sanitize_text_field($groq_key),
         ];
 
         $store_id = Mark_AI_Database::create_store($data);
@@ -219,7 +208,6 @@ class Mark_AI_Rest_API {
 
         $body = $request->get_json_params();
 
-        // Whitelist updatable fields
         $allowed = [
             'store_name', 'website_url', 'assistant_name', 'personality',
             'greeting_style', 'primary_language', 'supported_languages',
@@ -237,7 +225,6 @@ class Mark_AI_Rest_API {
             }
         }
 
-        // Allow longtext for custom_system_prompt
         if (isset($body['custom_system_prompt'])) {
             $updates['custom_system_prompt'] = wp_kses_post($body['custom_system_prompt']);
         }
@@ -301,16 +288,12 @@ class Mark_AI_Rest_API {
             return new WP_REST_Response(['message' => 'Store not found'], 404);
         }
 
-        $settings = get_option('mark_ai_settings', []);
-        $backend = $settings['backend_url'] ?? 'http://localhost:8000';
-
         $embed_script = sprintf(
             '<!-- Mark AI Shopping Companion -->
-<div id="mark-ai-widget" data-store-id="%s" data-backend="%s"></div>
+<div id="mark-ai-widget" data-store-id="%s"></div>
 <script src="%spublic/js/chatbot.js"></script>
 <!-- End Mark AI -->',
             esc_attr($store_id),
-            esc_url($backend),
             esc_url(MARK_AI_URL)
         );
 
@@ -321,61 +304,62 @@ class Mark_AI_Rest_API {
         ], 200);
     }
 
-    // ── Health Check ───────────────────────────────────
+    // ── Test Groq Connection ───────────────────────────
 
-    public function health_check() {
+    public function test_connection(WP_REST_Request $request) {
         $settings = get_option('mark_ai_settings', []);
-        $backend_url = $settings['backend_url'] ?? 'http://localhost:8000';
+        $api_key = $settings['groq_api_key'] ?? '';
 
-        $response = wp_remote_get($backend_url . '/api/status', [
-            'timeout' => 5,
-            'sslverify' => false,
+        if (empty($api_key)) {
+            return new WP_REST_Response([
+                'connected' => false,
+                'error'     => 'No Groq API key configured. Add it in Settings.',
+            ], 200);
+        }
+
+        // Test with a simple Groq API call
+        $response = wp_remote_post('https://api.groq.com/openai/v1/chat/completions', [
+            'timeout' => 10,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type'  => 'application/json',
+            ],
+            'body' => wp_json_encode([
+                'model'      => 'llama-3.3-70b-versatile',
+                'messages'   => [['role' => 'user', 'content' => 'Say OK']],
+                'max_tokens' => 5,
+            ]),
         ]);
 
         if (is_wp_error($response)) {
             return new WP_REST_Response([
-                'backend_online' => false,
-                'error'          => $response->get_error_message(),
+                'connected' => false,
+                'error'     => $response->get_error_message(),
+            ], 200);
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code === 200) {
+            return new WP_REST_Response([
+                'connected' => true,
+                'message'   => 'Groq API connected successfully!',
             ], 200);
         }
 
         $body = json_decode(wp_remote_retrieve_body($response), true);
         return new WP_REST_Response([
-            'backend_online' => true,
-            'backend_status' => $body,
+            'connected' => false,
+            'error'     => $body['error']['message'] ?? 'API returned status ' . $code,
         ], 200);
     }
 
     // ── Test Voice ─────────────────────────────────────
 
     public function test_voice(WP_REST_Request $request) {
-        $settings = get_option('mark_ai_settings', []);
-        $backend_url = $settings['backend_url'] ?? 'http://localhost:8000';
-
-        $body = $request->get_json_params();
-        $text = $body['text'] ?? 'Hello! I am Mark, your shopping companion.';
-        $language = $body['language'] ?? 'en';
-
-        $response = wp_remote_post($backend_url . '/api/tts', [
-            'timeout' => 15,
-            'sslverify' => false,
-            'headers' => ['Content-Type' => 'application/json'],
-            'body' => wp_json_encode([
-                'text'     => $text,
-                'language' => $language,
-            ]),
-        ]);
-
-        if (is_wp_error($response)) {
-            return new WP_REST_Response(['error' => $response->get_error_message()], 502);
-        }
-
-        $audio = wp_remote_retrieve_body($response);
-        $audio_b64 = base64_encode($audio);
-
+        // Voice testing is done client-side using browser SpeechSynthesis API
+        // This endpoint just confirms the config is valid
         return new WP_REST_Response([
-            'audio_base64' => $audio_b64,
-            'content_type' => 'audio/mpeg',
+            'message' => 'Voice test uses browser SpeechSynthesis. Click the play button to hear it.',
         ], 200);
     }
 }

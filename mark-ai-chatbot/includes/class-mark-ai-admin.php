@@ -63,15 +63,13 @@ class Mark_AI_Admin {
         wp_enqueue_script('mark-ai-admin', MARK_AI_URL . 'admin/js/admin.js', ['jquery'], MARK_AI_VERSION, true);
 
         // Pass config to JS
-        $settings = get_option('mark_ai_settings', []);
         wp_localize_script('mark-ai-admin', 'markAI', [
             'ajaxUrl'    => admin_url('admin-ajax.php'),
             'restUrl'    => rest_url('mark-ai/v1/'),
             'nonce'      => wp_create_nonce('wp_rest'),
-            'backendUrl' => $settings['backend_url'] ?? 'http://localhost:8000',
             'pluginUrl'  => MARK_AI_URL,
             'version'    => MARK_AI_VERSION,
-            'currentPage'=> $_GET['page'] ?? 'mark-ai',
+            'currentPage'=> isset($_GET['page']) ? sanitize_text_field($_GET['page']) : 'mark-ai',
         ]);
     }
 
