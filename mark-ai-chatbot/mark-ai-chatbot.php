@@ -27,6 +27,7 @@ require_once MARK_AI_PATH . 'includes/class-mark-ai-database.php';
 require_once MARK_AI_PATH . 'includes/class-mark-ai-admin.php';
 require_once MARK_AI_PATH . 'includes/class-mark-ai-rest-api.php';
 require_once MARK_AI_PATH . 'includes/class-mark-ai-widget.php';
+require_once MARK_AI_PATH . 'includes/class-mark-ai-updater.php';
 
 // ── Activation / Deactivation ───────────────────────────────
 register_activation_hook(__FILE__, ['Mark_AI_Activator', 'activate']);
@@ -41,6 +42,9 @@ function mark_ai_init() {
 
     // REST API endpoints (always loaded)
     new Mark_AI_Rest_API();
+
+    // Auto-updater (checks GitHub for new releases)
+    new Mark_AI_Updater();
 
     // Frontend widget (only loads on frontend)
     if (!is_admin()) {
