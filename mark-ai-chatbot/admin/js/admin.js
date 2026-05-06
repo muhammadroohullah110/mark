@@ -26,6 +26,7 @@
     let globalSettings = {};
     let activeTab      = 'settings';
     let storeSearch    = '';
+    let currentPage    = 'dashboard';
 
     /* ================================================================
        DESIGN TOKENS  (inline style fragments)
@@ -137,7 +138,6 @@
        TOAST
        ================================================================ */
     function toast(message, type = 'success') {
-        // Remove existing
         const existing = document.querySelector('.mark-ai-toast');
         if (existing) existing.remove();
 
@@ -169,7 +169,7 @@
     }
 
     /* ================================================================
-       INJECT GLOBAL KEYFRAMES (once)
+       INJECT GLOBAL KEYFRAMES + SIDEBAR CSS (once)
        ================================================================ */
     function injectKeyframes() {
         if (document.getElementById('mark-ai-keyframes')) return;
@@ -198,12 +198,59 @@
                 background: #1d2022;
                 color: #e0e3e5;
             }
+            /* Sidebar nav items */
+            #mark-sidebar-nav a {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 11px 20px;
+                margin: 2px 8px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 14px;
+                font-weight: 500;
+                text-decoration: none;
+                color: #909097;
+                border-left: 3px solid transparent;
+                border-radius: 0 6px 6px 0;
+            }
+            #mark-sidebar-nav a:hover {
+                color: #c6c6cd;
+                background: rgba(79,142,255,0.05);
+            }
+            #mark-sidebar-nav a[data-active="1"] {
+                color: #aec6ff;
+                background: rgba(79,142,255,0.08);
+                border-left-color: #4f8eff;
+                font-weight: 600;
+            }
+            #mark-sidebar-nav a[data-active="1"]:hover {
+                color: #aec6ff;
+                background: rgba(79,142,255,0.12);
+            }
+            #mark-sidebar-nav a .material-symbols-outlined {
+                font-size: 18px;
+                transition: color 0.15s;
+            }
+            #mark-sidebar-nav a[data-active="1"] .material-symbols-outlined {
+                color: #22d3ee;
+            }
         `;
         document.head.appendChild(style);
     }
 
     /* ================================================================
-       RENDER: APP SHELL
+       SIDEBAR ITEM RENDERER
+       ================================================================ */
+    function renderSidebarItem(page, icon, label) {
+        const isActive = currentPage === page;
+        return `<a data-sidebar-page="${page}" ${isActive ? 'data-active="1"' : ''} onclick="markAdmin.navigate('${page}')">
+            <span class="material-symbols-outlined">${icon}</span>${label}</a>`;
+    }
+
+    /* ================================================================
+       RENDER: APP SHELL (Sidebar + Content)
        ================================================================ */
     function renderAppShell() {
         injectKeyframes();
@@ -211,38 +258,109 @@
         const app = $('#mark-ai-app');
         if (!app) return;
 
-        app.innerHTML = `
-        <div class="mark-ai-app-root" style="${T.pageBg}min-height:calc(100vh - 32px);margin:-20px -20px 0 -2px;padding:0;font-family:'Inter',sans-serif;color:#e0e3e5;-webkit-font-smoothing:antialiased;">
-            <!-- Top Bar -->
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 32px;border-bottom:1px solid rgba(0,119,255,0.15);background:rgba(2,6,23,0.4);backdrop-filter:blur(30px);">
-                <div style="display:flex;align-items:center;gap:12px;">
-                    <span class="material-symbols-outlined" style="color:#22d3ee;font-size:28px;">smart_toy</span>
-                    <span style="font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:800;${T.gradientTextPurple}">Mark AI</span>
-                    <span style="font-size:10px;padding:3px 8px;border-radius:4px;background:rgba(174,198,255,0.1);color:#aec6ff;font-family:'Space Grotesk',sans-serif;font-weight:600;letter-spacing:0.05em;">v${markAI.version || '1.0'}</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:16px;">
-                    <span style="font-family:'Space Grotesk',sans-serif;font-size:11px;color:#909097;text-transform:uppercase;letter-spacing:0.1em;">Arctic Console</span>
-                </div>
-            </div>
+        // Map WP page slug to internal page name
+        const pageMap = {
+            'mark-ai': 'dashboard',
+            'mark-ai-stores': 'dashboard',
+            'mark-ai-conversations': 'conversations',
+            'mark-ai-settings': 'settings',
+        };
+        currentPage = pageMap[PAGE] || 'dashboard';
 
-            <!-- Content -->
-            <div style="padding:32px 40px;max-width:1440px;margin:0 auto;" id="mark-page-content">
-                ${skeleton('200px')}
-                <div style="margin-top:16px;">${skeleton('300px')}</div>
-            </div>
+        app.innerHTML = `
+        <div class="mark-ai-app-root" style="${T.pageBg}display:flex;min-height:calc(100vh - 32px);margin:-20px -20px 0 -2px;font-family:'Inter',sans-serif;color:#e0e3e5;-webkit-font-smoothing:antialiased;">
+
+            <!-- ======== Sidebar ======== -->
+            <aside id="mark-sidebar" style="width:220px;flex-shrink:0;background:#0b0f10;border-right:1px solid rgba(0,119,255,0.15);display:flex;flex-direction:column;position:sticky;top:32px;height:calc(100vh - 32px);overflow-y:auto;z-index:10;">
+
+                <!-- Logo -->
+                <div style="padding:24px 20px 18px;border-bottom:1px solid rgba(0,119,255,0.1);">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                        <span class="material-symbols-outlined" style="color:#22d3ee;font-size:24px;">smart_toy</span>
+                        <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:800;${T.gradientTextPurple}">Mark AI</span>
+                    </div>
+                    <span style="font-size:10px;font-weight:600;color:#909097;font-family:'Space Grotesk',sans-serif;letter-spacing:0.1em;text-transform:uppercase;">Boreal Intelligence</span>
+                </div>
+
+                <!-- Navigation -->
+                <nav style="flex:1;padding:16px 0;" id="mark-sidebar-nav">
+                    ${renderSidebarItem('dashboard', 'dashboard', 'Dashboard')}
+                    ${renderSidebarItem('conversations', 'forum', 'Conversations')}
+                    ${renderSidebarItem('settings', 'settings', 'Settings')}
+                </nav>
+
+                <!-- Bottom Actions -->
+                <div style="padding:16px;border-top:1px solid rgba(0,119,255,0.1);">
+                    <button style="${T.btnGradient}width:100%;justify-content:center;padding:10px 16px;font-size:13px;" onclick="markAdmin.showAddStore()">
+                        <span class="material-symbols-outlined" style="font-size:16px;">add</span> Deploy New Store
+                    </button>
+                </div>
+            </aside>
+
+            <!-- ======== Main Content ======== -->
+            <main style="flex:1;min-width:0;">
+                <!-- Top Bar -->
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 32px;border-bottom:1px solid rgba(0,119,255,0.1);background:rgba(2,6,23,0.6);backdrop-filter:blur(30px);position:sticky;top:0;z-index:5;">
+                    <span style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;color:#c6c6cd;display:flex;align-items:center;gap:8px;" id="mark-breadcrumb">
+                        <span class="material-symbols-outlined" style="font-size:16px;color:#22d3ee;">dashboard</span> Dashboard
+                    </span>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <span style="font-family:'Space Grotesk',sans-serif;font-size:10px;padding:3px 8px;border-radius:4px;background:rgba(174,198,255,0.1);color:#aec6ff;font-weight:600;letter-spacing:0.05em;">v${markAI.version || '1.0'}</span>
+                    </div>
+                </div>
+
+                <!-- Page Content -->
+                <div style="padding:32px 40px;max-width:1440px;margin:0 auto;" id="mark-page-content">
+                    ${skeleton('200px')}
+                    <div style="margin-top:16px;">${skeleton('300px')}</div>
+                </div>
+            </main>
         </div>
 
         <!-- Modal Container -->
         <div id="mark-modal-container"></div>
         `;
 
-        // Route to page
-        switch (PAGE) {
-            case 'mark-ai-stores':       loadDashboardPage(); break;
-            case 'mark-ai-conversations': loadConversationsPage(); break;
-            case 'mark-ai-settings':      loadSettingsPage(); break;
-            default:                      loadDashboardPage(); break;
+        // Load initial page
+        navigate(currentPage);
+    }
+
+    /* ================================================================
+       SPA NAVIGATION
+       ================================================================ */
+    function navigate(page) {
+        currentPage = page;
+        currentStore = null;
+
+        // Update sidebar active states
+        const items = $$('#mark-sidebar-nav a[data-sidebar-page]');
+        items.forEach(item => {
+            if (item.dataset.sidebarPage === page) {
+                item.setAttribute('data-active', '1');
+            } else {
+                item.removeAttribute('data-active');
+            }
+        });
+
+        // Update breadcrumb
+        const bc = $('#mark-breadcrumb');
+        if (bc) {
+            const icons = { dashboard: 'dashboard', conversations: 'forum', settings: 'settings' };
+            const labels = { dashboard: 'Dashboard', conversations: 'Conversations', settings: 'Settings' };
+            bc.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;color:#22d3ee;">${icons[page] || 'dashboard'}</span> ${labels[page] || 'Dashboard'}`;
         }
+
+        // Route
+        switch (page) {
+            case 'conversations': loadConversationsPage(); break;
+            case 'settings':      loadSettingsPage(); break;
+            default:              loadDashboardPage(); break;
+        }
+    }
+
+    function setBreadcrumb(html) {
+        const bc = $('#mark-breadcrumb');
+        if (bc) bc.innerHTML = html;
     }
 
     /* ================================================================
@@ -357,7 +475,7 @@
             </div>
 
             <!-- Stats Grid -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;margin-bottom:80px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:24px;margin-bottom:80px;">
                 ${renderStatCard('Total Stores', dashboardStats.total_stores, 'storefront')}
                 ${renderStatCard('Total Conversations', dashboardStats.total_conversations, 'forum')}
                 ${renderStatCard("Today's Chats", dashboardStats.today_conversations, 'today')}
@@ -381,7 +499,7 @@
             </div>
 
             <!-- Store Cards Grid -->
-            <div id="stores-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:24px;">
+            <div id="stores-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px;">
                 ${stores.length === 0 ? renderEmptyState() : stores.map(renderStoreCard).join('')}
             </div>
             `;
@@ -391,7 +509,7 @@
                 <span class="material-symbols-outlined" style="font-size:64px;color:rgba(255,180,171,0.3);margin-bottom:16px;">error</span>
                 <h3 style="${T.headline}font-size:20px;margin:16px 0 8px;">Failed to load dashboard</h3>
                 <p style="color:#c6c6cd;font-size:14px;margin:0 0 20px;">${esc(e.message)}</p>
-                <button style="${T.btnSecondary}" onclick="markAdmin.loadDashboard()">
+                <button style="${T.btnSecondary}" onclick="markAdmin.navigate('dashboard')">
                     <span class="material-symbols-outlined" style="font-size:18px;">refresh</span> Retry
                 </button>
             </div>`;
@@ -488,7 +606,7 @@
             });
             toast('Store "' + name + '" created successfully!', 'success');
             closeModal();
-            loadDashboardPage();
+            navigate('dashboard');
         } catch (e) {
             toast(e.message, 'error');
         }
@@ -509,10 +627,14 @@
             const data = await api('GET', 'stores/' + storeId);
             currentStore = data.store || data;
             activeTab = 'settings';
+
+            // Update breadcrumb to show store context
+            setBreadcrumb(`<a style="color:#909097;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;" onclick="markAdmin.navigate('dashboard')" onmouseenter="this.style.color='#aec6ff'" onmouseleave="this.style.color='#909097'"><span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Dashboard</a> <span style="color:#45464d;margin:0 8px;">/</span> <span style="color:#e0e3e5;">${esc(currentStore.store_name)}</span>`);
+
             renderStoreDetail();
         } catch (e) {
             toast('Failed to load store: ' + e.message, 'error');
-            loadDashboardPage();
+            navigate('dashboard');
         }
     }
 
@@ -521,14 +643,8 @@
         const content = $('#mark-page-content');
 
         content.innerHTML = `
-        <!-- Back + Header -->
+        <!-- Store Header -->
         <div style="margin-bottom:40px;">
-            <a style="display:inline-flex;align-items:center;gap:8px;color:#909097;text-decoration:none;font-size:14px;margin-bottom:16px;cursor:pointer;transition:color 0.2s;font-family:'Inter',sans-serif;"
-               onclick="markAdmin.loadDashboard()"
-               onmouseenter="this.style.color='#aec6ff'" onmouseleave="this.style.color='#909097'">
-                <span class="material-symbols-outlined" style="font-size:18px;">arrow_back</span>
-                Back to Dashboard
-            </a>
             <div style="display:flex;flex-direction:row;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;">
                 <div>
                     <h2 style="${T.headline}font-size:48px;line-height:1.1;letter-spacing:-0.02em;color:#aec6ff;margin:0 0 4px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -797,7 +913,7 @@
                     </button>
                 </div>
 
-                <!-- Audio Preview (appears after test) -->
+                <!-- Audio Preview -->
                 <div id="voice-preview" style="${T.glassLight}padding:24px;display:none;">
                     <span style="${T.label}">Voice Preview</span>
                     <div id="voice-preview-content" style="margin-top:8px;"></div>
@@ -820,19 +936,19 @@
         } catch (e) { toast(e.message, 'error'); }
     }
 
-    async function testVoice(lang) {
-        toast('Generating voice preview...', 'info');
+    function testVoice(lang) {
         const text = lang === 'ur'
             ? 'Assalam o alaikum! Main Mark hoon, aap ka shopping buddy.'
             : 'Hey there! I am Mark, your personal shopping companion.';
-        try {
-            const data = await api('POST', 'test-voice', {
-                text,
-                language: lang,
-                store_id: currentStore.store_id,
-            });
-            const audio = new Audio('data:audio/mpeg;base64,' + data.audio_base64);
-            audio.play();
+
+        // Use browser SpeechSynthesis for instant preview
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang === 'ur' ? 'ur-PK' : 'en-US';
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance);
 
             // Show preview
             const preview = $('#voice-preview');
@@ -842,16 +958,15 @@
                 previewContent.innerHTML = `
                 <div style="display:flex;align-items:center;gap:12px;">
                     <button style="width:40px;height:40px;border-radius:50%;background:#4f8eff;color:#00275e;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 10px rgba(79,142,255,0.4);"
-                            onclick="this.parentElement.parentElement.querySelector('audio').play()">
+                            onclick="markAdmin.testVoice('${lang}')">
                         <span class="material-symbols-outlined" style="font-size:20px;">play_arrow</span>
                     </button>
-                    <span style="font-size:14px;color:#c6c6cd;">${lang === 'ur' ? 'Urdu' : 'English'} sample</span>
-                    <audio src="data:audio/mpeg;base64,${data.audio_base64}"></audio>
+                    <span style="font-size:14px;color:#c6c6cd;">${lang === 'ur' ? 'Urdu' : 'English'} sample playing...</span>
                 </div>`;
             }
             toast('Playing voice sample!', 'success');
-        } catch (e) {
-            toast('Voice test failed: ' + e.message, 'error');
+        } else {
+            toast('Browser does not support speech synthesis.', 'error');
         }
     }
 
@@ -1073,7 +1188,6 @@
         navigator.clipboard.writeText(text).then(() => {
             toast('Copied to clipboard!', 'success');
         }).catch(() => {
-            // Fallback
             const ta = document.createElement('textarea');
             ta.value = text;
             document.body.appendChild(ta);
@@ -1129,7 +1243,7 @@
             toast('"' + currentStore.store_name + '" deleted.', 'success');
             currentStore = null;
             closeModal();
-            loadDashboardPage();
+            navigate('dashboard');
         } catch (e) {
             toast(e.message, 'error');
         }
@@ -1186,6 +1300,9 @@
             const data = await api('GET', 'stores/' + storeId);
             currentStore = data.store || data;
             activeTab = 'conversations';
+
+            setBreadcrumb(`<a style="color:#909097;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;" onclick="markAdmin.navigate('conversations')" onmouseenter="this.style.color='#aec6ff'" onmouseleave="this.style.color='#909097'"><span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Conversations</a> <span style="color:#45464d;margin:0 8px;">/</span> <span style="color:#e0e3e5;">${esc(currentStore.store_name)}</span>`);
+
             renderStoreDetail();
         } catch (e) {
             toast(e.message, 'error');
@@ -1286,6 +1403,19 @@
                 </div>
             </div>
 
+            <!-- Test Connection -->
+            <div style="${T.glass}padding:32px;margin-bottom:32px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;">
+                    <span class="material-symbols-outlined" style="font-size:20px;color:#aec6ff;">cable</span>
+                    <h3 style="${T.headline}font-size:24px;margin:0;">Connection Test</h3>
+                </div>
+                <p style="color:#c6c6cd;font-size:14px;margin:0 0 16px;">Verify your Groq API key is working correctly.</p>
+                <button style="${T.btnSecondary}" onclick="markAdmin.testConnection()" id="test-conn-btn">
+                    <span class="material-symbols-outlined" style="font-size:18px;">power</span> Test Groq Connection
+                </button>
+                <div id="conn-test-result" style="margin-top:12px;"></div>
+            </div>
+
             <!-- Save -->
             <button style="${T.btnGradient}padding:14px 32px;" onclick="markAdmin.saveGlobalSettings()"
                     onmouseenter="this.style.boxShadow='0 0 25px rgba(79,142,255,0.4)';this.style.transform='translateY(-2px)'"
@@ -1297,7 +1427,7 @@
             content.innerHTML = `<div style="text-align:center;padding:60px;color:#909097;">
                 <span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;">error</span>
                 <p style="margin:16px 0;">Failed to load settings: ${esc(e.message)}</p>
-                <button style="${T.btnSecondary}" onclick="markAdmin.loadSettings()">
+                <button style="${T.btnSecondary}" onclick="markAdmin.navigate('settings')">
                     <span class="material-symbols-outlined" style="font-size:18px;">refresh</span> Retry
                 </button>
             </div>`;
@@ -1319,6 +1449,25 @@
         } catch (e) { toast(e.message, 'error'); }
     }
 
+    async function testConnection() {
+        const btn = $('#test-conn-btn');
+        const result = $('#conn-test-result');
+        if (btn) btn.disabled = true;
+        if (result) result.innerHTML = `<span style="color:#aec6ff;font-size:13px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="animation:markSpin 1s linear infinite;font-size:16px;">progress_activity</span> Testing...</span>`;
+
+        try {
+            const data = await api('POST', 'test-connection');
+            if (data.connected) {
+                result.innerHTML = `<span style="color:#34d399;font-size:13px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="font-size:16px;">check_circle</span> ${esc(data.message)}</span>`;
+            } else {
+                result.innerHTML = `<span style="color:#ffb4ab;font-size:13px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="font-size:16px;">error</span> ${esc(data.error)}</span>`;
+            }
+        } catch (e) {
+            result.innerHTML = `<span style="color:#ffb4ab;font-size:13px;">${esc(e.message)}</span>`;
+        }
+        if (btn) btn.disabled = false;
+    }
+
     /* ================================================================
        MODAL HELPER
        ================================================================ */
@@ -1332,8 +1481,7 @@
        PUBLIC API (exposed to onclick handlers)
        ================================================================ */
     window.markAdmin = {
-        loadDashboard: loadDashboardPage,
-        loadSettings: loadSettingsPage,
+        navigate,
         filterStores,
         showAddStore,
         createStore,
@@ -1350,6 +1498,7 @@
         copyText,
         closeModal,
         saveGlobalSettings,
+        testConnection,
     };
 
     /* ================================================================

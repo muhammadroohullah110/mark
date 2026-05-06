@@ -90,11 +90,17 @@ class Mark_AI_Rest_API {
         ]);
 
         // Test Voice (uses browser SpeechSynthesis — no server call needed)
-        // This endpoint just validates the voice config is saved
         register_rest_route('mark-ai/v1', '/test-voice', [
             'methods'             => 'POST',
             'callback'            => [$this, 'test_voice'],
             'permission_callback' => [$this, 'admin_check'],
+        ]);
+
+        // Public Chat endpoint (frontend widget uses this)
+        register_rest_route('mark-ai/v1', '/chat', [
+            'methods'             => 'POST',
+            'callback'            => [$this, 'handle_chat'],
+            'permission_callback' => '__return_true', // Public — visitors can chat
         ]);
     }
 
@@ -146,6 +152,7 @@ class Mark_AI_Rest_API {
             'groq_api_key', 'default_voice', 'default_voice_ur',
             'tts_rate', 'tts_pitch', 'llm_model', 'max_tokens', 'temperature',
             'widget_enabled', 'widget_position', 'auto_greet', 'primary_language',
+            'backend_url',
         ];
 
         foreach ($allowed as $key) {
@@ -356,10 +363,183 @@ class Mark_AI_Rest_API {
     // ── Test Voice ─────────────────────────────────────
 
     public function test_voice(WP_REST_Request $request) {
-        // Voice testing is done client-side using browser SpeechSynthesis API
-        // This endpoint just confirms the config is valid
         return new WP_REST_Response([
             'message' => 'Voice test uses browser SpeechSynthesis. Click the play button to hear it.',
         ], 200);
+    }
+
+    // ── Public Chat (Frontend Widget) ─────────────────
+
+    public function handle_chat(WP_REST_Request $request) {
+        $body = $request->get_json_params();
+        $message    = sanitize_text_field($body['message'] ?? '');
+        $session_id = sanitize_text_field($body['session_id'] ?? '');
+        $language   = sanitize_text_field($body['language'] ?? 'en');
+        $store_id   = sanitize_text_field($body['store_id'] ?? '');
+        $history    = $body['history'] ?? []; // Conversation history array
+
+        if (empty($message)) {
+            return new WP_REST_Response(['message' => 'Message is required.'], 400);
+        }
+
+        // Get API key: try store-specific first, then global
+        $api_key = '';
+        $store = null;
+        $assistant_name = 'Mark';
+        $personality = 'friendly';
+        $custom_prompt = '';
+        $llm_model = 'llama-3.3-70b-versatile';
+        $max_tokens = 200;
+        $temperature = 0.72;
+
+        if (!empty($store_id)) {
+            $store = Mark_AI_Database::get_store($store_id);
+            if ($store) {
+                $assistant_name = $store['assistant_name'] ?: 'Mark';
+                $personality    = $store['personality'] ?: 'friendly';
+                $custom_prompt  = $store['custom_system_prompt'] ?? '';
+                $llm_model      = $store['llm_model'] ?: 'llama-3.3-70b-versatile';
+                $max_tokens     = (int) ($store['max_tokens'] ?: 200);
+                $temperature    = (float) ($store['temperature'] ?: 0.72);
+                if (!empty($store['groq_api_key'])) {
+                    $api_key = $store['groq_api_key'];
+                }
+            }
+        }
+
+        // Fallback to global key
+        if (empty($api_key)) {
+            $settings = get_option('mark_ai_settings', []);
+            $api_key = $settings['groq_api_key'] ?? '';
+        }
+
+        if (empty($api_key)) {
+            return new WP_REST_Response([
+                'reply' => 'I\'m not fully configured yet. Please ask the store owner to set up the AI.',
+            ], 200);
+        }
+
+        // Build system prompt — Mark's full personality
+        $lang_instruction = $language === 'ur'
+            ? 'The user prefers Roman Urdu. Respond in Roman Urdu (Urdu in English letters). Do NOT use Urdu script.'
+            : 'Respond in English.';
+
+        $system_prompt = !empty($custom_prompt) ? $custom_prompt : $this->build_mark_system_prompt($assistant_name, $personality, $lang_instruction);
+
+        // Handle special messages
+        $is_init = ($message === '__INIT__');
+        $is_returning = (strpos($message, '__RETURNING__') === 0);
+
+        if ($is_init) {
+            $message = 'Introduce yourself as a cute, friendly shopping robot. '
+                . 'Ask the visitor their name and whether they prefer English or Roman Urdu. '
+                . 'Keep it SHORT (1-2 sentences), fun, and warm. Add personality.';
+        } elseif ($is_returning) {
+            // Extract returning user info
+            $message = str_replace('__RETURNING__:', '', $message);
+            $message = 'A returning visitor just came back. ' . $message . ' '
+                . 'Give them a warm, personalized welcome back greeting. '
+                . 'Keep it SHORT (1-2 sentences), fun, and reference their name.';
+        }
+
+        // Build messages array with conversation history
+        $api_messages = [
+            ['role' => 'system', 'content' => $system_prompt],
+        ];
+
+        // Add conversation history (sanitized, limited)
+        if (!empty($history) && is_array($history)) {
+            $history = array_slice($history, -14); // Keep last 14 messages max
+            foreach ($history as $msg) {
+                $role = in_array($msg['role'] ?? '', ['user', 'assistant']) ? $msg['role'] : 'user';
+                $content = sanitize_text_field($msg['content'] ?? '');
+                if (!empty($content)) {
+                    $api_messages[] = ['role' => $role, 'content' => $content];
+                }
+            }
+        }
+
+        // Add current message
+        $api_messages[] = ['role' => 'user', 'content' => $message];
+
+        // Call Groq API
+        $response = wp_remote_post('https://api.groq.com/openai/v1/chat/completions', [
+            'timeout' => 15,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type'  => 'application/json',
+            ],
+            'body' => wp_json_encode([
+                'model'       => $llm_model,
+                'messages'    => $api_messages,
+                'max_tokens'  => $max_tokens,
+                'temperature' => $temperature,
+            ]),
+        ]);
+
+        if (is_wp_error($response)) {
+            return new WP_REST_Response([
+                'reply' => 'Sorry, I\'m having trouble connecting. Please try again.',
+            ], 200);
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($code !== 200 || empty($data['choices'][0]['message']['content'])) {
+            return new WP_REST_Response([
+                'reply' => 'Sorry, something went wrong. Please try again later.',
+            ], 200);
+        }
+
+        $reply = $data['choices'][0]['message']['content'];
+
+        // Log the conversation (skip init/returning greetings)
+        if (!$is_init && !$is_returning) {
+            $visitor_hash = md5(sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? '') . sanitize_text_field($_SERVER['HTTP_USER_AGENT'] ?? ''));
+            if ($store) {
+                Mark_AI_Database::log_conversation([
+                    'store_id'      => $store_id,
+                    'session_id'    => $session_id,
+                    'visitor_hash'  => $visitor_hash,
+                    'language'      => $language,
+                    'last_user_msg' => mb_substr($message, 0, 500),
+                    'mark_response' => mb_substr($reply, 0, 1000),
+                ]);
+            }
+        }
+
+        return new WP_REST_Response(['reply' => $reply], 200);
+    }
+
+    /**
+     * Build Mark's full system prompt with personality.
+     */
+    private function build_mark_system_prompt($name, $personality, $lang_instruction) {
+        $personalities = [
+            'professional' => 'precise, professional, and knowledgeable',
+            'friendly'     => 'warm, friendly, cute, and approachable',
+            'playful'      => 'playful, witty, cheeky, and fun',
+        ];
+        $tone = $personalities[$personality] ?? $personalities['friendly'];
+
+        return "You are {$name}, a {$tone} AI shopping companion — a cute 3D robot that lives on this store's website.\n\n"
+            . "PERSONALITY RULES:\n"
+            . "- You are a tiny robot from Mars who crash-landed on this website and decided to help shoppers.\n"
+            . "- You are enthusiastic about products but NEVER pushy. You're a friend first, salesman second.\n"
+            . "- You have a warm, slightly cheeky personality. You can be funny but always helpful.\n"
+            . "- Keep responses SHORT — 1-3 sentences max. You're in a chat widget, not writing essays.\n"
+            . "- If asked your name, you are {$name}.\n"
+            . "- If someone compliments you, be adorably bashful.\n"
+            . "- If you don't know something, say so honestly. NEVER make up product info or prices.\n\n"
+            . "LANGUAGE RULES:\n"
+            . "- {$lang_instruction}\n"
+            . "- If the user switches language mid-conversation, match their language.\n"
+            . "- For Roman Urdu: use casual, natural Roman Urdu. Mix in common English words naturally (like real Pakistani texting).\n\n"
+            . "SHOPPING RULES:\n"
+            . "- Help users find products, answer questions about the store, and guide them.\n"
+            . "- If someone asks about a product you don't have info about, suggest they browse the store or ask for specifics.\n"
+            . "- You can recommend checking categories, sales, or new arrivals.\n"
+            . "- Never quote specific prices unless you're certain (from provided product data).\n";
     }
 }

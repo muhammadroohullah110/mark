@@ -1,83 +1,265 @@
 /* ============================================================
-   Mark AI — Frontend Chatbot Widget Styles
+   Mark AI — 3D Robot Widget Styles
+   Full-featured floating robot that walks, talks, and chats.
    ============================================================ */
 
+/* ── ROOT CONTAINER ── */
 #mark-ai-chatbot-root {
     position: fixed;
     z-index: 99999;
-    font-family: 'Inter', -apple-system, sans-serif;
+    font-family: 'Outfit', -apple-system, sans-serif;
 }
 
-#mark-ai-chatbot-root[data-position="bottom-right"] {
-    bottom: 20px;
-    right: 20px;
+#mark-ai-chatbot-root * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-#mark-ai-chatbot-root[data-position="bottom-left"] {
-    bottom: 20px;
-    left: 20px;
+/* ── BACKDROP (talking mode) ── */
+#mark-talk-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.6s ease;
+    z-index: 9990;
+}
+#mark-ai-chatbot-root.mark-talking #mark-talk-backdrop {
+    opacity: 1; pointer-events: all;
 }
 
-/* 3D Robot Container */
-.mark-robot-container {
-    width: 180px;
-    height: 180px;
-    cursor: pointer;
-    transition: transform 0.3s ease;
+/* ── WIDGET (floating robot circle) ── */
+#mark-widget {
+    position: fixed;
+    width: 115px; height: 115px;
+    left: 5%; top: 70vh;
+    border-radius: 50%; overflow: hidden; cursor: grab;
+    z-index: 9999;
+    border: 3px solid rgba(102,126,234,0.95);
+    background: #080814;
+    box-shadow:
+        0 0 0 6px rgba(102,126,234,0.12),
+        0 0 25px rgba(102,126,234,0.7),
+        0 0 50px rgba(118,75,162,0.45);
+    transition:
+        left 3.2s cubic-bezier(0.45,0,0.25,1),
+        top 3.2s cubic-bezier(0.45,0,0.25,1),
+        width 0.7s cubic-bezier(0.4,0,0.2,1),
+        height 0.7s cubic-bezier(0.4,0,0.2,1),
+        box-shadow 0.5s ease,
+        border 0.5s ease,
+        transform 0.6s cubic-bezier(0.4,0,0.2,1);
 }
 
-.mark-robot-container:hover {
-    transform: scale(1.05);
+#mark-widget.mark-dragging {
+    cursor: grabbing;
+    transition: width 0.7s, height 0.7s, transform 0.6s;
 }
 
-/* Chat Bubble */
-.mark-chat-bubble {
-    position: absolute;
-    bottom: 190px;
-    right: 0;
-    background: rgba(16, 20, 21, 0.95);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(174, 198, 255, 0.15);
-    border-radius: 16px 16px 4px 16px;
-    padding: 16px;
-    max-width: 300px;
-    min-width: 200px;
-    color: #e0e3e5;
-    font-size: 14px;
-    line-height: 1.5;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    opacity: 0;
-    transform: translateY(10px) scale(0.95);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none;
+#mark-widget.mark-talking {
+    width: 320px !important; height: 320px !important;
+    left: 50% !important; top: 50% !important;
+    transform: translate(-50%, -55%) !important;
+    cursor: default !important;
+    border-color: rgba(168,85,247,0.95);
+    box-shadow:
+        0 0 0 8px rgba(168,85,247,0.18),
+        0 0 50px rgba(168,85,247,0.7),
+        0 0 100px rgba(102,126,234,0.5);
+    transition: all 0.7s cubic-bezier(0.4,0,0.2,1);
 }
 
-.mark-chat-bubble.visible {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    pointer-events: auto;
+@media (max-width:768px) {
+    #mark-widget { width:95px; height:95px; }
+    #mark-widget.mark-talking { width:260px !important; height:260px !important; }
 }
 
-/* Listening indicator */
-.mark-listening {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 0;
+/* ── HINT BUBBLE ── */
+#mark-hint {
+    position: absolute; bottom: calc(100% + 10px); left: 50%;
+    transform: translateX(-50%);
+    background: rgba(102,126,234,0.95); color: #fff;
+    font-size: 11px; font-weight: 700; padding: 5px 14px;
+    border-radius: 20px; white-space: nowrap; pointer-events: none;
+    box-shadow: 0 4px 14px rgba(102,126,234,0.5);
+    animation: markHintBounce 1.8s ease-in-out infinite;
+}
+#mark-hint::after {
+    content:''; position:absolute; top:100%; left:50%;
+    transform:translateX(-50%); border:6px solid transparent;
+    border-top-color:rgba(102,126,234,0.95);
+}
+@keyframes markHintBounce {
+    0%,100% { transform:translateX(-50%) translateY(0); }
+    50% { transform:translateX(-50%) translateY(-7px); }
+}
+#mark-ai-chatbot-root.mark-talking #mark-hint { display: none; }
+
+/* ── THREE.JS CONTAINER ── */
+#mark-three-container {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
 }
 
-.mark-listening-dot {
-    width: 6px;
-    height: 6px;
+/* ── CHAT UI (hidden until talking) ── */
+.mark-chat-ui {
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.5s ease 0.4s;
+}
+#mark-ai-chatbot-root.mark-talking .mark-chat-ui {
+    opacity: 1; pointer-events: all;
+}
+
+/* ── LIVE CAPTION ── */
+#mark-live-caption {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -260px);
+    font-size: clamp(15px, 2vw, 20px); font-weight: 500; color: #fff;
+    text-align: center; min-width: 240px; max-width: 600px;
+    background: rgba(20,20,35,0.85);
+    backdrop-filter: blur(14px);
+    padding: 14px 24px; border-radius: 20px;
+    border: 1px solid rgba(168,85,247,0.3);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    z-index: 10001; line-height: 1.45;
+    transition: opacity 0.4s ease;
+}
+@media(max-width:768px) {
+    #mark-live-caption { transform:translate(-50%,-210px); font-size:14px; padding:10px 18px; }
+}
+
+/* ── THINKING INDICATOR ── */
+#mark-thinking-indicator {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -260px);
+    z-index: 10001; font-size: 18px; font-weight: 600;
+    color: rgba(168,85,247,0.95);
+    background: rgba(20,20,35,0.85);
+    backdrop-filter: blur(14px);
+    padding: 10px 22px; border-radius: 20px;
+    border: 1px solid rgba(168,85,247,0.3);
+    display: none; text-align: center;
+}
+#mark-thinking-indicator.mark-show { display: block; }
+@keyframes markDots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
+#mark-thinking-indicator::after { content:''; animation: markDots 1.5s infinite; }
+@media(max-width:768px) {
+    #mark-thinking-indicator { transform:translate(-50%,-210px); font-size:15px; }
+}
+
+/* ── CLOSE BUTTON ── */
+#mark-close-btn {
+    position: fixed; top: 12%; right: 8%;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7); font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10001; backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+#mark-close-btn:hover {
+    background: rgba(239,68,68,0.2);
+    border-color: rgba(239,68,68,0.4);
+    color: #ef4444; transform: scale(1.08);
+}
+
+/* ── MIC BUTTON ── */
+#mark-mic-btn {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, 145px);
+    width: 78px; height: 78px; border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none; color: white; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10001;
+    box-shadow: 0 10px 40px rgba(102,126,234,0.6);
+    user-select: none; -webkit-user-select: none; touch-action: none;
+    transition: all 0.25s ease;
+    font-family: inherit;
+}
+#mark-mic-btn.mark-listening {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    transform: translate(-50%, 145px) scale(1.12);
+    box-shadow: 0 0 0 6px rgba(239,68,68,0.3), 0 0 30px rgba(239,68,68,0.6);
+    animation: markMicPulse 1.2s ease-in-out infinite;
+}
+@keyframes markMicPulse {
+    0%,100% { box-shadow: 0 0 0 6px rgba(239,68,68,0.3), 0 0 30px rgba(239,68,68,0.6); }
+    50% { box-shadow: 0 0 0 12px rgba(239,68,68,0.15), 0 0 50px rgba(239,68,68,0.4); }
+}
+@media(max-width:768px) {
+    #mark-mic-btn { width:64px; height:64px; transform:translate(-50%,115px); }
+    #mark-mic-btn.mark-listening { transform:translate(-50%,115px) scale(1.12); }
+}
+
+/* ── MIC HINT ── */
+#mark-mic-hint {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, 230px);
+    color: rgba(255,255,255,0.7);
+    font-size: 12px; font-weight: 500; letter-spacing: 0.05em;
+    z-index: 10001; text-align: center; white-space: nowrap;
+}
+
+/* ── TEXT INPUT AREA ── */
+#mark-text-input-area {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, 275px);
+    display: flex; gap: 6px;
+    z-index: 10001; width: 320px; max-width: 90vw;
+}
+#mark-text-input {
+    flex: 1; padding: 10px 16px; border-radius: 25px;
+    border: 1px solid rgba(168,85,247,0.3);
+    background: rgba(20,20,35,0.8);
+    backdrop-filter: blur(10px);
+    color: #fff; font-size: 14px;
+    font-family: 'Outfit', -apple-system, sans-serif;
+    outline: none; transition: border-color 0.3s ease;
+}
+#mark-text-input::placeholder { color: rgba(255,255,255,0.35); }
+#mark-text-input:focus { border-color: rgba(168,85,247,0.7); }
+
+#mark-send-btn {
+    width: 42px; height: 42px; border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none; color: white; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; transition: transform 0.2s ease;
+    font-family: inherit;
+}
+#mark-send-btn:hover { transform: scale(1.08); }
+@media(max-width:768px) {
+    #mark-text-input-area { width:260px; transform:translate(-50%,250px); }
+}
+
+/* ── LOADING OVERLAY ── */
+.mark-loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 99999;
+    transition: opacity 0.5s ease;
+}
+.mark-loading-overlay.mark-hidden { opacity: 0; pointer-events: none; }
+.mark-loading-text {
+    color: #fff; font-size: 22px; font-weight: 700; margin-bottom: 18px;
+}
+.mark-loading-spinner {
+    width: 40px; height: 40px;
+    border: 3px solid rgba(102,126,234,0.3);
+    border-top-color: #667eea;
     border-radius: 50%;
-    background: #aec6ff;
-    animation: markListeningPulse 1.4s ease-in-out infinite;
+    animation: markSpin 0.9s linear infinite;
 }
+@keyframes markSpin { to { transform: rotate(360deg); } }
 
-.mark-listening-dot:nth-child(2) { animation-delay: 0.2s; }
-.mark-listening-dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes markListeningPulse {
-    0%, 100% { transform: scale(1); opacity: 0.4; }
-    50% { transform: scale(1.5); opacity: 1; }
+/* ── BOUNCE ANIMATION (for typing dots) ── */
+@keyframes markBounce {
+    0%, 100% { transform: translateY(0); opacity: 0.4; }
+    50% { transform: translateY(-4px); opacity: 1; }
 }

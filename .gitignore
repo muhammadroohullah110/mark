@@ -34,8 +34,9 @@ desktop.ini
 # ─── Logs ───
 *.log
 logs/
+backend/logs/
 
-# ─── Database ───
+# ─── Database (runtime) ───
 *.db
 *.db-wal
 *.db-shm
@@ -44,12 +45,18 @@ logs/
 backend/pip
 *.zip
 *.mp4
-
-# ─── Old admin panel (replaced by WP plugin) ───
-/admin/
-
-# ─── Binaries ───
 cloudflared*
+
+# ─── Old folders (removed) ───
+/admin/
+/css/
+/jcode/
+/UI&UX/
 
 # ─── Node ───
 node_modules/
+
+# ─── WP Plugin empty dirs ───
+mark-ai-chatbot/languages/
+mark-ai-chatbot/admin/views/
+mark-ai-chatbot/public/models/
