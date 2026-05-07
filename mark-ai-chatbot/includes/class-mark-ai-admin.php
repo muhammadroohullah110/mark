@@ -44,20 +44,26 @@ class Mark_AI_Admin {
             return;
         }
 
-        // Google Fonts
+        // Preconnect to Google Fonts for faster loading
+        add_action('admin_head', function() {
+            echo '<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>' . "\n";
+            echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
+        }, 1);
+
+        // Google Fonts (combined request — single HTTP call for both families)
         wp_enqueue_style('mark-ai-fonts', 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap', [], null);
 
-        // Material Icons
-        wp_enqueue_style('material-icons', 'https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined', [], null);
+        // Material Icons (only the weights we use: 400, filled=0)
+        wp_enqueue_style('material-icons', 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap', [], null);
 
         // Our admin CSS
         wp_enqueue_style('mark-ai-admin', MARK_AI_URL . 'admin/css/admin.css', [], MARK_AI_VERSION);
 
-        // Chart.js for analytics
+        // Chart.js for analytics (loaded async — not render-blocking)
         wp_enqueue_script('chartjs', 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js', [], null, true);
 
-        // Our admin JS
-        wp_enqueue_script('mark-ai-admin', MARK_AI_URL . 'admin/js/admin.js', ['jquery'], MARK_AI_VERSION, true);
+        // Our admin JS (no jQuery dependency — pure vanilla JS)
+        wp_enqueue_script('mark-ai-admin', MARK_AI_URL . 'admin/js/admin.js', [], MARK_AI_VERSION, true);
 
         // Pass config to JS
         wp_localize_script('mark-ai-admin', 'markAI', [

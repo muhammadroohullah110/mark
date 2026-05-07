@@ -826,37 +826,81 @@
         } catch (e) { toast(e.message, 'error'); }
     }
 
-    function testVoice(lang) {
+    async function testVoice(lang) {
         const text = lang === 'ur'
             ? 'Assalam o alaikum! Main Mark hoon, aap ka shopping buddy.'
             : 'Hey there! I am Mark, your personal shopping companion.';
 
-        // Use browser SpeechSynthesis for instant preview
+        const preview = $('#voice-preview');
+        const previewContent = $('#voice-preview-content');
+        if (preview && previewContent) {
+            preview.style.display = 'block';
+            previewContent.innerHTML = `
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:40px;height:40px;border-radius:50%;background:rgba(79,142,255,0.2);display:flex;align-items:center;justify-content:center;">
+                    <span class="material-symbols-outlined" style="font-size:20px;color:#4f8eff;animation:markSpin 1s linear infinite;">progress_activity</span>
+                </div>
+                <span style="font-size:14px;color:#c6c6cd;">Generating ${lang === 'ur' ? 'Urdu' : 'English'} voice...</span>
+            </div>`;
+        }
+
+        // Try Edge TTS via backend first (actual voice the user will hear)
+        const settings = markAI || {};
+        const backendUrl = currentStore?.backend_url || settings.backendUrl || 'https://mark-ix64.onrender.com';
+
+        try {
+            const res = await fetch(backendUrl + '/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    language: lang,
+                    store_id: currentStore?.store_id || '',
+                }),
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const audio = new Audio(url);
+                audio.onended = () => URL.revokeObjectURL(url);
+                await audio.play();
+
+                if (previewContent) {
+                    previewContent.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <button style="width:40px;height:40px;border-radius:50%;background:#4f8eff;color:#00275e;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 10px rgba(79,142,255,0.4);"
+                                onclick="markAdmin.testVoice('${lang}')">
+                            <span class="material-symbols-outlined" style="font-size:20px;">play_arrow</span>
+                        </button>
+                        <span style="font-size:14px;color:#c6c6cd;">${lang === 'ur' ? 'Urdu' : 'English'} sample playing (Edge TTS)</span>
+                    </div>`;
+                }
+                toast('Playing Edge TTS voice!', 'success');
+                return;
+            }
+        } catch (e) { /* backend not reachable, fallback below */ }
+
+        // Fallback: browser SpeechSynthesis
         if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = lang === 'ur' ? 'ur-PK' : 'en-US';
-            utterance.rate = 1.0;
-            utterance.pitch = 1.0;
             window.speechSynthesis.cancel();
             window.speechSynthesis.speak(utterance);
 
-            // Show preview
-            const preview = $('#voice-preview');
-            const previewContent = $('#voice-preview-content');
-            if (preview && previewContent) {
-                preview.style.display = 'block';
+            if (previewContent) {
                 previewContent.innerHTML = `
                 <div style="display:flex;align-items:center;gap:12px;">
                     <button style="width:40px;height:40px;border-radius:50%;background:#4f8eff;color:#00275e;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 10px rgba(79,142,255,0.4);"
                             onclick="markAdmin.testVoice('${lang}')">
                         <span class="material-symbols-outlined" style="font-size:20px;">play_arrow</span>
                     </button>
-                    <span style="font-size:14px;color:#c6c6cd;">${lang === 'ur' ? 'Urdu' : 'English'} sample playing...</span>
+                    <span style="font-size:14px;color:#c6c6cd;">${lang === 'ur' ? 'Urdu' : 'English'} (browser fallback — backend offline)</span>
                 </div>`;
             }
-            toast('Playing voice sample!', 'success');
+            toast('Backend offline — using browser voice as preview.', 'info');
         } else {
-            toast('Browser does not support speech synthesis.', 'error');
+            toast('Voice preview not available.', 'error');
         }
     }
 

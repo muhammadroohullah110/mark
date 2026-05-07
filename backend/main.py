@@ -6,6 +6,7 @@ import hashlib
 import threading
 import requests as http_requests
 from collections import defaultdict
+from urllib.parse import urlparse
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Header
@@ -148,13 +149,20 @@ def get_rag(tenant: dict | None) -> MarkRAG | None:
 def get_edge_voice(tenant: dict | None, language: str = "en") -> str:
     """Pick the right Edge TTS voice based on tenant config and language."""
     if tenant:
-        custom_voice = tenant.get("tts_voice", "")
-        if custom_voice:
-            return custom_voice
+        if language in ("ur", "hi"):
+            # Use Urdu-specific voice if configured
+            urdu_voice = tenant.get("tts_voice_urdu", "")
+            if urdu_voice:
+                return urdu_voice
+        else:
+            # Use English voice if configured
+            en_voice = tenant.get("tts_voice", "")
+            if en_voice:
+                return en_voice
 
-    # Auto-select by language
+    # Fallback: auto-select by language from global config
     if language in ("ur", "hi"):
-        return EDGE_TTS_VOICES.get(f"{language}_male", DEFAULT_EDGE_VOICE)
+        return EDGE_TTS_VOICES.get("ur_male", DEFAULT_EDGE_VOICE)
     return EDGE_TTS_VOICES.get("en_male", DEFAULT_EDGE_VOICE)
 
 
@@ -460,6 +468,34 @@ async def text_to_speech(request: Request, body: TTSRequest):
     except Exception as e:
         print(f"Edge TTS error: {e}")
         raise HTTPException(status_code=500, detail="TTS failed.")
+
+
+class RAGCrawlRequest(BaseModel):
+    store_id: str
+    website_url: str
+
+
+@app.post("/api/rag-crawl")
+async def rag_crawl_trigger(request: Request, body: RAGCrawlRequest):
+    """Trigger RAG crawl immediately when a store is created/updated.
+    Called from WP plugin when store URL is set."""
+    if not body.website_url:
+        return {"status": "error", "message": "No website URL provided."}
+
+    # Create or re-initialize RAG for this store
+    sid = body.store_id
+    with _rag_lock:
+        if sid in _rag_instances:
+            # Re-crawl existing instance
+            _rag_instances[sid].base_url = body.website_url.rstrip('/')
+            _rag_instances[sid].domain = urlparse(body.website_url).netloc
+            _rag_instances[sid].reindex()
+        else:
+            r = MarkRAG(body.website_url, max_pages=MAX_CRAWL_PAGES)
+            _rag_instances[sid] = r
+            threading.Thread(target=r.initialize, daemon=True).start()
+
+    return {"status": "crawling", "message": f"RAG crawl started for {body.website_url}"}
 
 
 @app.post("/api/rag-search")

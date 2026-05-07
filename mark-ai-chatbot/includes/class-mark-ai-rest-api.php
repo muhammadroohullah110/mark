@@ -191,6 +191,10 @@ class Mark_AI_Rest_API {
         ];
 
         $store_id = Mark_AI_Database::create_store($data);
+
+        // Trigger RAG crawl on backend immediately
+        $this->trigger_rag_crawl($store_id, $data['website_url']);
+
         return new WP_REST_Response(['store_id' => $store_id, 'message' => 'Store created!'], 201);
     }
 
@@ -238,6 +242,11 @@ class Mark_AI_Rest_API {
 
         if (!empty($updates)) {
             Mark_AI_Database::update_store($store_id, $updates);
+        }
+
+        // If website URL changed, trigger RAG re-crawl
+        if (!empty($updates['website_url'])) {
+            $this->trigger_rag_crawl($store_id, $updates['website_url']);
         }
 
         return new WP_REST_Response(['message' => 'Store updated!', 'store_id' => $store_id], 200);
@@ -541,5 +550,26 @@ class Mark_AI_Rest_API {
             . "- If someone asks about a product you don't have info about, suggest they browse the store or ask for specifics.\n"
             . "- You can recommend checking categories, sales, or new arrivals.\n"
             . "- Never quote specific prices unless you're certain (from provided product data).\n";
+    }
+
+    /**
+     * Trigger RAG crawl on the Python backend.
+     * Non-blocking — fires and forgets so store creation isn't delayed.
+     */
+    private function trigger_rag_crawl( $store_id, $website_url ) {
+        $settings    = get_option( 'mark_ai_settings', [] );
+        $backend_url = ! empty( $settings['backend_url'] )
+            ? $settings['backend_url']
+            : 'https://mark-ix64.onrender.com';
+
+        wp_remote_post( $backend_url . '/api/rag-crawl', [
+            'timeout'  => 3, // Don't wait — fire and forget
+            'blocking' => false,
+            'headers'  => [ 'Content-Type' => 'application/json' ],
+            'body'     => wp_json_encode( [
+                'store_id'    => $store_id,
+                'website_url' => $website_url,
+            ] ),
+        ] );
     }
 }
