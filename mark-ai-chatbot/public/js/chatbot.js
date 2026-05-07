@@ -120,18 +120,29 @@
     }
 
     // ============================================================
-    // BACKEND HEALTH CHECK — determine if Render backend is alive
+    // BACKEND HEALTH CHECK — wake up Render backend with retries
+    // Free tier sleeps after inactivity; needs ~30s to cold-start.
     // ============================================================
+    let backendRetries = 0;
+    const MAX_RETRIES  = 4;
+
     async function checkBackend() {
         if (!BACKEND) return;
         try {
-            const res = await fetch(`${BACKEND}/api/status`, { signal: AbortSignal.timeout(5000) });
+            const res = await fetch(`${BACKEND}/api/status`, { signal: AbortSignal.timeout(8000) });
             const data = await res.json();
             backendAlive = true;
             ttsAvailable = data.tts_available || false;
+            backendRetries = 0;
         } catch {
             backendAlive = false;
             ttsAvailable = false;
+            // Retry with exponential backoff (5s, 10s, 20s, 40s)
+            if (backendRetries < MAX_RETRIES) {
+                const delay = 5000 * Math.pow(2, backendRetries);
+                backendRetries++;
+                setTimeout(checkBackend, delay);
+            }
         }
     }
 
@@ -245,9 +256,24 @@
     }
     function moveToRandomSpot() {
         const w = MOBILE_PX || WIDGET_PX;
-        const padX = 30, padTopMin = 40;
-        markWidget.style.left = Math.max(padTopMin, padX + Math.random() * (window.innerWidth - w - padX*2)) + 'px';
-        markWidget.style.top  = Math.max(padTopMin, window.innerHeight*0.30 + Math.random() * (window.innerHeight*0.55 - w)) + 'px';
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            // Mobile: walk in bottom third of screen, avoid top
+            const padX = 20;
+            const minY = window.innerHeight * 0.55;
+            const maxY = window.innerHeight - w - 30;
+            markWidget.style.left = (padX + Math.random() * (window.innerWidth - w - padX * 2)) + 'px';
+            markWidget.style.top  = (minY + Math.random() * Math.max(0, maxY - minY)) + 'px';
+        } else {
+            // Desktop: walk in bottom-right quadrant (doesn't block content)
+            const minX = window.innerWidth * 0.55;
+            const maxX = window.innerWidth - w - 30;
+            const minY = window.innerHeight * 0.45;
+            const maxY = window.innerHeight - w - 30;
+            markWidget.style.left = (minX + Math.random() * Math.max(0, maxX - minX)) + 'px';
+            markWidget.style.top  = (minY + Math.random() * Math.max(0, maxY - minY)) + 'px';
+        }
     }
     function stopWalking() {
         clearTimeout(walkTimer);
@@ -295,6 +321,9 @@
         markState = 'talking'; exchangeCount = 0;
         clearTimeout(walkTimer);
         markHint.style.display = 'none';
+
+        // If backend isn't awake yet, kick off a fresh wake-up attempt
+        if (!backendAlive) { backendRetries = 0; checkBackend(); }
 
         root.classList.add('mark-talking');
         markWidget.classList.add('mark-talking');

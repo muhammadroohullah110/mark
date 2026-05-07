@@ -44,9 +44,6 @@ class Mark_AI_Admin {
             return;
         }
 
-        // Tailwind via CDN (with forms plugin)
-        wp_enqueue_script('tailwindcss', 'https://cdn.tailwindcss.com?plugins=forms', [], null, false);
-
         // Google Fonts
         wp_enqueue_style('mark-ai-fonts', 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap', [], null);
 
@@ -69,7 +66,7 @@ class Mark_AI_Admin {
             'nonce'      => wp_create_nonce('wp_rest'),
             'pluginUrl'  => MARK_AI_URL,
             'version'    => MARK_AI_VERSION,
-            'currentPage'=> isset($_GET['page']) ? sanitize_text_field($_GET['page']) : 'mark-ai',
+            'currentPage'=> isset($_GET['page']) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : 'mark-ai', // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         ]);
     }
 

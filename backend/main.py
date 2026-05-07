@@ -489,6 +489,10 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     name = get_assistant_name(tenant)
     product_context = format_products_context(tenant)
 
+    # Inject RAG brand context (store name, categories, product count)
+    rag_instance = get_rag(tenant)
+    brand_context = rag_instance.get_brand_context() if rag_instance and rag_instance.ready else ''
+
     # Use custom system prompt if tenant set one, otherwise default
     custom_prompt = (tenant or {}).get("custom_system_prompt", "")
     if custom_prompt and custom_prompt.strip():
@@ -501,6 +505,10 @@ async def chat_endpoint(request: Request, body: ChatRequest):
             product_context=product_context,
             name=name,
         )
+
+    # Append RAG brand intelligence to system prompt
+    if brand_context:
+        system_instruction += f"\n\n══ STORE INTELLIGENCE (from website crawl) ══\n{brand_context}\nUse this context to sound knowledgeable about the store — its brand, categories, and what it sells."
 
     llm_model = (tenant or {}).get("llm_model") or "llama-3.3-70b-versatile"
     max_tokens = (tenant or {}).get("max_tokens") or 150

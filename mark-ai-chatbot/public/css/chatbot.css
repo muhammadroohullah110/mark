@@ -51,6 +51,10 @@
         box-shadow 0.5s ease,
         border 0.5s ease,
         transform 0.6s cubic-bezier(0.4,0,0.2,1);
+    /* Prevent browser from hijacking touch for scroll/zoom */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 #mark-widget.mark-dragging {
@@ -236,21 +240,27 @@
     #mark-text-input-area { width:260px; transform:translate(-50%,250px); }
 }
 
-/* ── LOADING OVERLAY ── */
+/* ── LOADING OVERLAY (contained in widget, not full-screen) ── */
 .mark-loading-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.92);
+    position: fixed;
+    bottom: 30px; right: 30px;
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    background: rgba(8,8,20,0.95);
+    border: 3px solid rgba(102,126,234,0.6);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     z-index: 99999;
     transition: opacity 0.5s ease;
+    box-shadow: 0 0 25px rgba(102,126,234,0.5);
 }
 .mark-loading-overlay.mark-hidden { opacity: 0; pointer-events: none; }
 .mark-loading-text {
-    color: #fff; font-size: 22px; font-weight: 700; margin-bottom: 18px;
+    color: #fff; font-size: 11px; font-weight: 700; margin-bottom: 8px;
+    text-align: center; padding: 0 10px;
 }
 .mark-loading-spinner {
-    width: 40px; height: 40px;
+    width: 28px; height: 28px;
     border: 3px solid rgba(102,126,234,0.3);
     border-top-color: #667eea;
     border-radius: 50%;

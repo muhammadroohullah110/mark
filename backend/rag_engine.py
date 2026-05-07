@@ -1,22 +1,66 @@
+"""
+Mark RAG Engine — Elite-Class Website Intelligence
+===================================================
+Crawls a website and builds a rich semantic index for navigation + Q&A.
+
+Features:
+- Structured data extraction (JSON-LD, Open Graph, meta tags)
+- WooCommerce / Shopify product schema detection
+- Category & collection taxonomy mapping
+- Brand identity extraction (logo, tagline, about content)
+- Smart content chunking with page-type classification
+- BM25-weighted TF-IDF with ngram boosting
+- Concurrent crawling with politeness delay
+"""
+
+import re
+import json
+import time
+import threading
 import requests
+import numpy as np
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
-import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+# ── Page type classification ────────────────────────────────
+PAGE_TYPES = {
+    'product':    5.0,   # individual product pages get highest boost
+    'category':   4.0,   # category / collection listings
+    'service':    4.0,   # service pages
+    'about':      2.5,   # about / brand pages
+    'contact':    2.0,   # contact page
+    'home':       3.0,   # homepage
+    'blog':       1.5,   # blog posts
+    'policy':     0.5,   # privacy, terms, refund
+    'generic':    1.0,   # everything else
+}
 
 
 class MarkRAG:
-    def __init__(self, base_url: str, max_pages: int = 120):
+    def __init__(self, base_url: str, max_pages: int = 150):
         self.base_url = base_url.rstrip('/')
         self.domain = urlparse(base_url).netloc
         self.max_pages = max_pages
         self.pages = []
-        self.vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1, stop_words=None)
+        self.brand_info = {}
+        self.categories = []
+        self.vectorizer = TfidfVectorizer(
+            ngram_range=(1, 3),
+            min_df=1,
+            max_df=0.95,
+            sublinear_tf=True,       # log-normalized TF (BM25-like)
+            stop_words='english',
+        )
         self.tfidf_matrix = None
         self._lock = threading.Lock()
         self.ready = False
+        self._session = None
+
+    # ── URL Helpers ──────────────────────────────────────────
 
     def _is_internal(self, url: str) -> bool:
         parsed = urlparse(url)
@@ -24,86 +68,300 @@ class MarkRAG:
 
     def _should_skip(self, url: str) -> bool:
         skip_patterns = [
-            '#', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp',
-            '.pdf', '.zip', '.css', '.js', '.ico',
+            '#', 'javascript:', 'mailto:', 'tel:',
+            '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.ico',
+            '.pdf', '.zip', '.css', '.js', '.woff', '.woff2', '.ttf',
             'wp-admin', 'wp-login', 'wp-json', 'xmlrpc', 'feed',
-            'wp-content/uploads', 'cart', 'my-account', 'checkout', 'logout'
+            'wp-content/uploads', 'wp-content/plugins',
+            'my-account', 'checkout', 'logout', 'login', 'register',
+            '/cart', '?add-to-cart', '?removed_item',
+            '/author/', '/tag/', '/page/', '/attachment/',
         ]
-        return any(p in url for p in skip_patterns)
+        lower = url.lower()
+        return any(p in lower for p in skip_patterns)
+
+    # ── Page Type Detection ──────────────────────────────────
+
+    def _classify_page(self, url: str, soup: BeautifulSoup) -> str:
+        lower_url = url.lower()
+        body_classes = ' '.join(soup.body.get('class', [])).lower() if soup.body else ''
+
+        # Product page signals
+        if any(x in body_classes for x in ['single-product', 'product-template']):
+            return 'product'
+        if soup.find(class_=re.compile(r'product_title|product-title|product_price|add.to.cart', re.I)):
+            return 'product'
+        if any(x in lower_url for x in ['/product/', '/products/', '/shop/']):
+            # Could be category or product — check for add-to-cart button
+            if soup.find('button', class_=re.compile(r'add.to.cart|single_add_to_cart', re.I)):
+                return 'product'
+            return 'category'
+
+        # Category / collection
+        if any(x in lower_url for x in ['/category/', '/collection/', '/product-category/']):
+            return 'category'
+        if any(x in body_classes for x in ['archive', 'product-category', 'tax-product_cat']):
+            return 'category'
+
+        # Service pages
+        if any(x in lower_url for x in ['/service', '/services']):
+            return 'service'
+
+        # About
+        if any(x in lower_url for x in ['/about', '/our-story', '/who-we-are']):
+            return 'about'
+
+        # Contact
+        if '/contact' in lower_url:
+            return 'contact'
+
+        # Home
+        if lower_url.rstrip('/') == self.base_url.lower().rstrip('/'):
+            return 'home'
+
+        # Blog
+        if any(x in lower_url for x in ['/blog/', '/news/', '/article/']):
+            return 'blog'
+
+        # Policy pages
+        if any(x in lower_url for x in ['/privacy', '/terms', '/refund', '/return', '/shipping-policy']):
+            return 'policy'
+
+        return 'generic'
+
+    # ── Structured Data Extraction ───────────────────────────
+
+    def _extract_json_ld(self, soup: BeautifulSoup) -> list:
+        """Extract JSON-LD structured data (Schema.org)."""
+        results = []
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                data = json.loads(script.string or '{}')
+                if isinstance(data, list):
+                    results.extend(data)
+                else:
+                    results.append(data)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return results
+
+    def _extract_open_graph(self, soup: BeautifulSoup) -> dict:
+        """Extract Open Graph meta tags."""
+        og = {}
+        for meta in soup.find_all('meta', property=re.compile(r'^og:')):
+            key = meta.get('property', '').replace('og:', '')
+            og[key] = meta.get('content', '')
+        return og
+
+    # ── Rich Content Extraction ──────────────────────────────
 
     def _extract_page_data(self, url: str, soup: BeautifulSoup) -> dict | None:
-        title = soup.title.string.strip() if soup.title else ''
+        page_type = self._classify_page(url, soup)
 
+        # Title
+        title = ''
+        if soup.title:
+            title = soup.title.string.strip() if soup.title.string else ''
+
+        # Meta description
         meta_desc = ''
         meta = soup.find('meta', attrs={'name': 'description'})
         if meta:
-            meta_desc = meta.get('content', '')
+            meta_desc = meta.get('content', '') or ''
 
-        headings = ' '.join(h.get_text(separator=' ').strip() for h in soup.find_all(['h1', 'h2', 'h3']))
+        # Open Graph
+        og = self._extract_open_graph(soup)
+        og_title = og.get('title', '')
+        og_desc = og.get('description', '')
 
-        # Nav links give great page discovery signals
-        nav_texts = ' '.join(a.get_text().strip() for a in soup.find_all('a') if a.get_text().strip())
+        # JSON-LD structured data
+        json_ld = self._extract_json_ld(soup)
+        ld_texts = []
+        for item in json_ld:
+            schema_type = item.get('@type', '')
+            if schema_type == 'Product':
+                name = item.get('name', '')
+                desc = item.get('description', '')
+                brand = item.get('brand', {})
+                brand_name = brand.get('name', '') if isinstance(brand, dict) else str(brand)
+                price_info = item.get('offers', {})
+                price = price_info.get('price', '') if isinstance(price_info, dict) else ''
+                ld_texts.append(f"{name} {desc} {brand_name} price {price}")
+            elif schema_type in ('Organization', 'LocalBusiness', 'Store'):
+                name = item.get('name', '')
+                desc = item.get('description', '')
+                ld_texts.append(f"{name} {desc}")
+                # Save brand info
+                if name:
+                    self.brand_info['name'] = name
+                if desc:
+                    self.brand_info['description'] = desc
+            elif isinstance(schema_type, str):
+                name = item.get('name', '')
+                desc = item.get('description', '')
+                if name or desc:
+                    ld_texts.append(f"{name} {desc}")
 
-        # WooCommerce / Shopify product names
-        product_names = ' '.join(
-            el.get_text().strip()
-            for el in soup.find_all(class_=lambda c: c and any(
-                kw in c for kw in ['product-title', 'product-name', 'woocommerce-loop-product__title', 'entry-title']
-            ))
+        # Headings (weighted — h1 most important)
+        h1 = ' '.join(h.get_text(separator=' ').strip() for h in soup.find_all('h1'))
+        h2 = ' '.join(h.get_text(separator=' ').strip() for h in soup.find_all('h2'))
+        h3 = ' '.join(h.get_text(separator=' ').strip() for h in soup.find_all('h3'))
+
+        # Product-specific extraction
+        product_data = ''
+        if page_type in ('product', 'category'):
+            # WooCommerce product titles
+            product_titles = [el.get_text().strip() for el in soup.find_all(class_=re.compile(
+                r'product.title|product.name|woocommerce-loop-product__title|entry-title|'
+                r'product_title|product-item-name', re.I
+            ))]
+
+            # Prices
+            prices = [el.get_text().strip() for el in soup.find_all(class_=re.compile(
+                r'price|woocommerce-Price-amount|product-price', re.I
+            ))]
+
+            # Product short description
+            short_desc = [el.get_text(separator=' ').strip() for el in soup.find_all(class_=re.compile(
+                r'product-short-description|woocommerce-product-details__short-description|'
+                r'product-description|product_description', re.I
+            ))]
+
+            # Categories on product pages
+            cats = [el.get_text().strip() for el in soup.find_all(class_=re.compile(
+                r'posted_in|product_meta|product-categories|product-category', re.I
+            ))]
+
+            product_data = ' '.join(product_titles + prices + short_desc + cats)
+
+        # Main content (paragraphs — limited to avoid noise)
+        main_content = ''
+        content_el = (
+            soup.find('main')
+            or soup.find(class_=re.compile(r'entry-content|page-content|site-content', re.I))
+            or soup.find('article')
         )
+        if content_el:
+            paragraphs = content_el.find_all('p')
+            main_content = ' '.join(p.get_text(separator=' ').strip() for p in paragraphs[:15])
 
-        content = ' '.join(filter(None, [title, meta_desc, headings, product_names, nav_texts]))
+        # Navigation links (for page discovery context)
+        nav_el = soup.find('nav') or soup.find(class_=re.compile(r'menu|navigation', re.I))
+        nav_text = ''
+        if nav_el:
+            nav_text = ' '.join(a.get_text().strip() for a in nav_el.find_all('a') if a.get_text().strip())
 
-        if not content.strip():
+        # Category extraction from nav menus
+        if page_type == 'home' and nav_el:
+            for a in nav_el.find_all('a', href=True):
+                href = a['href']
+                text = a.get_text().strip()
+                if text and any(x in href for x in ['/category/', '/product-category/', '/collection/', '/shop/']):
+                    self.categories.append({'name': text, 'url': urljoin(url, href)})
+
+        # Build content string with importance weighting
+        # Repeat important fields to boost their TF-IDF weight
+        parts = [
+            h1, h1, h1,           # h1 gets 3x weight
+            title, title,          # title gets 2x weight
+            og_title,
+            meta_desc, og_desc,
+            h2, h2,               # h2 gets 2x weight
+            h3,
+            product_data, product_data, product_data,  # products 3x
+            ' '.join(ld_texts),
+            main_content,
+            nav_text,
+        ]
+        content = ' '.join(filter(None, parts))
+        # Clean up whitespace
+        content = re.sub(r'\s+', ' ', content).strip()
+
+        if not content or len(content) < 10:
             return None
 
         return {
             'url': url,
-            'title': title or url,
-            'content': content
+            'title': (og_title or title or h1 or url).strip(),
+            'content': content,
+            'page_type': page_type,
+            'boost': PAGE_TYPES.get(page_type, 1.0),
         }
+
+    # ── Crawling ─────────────────────────────────────────────
+
+    def _fetch_page(self, url: str) -> tuple:
+        """Fetch a single page. Returns (url, html) or (url, None)."""
+        try:
+            resp = self._session.get(url, timeout=10)
+            ct = resp.headers.get('content-type', '')
+            if 'text/html' not in ct:
+                return (url, None)
+            return (url, resp.text)
+        except Exception:
+            return (url, None)
 
     def crawl(self):
         visited = set()
         to_visit = [self.base_url]
         pages = []
-        headers = {'User-Agent': 'MarkAI/1.0 Shopping Assistant'}
 
-        print(f"🕷️  Crawling {self.base_url} ...")
+        self._session = requests.Session()
+        self._session.headers.update({
+            'User-Agent': 'MarkAI/1.0 Shopping Assistant (+https://mark-ai.com)',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'en-US,en;q=0.9',
+        })
+
+        print(f"🕷️  RAG Engine crawling {self.base_url} ...")
 
         while to_visit and len(visited) < self.max_pages:
-            url = to_visit.pop(0)
-            if url in visited or self._should_skip(url):
-                continue
-
-            try:
-                resp = requests.get(url, headers=headers, timeout=8)
-                content_type = resp.headers.get('content-type', '')
-                if 'text/html' not in content_type:
+            # Batch fetch up to 5 URLs concurrently
+            batch = []
+            while to_visit and len(batch) < 5:
+                url = to_visit.pop(0)
+                if url in visited or self._should_skip(url):
                     continue
+                batch.append(url)
 
-                visited.add(url)
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                page_data = self._extract_page_data(url, soup)
-                if page_data:
-                    pages.append(page_data)
+            if not batch:
+                break
 
-                # Discover internal links
-                for a in soup.find_all('a', href=True):
-                    full_url = urljoin(url, a['href']).split('?')[0].rstrip('/')
-                    if (
-                        self._is_internal(full_url)
-                        and full_url not in visited
-                        and not self._should_skip(full_url)
-                    ):
-                        to_visit.append(full_url)
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = {executor.submit(self._fetch_page, u): u for u in batch}
+                for future in as_completed(futures):
+                    url, html = future.result()
+                    if html is None:
+                        visited.add(url)
+                        continue
 
-            except Exception as e:
-                print(f"  Skip {url}: {e}")
-                continue
+                    visited.add(url)
+                    soup = BeautifulSoup(html, 'html.parser')
+                    page_data = self._extract_page_data(url, soup)
+                    if page_data:
+                        pages.append(page_data)
 
-        print(f"✅ Crawled {len(pages)} pages")
+                    # Discover internal links
+                    for a in soup.find_all('a', href=True):
+                        full_url = urljoin(url, a['href']).split('?')[0].split('#')[0].rstrip('/')
+                        if (
+                            self._is_internal(full_url)
+                            and full_url not in visited
+                            and not self._should_skip(full_url)
+                            and full_url not in to_visit
+                        ):
+                            to_visit.append(full_url)
+
+            # Politeness: small delay between batches
+            time.sleep(0.3)
+
+        self._session.close()
+        self._session = None
+
+        print(f"✅ Crawled {len(pages)} pages ({len(visited)} visited)")
         return pages
+
+    # ── Indexing ─────────────────────────────────────────────
 
     def build_index(self, pages: list):
         if not pages:
@@ -112,7 +370,20 @@ class MarkRAG:
 
         corpus = [p['content'] for p in pages]
         self.tfidf_matrix = self.vectorizer.fit_transform(corpus)
-        print(f"✅ Index ready — {len(pages)} pages")
+
+        # Log page type distribution
+        type_counts = {}
+        for p in pages:
+            pt = p.get('page_type', 'generic')
+            type_counts[pt] = type_counts.get(pt, 0) + 1
+        print(f"✅ Index ready — {len(pages)} pages: {type_counts}")
+
+        if self.brand_info:
+            print(f"🏪 Brand: {self.brand_info.get('name', 'Unknown')}")
+        if self.categories:
+            cat_names = list(set(c['name'] for c in self.categories))[:10]
+            print(f"📂 Categories: {', '.join(cat_names)}")
+
         return True
 
     def initialize(self):
@@ -122,27 +393,60 @@ class MarkRAG:
                 self.pages = pages
                 self.ready = True
 
-    def search(self, query: str, top_k: int = 3, threshold: float = 0.03):
+    # ── Search ───────────────────────────────────────────────
+
+    def search(self, query: str, top_k: int = 5, threshold: float = 0.02):
         if not self.ready or self.tfidf_matrix is None:
             return []
 
         with self._lock:
-            query_vec = self.vectorizer.transform([query])
-            scores = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
-            top_indices = np.argsort(scores)[::-1][:top_k]
+            # Clean query
+            clean_query = re.sub(r'[^\w\s]', ' ', query.lower()).strip()
+            if not clean_query:
+                return []
+
+            query_vec = self.vectorizer.transform([clean_query])
+            raw_scores = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
+
+            # Apply page-type boost
+            boosted_scores = np.array([
+                raw_scores[i] * self.pages[i].get('boost', 1.0)
+                for i in range(len(self.pages))
+            ])
+
+            top_indices = np.argsort(boosted_scores)[::-1][:top_k]
 
             results = []
             for idx in top_indices:
-                if scores[idx] >= threshold:
+                if boosted_scores[idx] >= threshold:
                     results.append({
                         'url': self.pages[idx]['url'],
                         'title': self.pages[idx]['title'],
-                        'score': round(float(scores[idx]), 4)
+                        'score': round(float(boosted_scores[idx]), 4),
+                        'page_type': self.pages[idx].get('page_type', 'generic'),
                     })
 
         return results
 
+    def get_brand_context(self) -> str:
+        """Return a summary string for the LLM system prompt."""
+        parts = []
+        if self.brand_info.get('name'):
+            parts.append(f"Store: {self.brand_info['name']}")
+        if self.brand_info.get('description'):
+            parts.append(f"About: {self.brand_info['description']}")
+        if self.categories:
+            cat_names = list(set(c['name'] for c in self.categories))[:15]
+            parts.append(f"Categories: {', '.join(cat_names)}")
+        if self.pages:
+            product_pages = [p for p in self.pages if p.get('page_type') == 'product']
+            if product_pages:
+                parts.append(f"Products indexed: {len(product_pages)}")
+            total = len(self.pages)
+            parts.append(f"Total pages indexed: {total}")
+        return ' | '.join(parts) if parts else 'Store information not yet available.'
+
     def reindex(self):
-        """Call this to re-crawl and rebuild the index (e.g. after new products added)."""
+        """Re-crawl and rebuild the index (e.g. after new products added)."""
         self.ready = False
         threading.Thread(target=self.initialize, daemon=True).start()

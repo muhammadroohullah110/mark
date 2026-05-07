@@ -33,6 +33,12 @@ require_once MARK_AI_PATH . 'includes/class-mark-ai-updater.php';
 register_activation_hook(__FILE__, ['Mark_AI_Activator', 'activate']);
 register_deactivation_hook(__FILE__, ['Mark_AI_Activator', 'deactivate']);
 
+// ── Load Text Domain for i18n ───────────────────────────────
+function mark_ai_load_textdomain() {
+    load_plugin_textdomain( 'mark-ai-chatbot', false, dirname( MARK_AI_BASENAME ) . '/languages/' );
+}
+add_action( 'init', 'mark_ai_load_textdomain' );
+
 // ── Initialize Plugin ───────────────────────────────────────
 function mark_ai_init() {
     // Admin panel (only loads on admin pages)

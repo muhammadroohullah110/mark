@@ -198,59 +198,16 @@
                 background: #1d2022;
                 color: #e0e3e5;
             }
-            /* Sidebar nav items */
-            #mark-sidebar-nav a {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                padding: 11px 20px;
-                margin: 2px 8px;
-                cursor: pointer;
-                transition: all 0.15s ease;
-                font-family: 'Space Grotesk', sans-serif;
-                font-size: 14px;
-                font-weight: 500;
-                text-decoration: none;
-                color: #909097;
-                border-left: 3px solid transparent;
-                border-radius: 0 6px 6px 0;
-            }
-            #mark-sidebar-nav a:hover {
-                color: #c6c6cd;
-                background: rgba(79,142,255,0.05);
-            }
-            #mark-sidebar-nav a[data-active="1"] {
-                color: #aec6ff;
-                background: rgba(79,142,255,0.08);
-                border-left-color: #4f8eff;
-                font-weight: 600;
-            }
-            #mark-sidebar-nav a[data-active="1"]:hover {
-                color: #aec6ff;
-                background: rgba(79,142,255,0.12);
-            }
-            #mark-sidebar-nav a .material-symbols-outlined {
-                font-size: 18px;
-                transition: color 0.15s;
-            }
-            #mark-sidebar-nav a[data-active="1"] .material-symbols-outlined {
-                color: #22d3ee;
+            /* WP Admin overrides */
+            #mark-ai-app .mark-ai-app-root {
+                margin: 0 !important;
             }
         `;
         document.head.appendChild(style);
     }
 
     /* ================================================================
-       SIDEBAR ITEM RENDERER
-       ================================================================ */
-    function renderSidebarItem(page, icon, label) {
-        const isActive = currentPage === page;
-        return `<a data-sidebar-page="${page}" ${isActive ? 'data-active="1"' : ''} onclick="markAdmin.navigate('${page}')">
-            <span class="material-symbols-outlined">${icon}</span>${label}</a>`;
-    }
-
-    /* ================================================================
-       RENDER: APP SHELL (Sidebar + Content)
+       RENDER: APP SHELL (Content Area)
        ================================================================ */
     function renderAppShell() {
         injectKeyframes();
@@ -268,57 +225,16 @@
         currentPage = pageMap[PAGE] || 'dashboard';
 
         app.innerHTML = `
-        <div class="mark-ai-app-root" style="${T.pageBg}display:flex;min-height:calc(100vh - 32px);margin:-20px -20px 0 -2px;font-family:'Inter',sans-serif;color:#e0e3e5;-webkit-font-smoothing:antialiased;">
+        <div class="mark-ai-app-root" style="${T.pageBg}min-height:500px;padding:0;font-family:'Inter',sans-serif;color:#e0e3e5;-webkit-font-smoothing:antialiased;border-radius:8px;overflow:hidden;">
+            <!-- Page Content -->
+            <div style="padding:32px 32px;max-width:1200px;" id="mark-page-content">
+                ${skeleton('200px')}
+                <div style="margin-top:16px;">${skeleton('300px')}</div>
+            </div>
 
-            <!-- ======== Sidebar ======== -->
-            <aside id="mark-sidebar" style="width:220px;flex-shrink:0;background:#0b0f10;border-right:1px solid rgba(0,119,255,0.15);display:flex;flex-direction:column;position:sticky;top:32px;height:calc(100vh - 32px);overflow-y:auto;z-index:10;">
-
-                <!-- Logo -->
-                <div style="padding:24px 20px 18px;border-bottom:1px solid rgba(0,119,255,0.1);">
-                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-                        <span class="material-symbols-outlined" style="color:#22d3ee;font-size:24px;">smart_toy</span>
-                        <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:800;${T.gradientTextPurple}">Mark AI</span>
-                    </div>
-                    <span style="font-size:10px;font-weight:600;color:#909097;font-family:'Space Grotesk',sans-serif;letter-spacing:0.1em;text-transform:uppercase;">Boreal Intelligence</span>
-                </div>
-
-                <!-- Navigation -->
-                <nav style="flex:1;padding:16px 0;" id="mark-sidebar-nav">
-                    ${renderSidebarItem('dashboard', 'dashboard', 'Dashboard')}
-                    ${renderSidebarItem('conversations', 'forum', 'Conversations')}
-                    ${renderSidebarItem('settings', 'settings', 'Settings')}
-                </nav>
-
-                <!-- Bottom Actions -->
-                <div style="padding:16px;border-top:1px solid rgba(0,119,255,0.1);">
-                    <button style="${T.btnGradient}width:100%;justify-content:center;padding:10px 16px;font-size:13px;" onclick="markAdmin.showAddStore()">
-                        <span class="material-symbols-outlined" style="font-size:16px;">add</span> Deploy New Store
-                    </button>
-                </div>
-            </aside>
-
-            <!-- ======== Main Content ======== -->
-            <main style="flex:1;min-width:0;">
-                <!-- Top Bar -->
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 32px;border-bottom:1px solid rgba(0,119,255,0.1);background:rgba(2,6,23,0.6);backdrop-filter:blur(30px);position:sticky;top:0;z-index:5;">
-                    <span style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;color:#c6c6cd;display:flex;align-items:center;gap:8px;" id="mark-breadcrumb">
-                        <span class="material-symbols-outlined" style="font-size:16px;color:#22d3ee;">dashboard</span> Dashboard
-                    </span>
-                    <div style="display:flex;align-items:center;gap:12px;">
-                        <span style="font-family:'Space Grotesk',sans-serif;font-size:10px;padding:3px 8px;border-radius:4px;background:rgba(174,198,255,0.1);color:#aec6ff;font-weight:600;letter-spacing:0.05em;">v${markAI.version || '1.0'}</span>
-                    </div>
-                </div>
-
-                <!-- Page Content -->
-                <div style="padding:32px 40px;max-width:1440px;margin:0 auto;" id="mark-page-content">
-                    ${skeleton('200px')}
-                    <div style="margin-top:16px;">${skeleton('300px')}</div>
-                </div>
-            </main>
+            <!-- Modal Container -->
+            <div id="mark-modal-container"></div>
         </div>
-
-        <!-- Modal Container -->
-        <div id="mark-modal-container"></div>
         `;
 
         // Load initial page
@@ -332,35 +248,12 @@
         currentPage = page;
         currentStore = null;
 
-        // Update sidebar active states
-        const items = $$('#mark-sidebar-nav a[data-sidebar-page]');
-        items.forEach(item => {
-            if (item.dataset.sidebarPage === page) {
-                item.setAttribute('data-active', '1');
-            } else {
-                item.removeAttribute('data-active');
-            }
-        });
-
-        // Update breadcrumb
-        const bc = $('#mark-breadcrumb');
-        if (bc) {
-            const icons = { dashboard: 'dashboard', conversations: 'forum', settings: 'settings' };
-            const labels = { dashboard: 'Dashboard', conversations: 'Conversations', settings: 'Settings' };
-            bc.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;color:#22d3ee;">${icons[page] || 'dashboard'}</span> ${labels[page] || 'Dashboard'}`;
-        }
-
-        // Route
+        // Route to the correct page loader
         switch (page) {
             case 'conversations': loadConversationsPage(); break;
             case 'settings':      loadSettingsPage(); break;
             default:              loadDashboardPage(); break;
         }
-    }
-
-    function setBreadcrumb(html) {
-        const bc = $('#mark-breadcrumb');
-        if (bc) bc.innerHTML = html;
     }
 
     /* ================================================================
@@ -627,9 +520,6 @@
             const data = await api('GET', 'stores/' + storeId);
             currentStore = data.store || data;
             activeTab = 'settings';
-
-            // Update breadcrumb to show store context
-            setBreadcrumb(`<a style="color:#909097;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;" onclick="markAdmin.navigate('dashboard')" onmouseenter="this.style.color='#aec6ff'" onmouseleave="this.style.color='#909097'"><span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Dashboard</a> <span style="color:#45464d;margin:0 8px;">/</span> <span style="color:#e0e3e5;">${esc(currentStore.store_name)}</span>`);
 
             renderStoreDetail();
         } catch (e) {
@@ -1300,8 +1190,6 @@
             const data = await api('GET', 'stores/' + storeId);
             currentStore = data.store || data;
             activeTab = 'conversations';
-
-            setBreadcrumb(`<a style="color:#909097;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;" onclick="markAdmin.navigate('conversations')" onmouseenter="this.style.color='#aec6ff'" onmouseleave="this.style.color='#909097'"><span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Conversations</a> <span style="color:#45464d;margin:0 8px;">/</span> <span style="color:#e0e3e5;">${esc(currentStore.store_name)}</span>`);
 
             renderStoreDetail();
         } catch (e) {
