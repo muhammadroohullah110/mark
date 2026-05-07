@@ -124,22 +124,25 @@
     // Free tier sleeps after inactivity; needs ~30s to cold-start.
     // ============================================================
     let backendRetries = 0;
-    const MAX_RETRIES  = 4;
+    const MAX_RETRIES  = 5;
 
     async function checkBackend() {
         if (!BACKEND) return;
         try {
-            const res = await fetch(`${BACKEND}/api/status`, { signal: AbortSignal.timeout(8000) });
+            const res = await fetch(`${BACKEND}/api/status`, { signal: AbortSignal.timeout(12000) });
+            if (!res.ok) throw new Error('Status ' + res.status);
             const data = await res.json();
             backendAlive = true;
-            ttsAvailable = data.tts_available || false;
+            ttsAvailable = data.tts_available !== false;
             backendRetries = 0;
-        } catch {
+            console.log('[Mark] Backend alive — TTS:', ttsAvailable);
+        } catch(e) {
+            console.log('[Mark] Backend check failed:', e.message, '(retry', backendRetries+1, '/', MAX_RETRIES, ')');
             backendAlive = false;
             ttsAvailable = false;
-            // Retry with exponential backoff (5s, 10s, 20s, 40s)
+            // Retry with exponential backoff (4s, 8s, 16s, 32s, 64s)
             if (backendRetries < MAX_RETRIES) {
-                const delay = 5000 * Math.pow(2, backendRetries);
+                const delay = 4000 * Math.pow(2, backendRetries);
                 backendRetries++;
                 setTimeout(checkBackend, delay);
             }
@@ -322,6 +325,8 @@
         clearTimeout(walkTimer);
         markHint.style.display = 'none';
 
+        console.log('[Mark] Entering talking mode — backendAlive:', backendAlive, 'ttsAvailable:', ttsAvailable);
+
         // If backend isn't awake yet, kick off a fresh wake-up attempt
         if (!backendAlive) { backendRetries = 0; checkBackend(); }
 
@@ -405,7 +410,8 @@
                         messages: [{ role: 'user', content: msg }],
                         user_language: language || detectedLanguage,
                         store_id: STORE_ID
-                    })
+                    }),
+                    signal: AbortSignal.timeout(15000)
                 });
                 const data = await res.json();
                 hideThinking();
@@ -415,7 +421,10 @@
                     speak(data.response);
                     return;
                 }
-            } catch(e) { /* fall through to WP fallback */ }
+            } catch(e) {
+                console.log('[Mark] Backend chat failed:', e.message);
+                // fall through to WP fallback
+            }
         }
 
         // Fallback to WP REST
@@ -423,7 +432,8 @@
             const res = await fetch(WP_REST + 'chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE },
-                body: JSON.stringify({ message: msg, language: language || detectedLanguage, store_id: STORE_ID })
+                body: JSON.stringify({ message: msg, language: language || detectedLanguage, store_id: STORE_ID }),
+                signal: AbortSignal.timeout(15000)
             });
             const data = await res.json();
             hideThinking();
@@ -433,9 +443,11 @@
                 speak(data.reply);
                 return;
             }
-        } catch(e) { /* both failed */ }
+        } catch(e) {
+            console.log('[Mark] WP REST chat failed:', e.message);
+        }
 
-        // Hardcoded fallback
+        // Hardcoded fallback — ALWAYS shows something
         hideThinking();
         const fb = type === 'returning'
             ? (language === 'ur' ? `${name}! Wapas aaye -- bohat acha! Kya chahiye aaj?` : `${name}! Welcome back! What are you looking for today?`)
@@ -507,7 +519,10 @@
         cancelIdleTimer();
 
         if (ttsAvailable && backendAlive) {
-            playBackendTTS(cleanText).catch(() => { playBrowserTTS(cleanText); });
+            playBackendTTS(cleanText).catch((e) => {
+                console.log('[Mark] Backend TTS failed, using browser:', e.message);
+                playBrowserTTS(cleanText);
+            });
         } else {
             playBrowserTTS(cleanText);
         }
@@ -519,9 +534,11 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, language: detectedLanguage, store_id: STORE_ID })
         });
-        if (!res.ok) throw new Error('TTS failed');
+        if (!res.ok) throw new Error('TTS HTTP ' + res.status);
 
         const blob = await res.blob();
+        if (blob.size < 100) throw new Error('TTS empty audio');
+
         const url = URL.createObjectURL(blob);
         currentAudio = new Audio(url);
         currentAudio.onended = () => {
@@ -532,12 +549,27 @@
             URL.revokeObjectURL(url); currentAudio = null;
             playBrowserTTS(text);
         };
-        await currentAudio.play();
+
+        // Handle autoplay restrictions — if play() is rejected, fall back
+        try {
+            await currentAudio.play();
+        } catch(e) {
+            console.log('[Mark] Audio autoplay blocked:', e.message);
+            URL.revokeObjectURL(url); currentAudio = null;
+            playBrowserTTS(text);
+        }
     }
 
     function playBrowserTTS(text) {
-        if (!synth) { resetIdleTimer(); return; }
+        if (!synth) {
+            // No TTS available at all — just show caption, set idle timer
+            window.markAnimator.play('idle');
+            hideCaption();
+            resetIdleTimer();
+            return;
+        }
         const u = new SpeechSynthesisUtterance(text);
+        // For Roman Urdu text: use English-India voice (Urdu-like pronunciation)
         if (detectedLanguage === 'ur') { u.rate = 0.88; u.pitch = 0.95; }
         else { u.rate = 0.97; u.pitch = 0.92; }
         u.volume = 1.0;
@@ -547,6 +579,7 @@
             if (v) { u.voice = v; u.lang = v.lang; }
             if (detectedLanguage === 'ur') u.lang = 'en-IN';
             u.onend = () => { window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
+            u.onerror = () => { window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
             synth.speak(u);
         };
         synth.getVoices().length > 0 ? go() : (synth.onvoiceschanged = go);
