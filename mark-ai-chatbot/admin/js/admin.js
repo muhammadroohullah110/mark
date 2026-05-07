@@ -677,10 +677,7 @@
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         <label style="${T.label}">Primary Language</label>
                         <select id="s-primary-lang" style="${T.select}">
-                            <option value="en" ${s.primary_language === 'en' ? 'selected' : ''}>English</option>
-                            <option value="ur" ${s.primary_language === 'ur' ? 'selected' : ''}>Urdu (Roman)</option>
-                            <option value="hi" ${s.primary_language === 'hi' ? 'selected' : ''}>Hindi (Roman)</option>
-                            <option value="ar" ${s.primary_language === 'ar' ? 'selected' : ''}>Arabic</option>
+                            <option value="en" selected>English</option>
                         </select>
                     </div>
                     <!-- Idle Timeout -->
@@ -759,13 +756,7 @@
                             <option value="en-GB-SoniaNeural" ${s.tts_voice === 'en-GB-SoniaNeural' ? 'selected' : ''}>Sonia (Female, British)</option>
                         </select>
                     </div>
-                    <div style="display:flex;flex-direction:column;gap:4px;">
-                        <label style="${T.label}">Urdu Voice</label>
-                        <select id="s-tts-voice-urdu" style="${T.select}">
-                            <option value="ur-PK-AsadNeural" ${s.tts_voice_urdu === 'ur-PK-AsadNeural' ? 'selected' : ''}>Asad (Male, Urdu)</option>
-                            <option value="ur-PK-UzmaNeural" ${s.tts_voice_urdu === 'ur-PK-UzmaNeural' ? 'selected' : ''}>Uzma (Female, Urdu)</option>
-                        </select>
-                    </div>
+                    <!-- Urdu voice removed for V1 — English only -->
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         <label style="${T.label}">Speech Rate</label>
                         <select id="s-tts-rate" style="${T.select}">
@@ -798,9 +789,7 @@
                     <button style="${T.btnSecondary}width:100%;justify-content:center;" onclick="markAdmin.testVoice('en')">
                         <span class="material-symbols-outlined" style="font-size:18px;">play_arrow</span> Test English
                     </button>
-                    <button style="${T.btnSecondary}width:100%;justify-content:center;" onclick="markAdmin.testVoice('ur')">
-                        <span class="material-symbols-outlined" style="font-size:18px;">play_arrow</span> Test Urdu
-                    </button>
+                    <!-- Test Urdu removed for V1 -->
                 </div>
 
                 <!-- Audio Preview -->
@@ -815,7 +804,6 @@
     async function saveVoice() {
         const data = {
             tts_voice:      $('#s-tts-voice').value,
-            tts_voice_urdu: $('#s-tts-voice-urdu').value,
             tts_rate:       $('#s-tts-rate').value,
             tts_pitch:      $('#s-tts-pitch').value,
         };
@@ -827,9 +815,8 @@
     }
 
     async function testVoice(lang) {
-        const text = lang === 'ur'
-            ? 'Assalam o alaikum! Main Mark hoon, aap ka shopping buddy.'
-            : 'Hey there! I am Mark, your personal shopping companion.';
+        const text = 'Hey there! I am Mark, your personal shopping companion.';
+        lang = 'en'; // V1: English only
 
         const preview = $('#voice-preview');
         const previewContent = $('#voice-preview-content');
@@ -840,7 +827,7 @@
                 <div style="width:40px;height:40px;border-radius:50%;background:rgba(79,142,255,0.2);display:flex;align-items:center;justify-content:center;">
                     <span class="material-symbols-outlined" style="font-size:20px;color:#4f8eff;animation:markSpin 1s linear infinite;">progress_activity</span>
                 </div>
-                <span style="font-size:14px;color:#c6c6cd;">Generating ${lang === 'ur' ? 'Urdu' : 'English'} voice...</span>
+                <span style="font-size:14px;color:#c6c6cd;">Generating English voice...</span>
             </div>`;
         }
 
@@ -873,7 +860,7 @@
                                 onclick="markAdmin.testVoice('${lang}')">
                             <span class="material-symbols-outlined" style="font-size:20px;">play_arrow</span>
                         </button>
-                        <span style="font-size:14px;color:#c6c6cd;">${lang === 'ur' ? 'Urdu' : 'English'} sample playing (Edge TTS)</span>
+                        <span style="font-size:14px;color:#c6c6cd;">English sample playing (Edge TTS)</span>
                     </div>`;
                 }
                 toast('Playing Edge TTS voice!', 'success');
@@ -884,7 +871,7 @@
         // Fallback: browser SpeechSynthesis
         if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = lang === 'ur' ? 'ur-PK' : 'en-US';
+            utterance.lang = 'en-US';
             window.speechSynthesis.cancel();
             window.speechSynthesis.speak(utterance);
 
@@ -895,7 +882,7 @@
                             onclick="markAdmin.testVoice('${lang}')">
                         <span class="material-symbols-outlined" style="font-size:20px;">play_arrow</span>
                     </button>
-                    <span style="font-size:14px;color:#c6c6cd;">${lang === 'ur' ? 'Urdu' : 'English'} (browser fallback — backend offline)</span>
+                    <span style="font-size:14px;color:#c6c6cd;">English (browser fallback — backend offline)</span>
                 </div>`;
             }
             toast('Backend offline — using browser voice as preview.', 'info');
@@ -1294,13 +1281,7 @@
                             <option value="en-US-JennyNeural" ${s.default_voice === 'en-US-JennyNeural' ? 'selected' : ''}>Jenny (Female)</option>
                         </select>
                     </div>
-                    <div>
-                        <label style="${T.label}">Urdu Voice</label>
-                        <select id="g-voice-ur" style="${T.select}">
-                            <option value="ur-PK-AsadNeural" ${s.default_voice_ur === 'ur-PK-AsadNeural' ? 'selected' : ''}>Asad (Male)</option>
-                            <option value="ur-PK-UzmaNeural" ${s.default_voice_ur === 'ur-PK-UzmaNeural' ? 'selected' : ''}>Uzma (Female)</option>
-                        </select>
-                    </div>
+                    <!-- Urdu voice removed for V1 -->
                 </div>
             </div>
 
@@ -1370,7 +1351,7 @@
         const data = {
             groq_api_key:    $('#g-groq-key').value.trim(),
             default_voice:   $('#g-voice-en').value,
-            default_voice_ur: $('#g-voice-ur').value,
+            // default_voice_ur removed for V1 — English only
             widget_enabled:  $('#g-widget-enabled').value,
             widget_position: $('#g-widget-position').value,
             auto_greet:      $('#g-auto-greet').value,

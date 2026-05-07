@@ -428,10 +428,8 @@ class Mark_AI_Rest_API {
             ], 200);
         }
 
-        // Build system prompt — Mark's full personality
-        $lang_instruction = $language === 'ur'
-            ? 'The user prefers Roman Urdu. Respond in Roman Urdu (Urdu in English letters). Do NOT use Urdu script.'
-            : 'Respond in English.';
+        // Build system prompt — Mark's full personality (English only for V1)
+        $lang_instruction = 'Respond in English.';
 
         $system_prompt = !empty($custom_prompt) ? $custom_prompt : $this->build_mark_system_prompt($assistant_name, $personality, $lang_instruction);
 
@@ -441,7 +439,7 @@ class Mark_AI_Rest_API {
 
         if ($is_init) {
             $message = 'Introduce yourself as a cute, friendly shopping robot. '
-                . 'Ask the visitor their name and whether they prefer English or Roman Urdu. '
+                . 'Ask the visitor their name. '
                 . 'Keep it SHORT (1-2 sentences), fun, and warm. Add personality.';
         } elseif ($is_returning) {
             // Extract returning user info
@@ -543,8 +541,7 @@ class Mark_AI_Rest_API {
             . "- If you don't know something, say so honestly. NEVER make up product info or prices.\n\n"
             . "LANGUAGE RULES:\n"
             . "- {$lang_instruction}\n"
-            . "- If the user switches language mid-conversation, match their language.\n"
-            . "- For Roman Urdu: use casual, natural Roman Urdu. Mix in common English words naturally (like real Pakistani texting).\n\n"
+            . "- Keep responses in clear, natural English.\n\n"
             . "SHOPPING RULES:\n"
             . "- Help users find products, answer questions about the store, and guide them.\n"
             . "- If someone asks about a product you don't have info about, suggest they browse the store or ask for specifics.\n"

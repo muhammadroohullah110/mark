@@ -16,16 +16,13 @@ const MARK_WP_NONCE = MARK_CFG.nonce || '';
 const MARK_STORE_ID = MARK_CFG.storeId || '';
 const MARK_LANGUAGE = MARK_CFG.language || 'en';
 
-// Navigation intent keywords (English + Roman Urdu)
+// Navigation intent keywords (English)
 const NAV_KEYWORDS = [
     'show', 'find', 'looking for', 'want to see', 'take me', 'go to',
     'browse', 'search', 'see', 'check', 'open', 'shop', 'buy', 'order',
     'new arrival', 'latest', 'collection', 'category', 'cart', 'checkout',
     'sale', 'offer', 'discount', 'deal', 'trending', 'popular', 'best seller',
     'product', 'page', 'store', 'section', 'where',
-    'dikha', 'dikhao', 'dekhna', 'dekhao', 'chahiye', 'chahta', 'chahti',
-    'karo', 'kahan', 'le chalo', 'jana', 'kharidna', 'khareedna', 'naya',
-    'nayi', 'cart mein', 'kart', 'checkout karo', 'dhundh', 'talash'
 ];
 
 function isNavigationIntent(message) {
@@ -50,10 +47,7 @@ async function ragSearch(query) {
 }
 
 function redirectToPage(url, title) {
-    const lang = (typeof detectedLanguage !== 'undefined') ? detectedLanguage : 'en';
-    const feedback = lang === 'ur'
-        ? `Chaliye, main aap ko ${title} le chalta hoon.`
-        : `Sure, let me take you to ${title}.`;
+    const feedback = `Sure, let me take you to ${title}.`;
     if (typeof speak === 'function') speak(feedback);
     setTimeout(() => { window.location.href = url; }, 2800);
 }

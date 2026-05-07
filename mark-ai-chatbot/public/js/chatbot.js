@@ -52,8 +52,8 @@
     let markState         = 'loading';
     let walkTimer         = null;
     let idleTimer         = null;
-    let detectedLanguage  = LANG;
-    let languageLocked    = false;
+    let detectedLanguage  = 'en';
+    let languageLocked    = true; // English only for V1
     let lastMarkText      = '';
     let exchangeCount     = 0;
     let currentAudio      = null;
@@ -342,10 +342,8 @@
         }, 720);
 
         const mem = loadMemory();
-        if (mem.name && mem.language) {
-            detectedLanguage = mem.language;
-            languageLocked = true;
-            playCuteAyie(() => { sendGreeting('returning', mem.name, mem.language); });
+        if (mem.name) {
+            playCuteAyie(() => { sendGreeting('returning', mem.name, 'en'); });
         } else {
             playCuteAyie(() => { sendGreeting('init'); });
         }
@@ -381,7 +379,7 @@
     // ============================================================
     function showThinking() {
         liveCaption.style.opacity = '0';
-        thinkingEl.textContent = detectedLanguage === 'ur' ? 'Mark soch raha hai' : 'Mark is thinking';
+        thinkingEl.textContent = 'Mark is thinking';
         thinkingEl.classList.add('mark-show');
         window.markAnimator.play('think');
     }
@@ -395,7 +393,7 @@
 
         let msg;
         if (type === 'returning') {
-            msg = `__RETURNING__:Name is ${name}. Language preference is ${language === 'ur' ? 'Roman Urdu' : 'English'}.`;
+            msg = `__RETURNING__:Name is ${name}. Language preference is English.`;
         } else {
             msg = '__INIT__';
         }
@@ -450,32 +448,9 @@
         // Hardcoded fallback — ALWAYS shows something
         hideThinking();
         const fb = type === 'returning'
-            ? (language === 'ur' ? `${name}! Wapas aaye -- bohat acha! Kya chahiye aaj?` : `${name}! Welcome back! What are you looking for today?`)
-            : "Hey hey! I'm Mark, your shopping buddy. What's your name -- and shall we chat in English ya Urdu?";
+            ? `${name}! Welcome back! What are you looking for today?`
+            : "Hey hey! I'm Mark, your shopping buddy. What's your name?";
         showCaption(fb); speak(fb);
-    }
-
-    // ============================================================
-    // LANGUAGE DETECTION
-    // ============================================================
-    function detectLanguageAdvanced(text) {
-        const patterns = ['hai','kya','mujhe','kaise','acha','theek','batao','dikha',
-            'chahiye','hoon','ho','kar','ke','ki','ko','se','ne','aap','tum','main',
-            'yeh','woh','kaun','kahan','kab','kyun','kitna','sab','kuch','bhi',
-            'nahi','haan','naa','mein','par','liye','dena','lena','tha','thi','the',
-            'bohat','zyada','thora','assalam','salaam','adaab','naam','mera'];
-        let score = 0;
-        const lower = text.toLowerCase();
-        patterns.forEach(w => { if (new RegExp('\\b'+w+'\\b','i').test(lower)) score += 2; });
-        if (/[؀-ۿ]/.test(text)) score += 10;
-        return score >= 3 ? 'ur' : 'en';
-    }
-
-    function detectLanguagePreference(text) {
-        const t = text.toLowerCase();
-        if (/\b(urdu|roman urdu|urdoo)\b/.test(t)) return 'ur';
-        if (/\b(english|angrezi|eng)\b/.test(t)) return 'en';
-        return null;
     }
 
     // ============================================================
@@ -562,22 +537,17 @@
 
     function playBrowserTTS(text) {
         if (!synth) {
-            // No TTS available at all — just show caption, set idle timer
             window.markAnimator.play('idle');
             hideCaption();
             resetIdleTimer();
             return;
         }
         const u = new SpeechSynthesisUtterance(text);
-        // For Roman Urdu text: use English-India voice (Urdu-like pronunciation)
-        if (detectedLanguage === 'ur') { u.rate = 0.88; u.pitch = 0.95; }
-        else { u.rate = 0.97; u.pitch = 0.92; }
-        u.volume = 1.0;
+        u.rate = 0.97; u.pitch = 0.92; u.volume = 1.0;
 
         const go = () => {
-            const v = pickVoice(detectedLanguage);
+            const v = pickVoice();
             if (v) { u.voice = v; u.lang = v.lang; }
-            if (detectedLanguage === 'ur') u.lang = 'en-IN';
             u.onend = () => { window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
             u.onerror = () => { window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
             synth.speak(u);
@@ -585,14 +555,8 @@
         synth.getVoices().length > 0 ? go() : (synth.onvoiceschanged = go);
     }
 
-    function pickVoice(language) {
+    function pickVoice() {
         const voices = synth.getVoices();
-        if (language === 'ur') {
-            return voices.find(v => v.name.includes('Microsoft Ravi'))
-                || voices.find(v => v.lang === 'en-IN')
-                || voices.find(v => v.lang.startsWith('hi'))
-                || voices.find(v => v.lang.startsWith('en'));
-        }
         return voices.find(v => v.name.includes('Microsoft Mark'))
             || voices.find(v => v.name.includes('Microsoft David'))
             || voices.find(v => v.name.includes('Google UK English Male'))
@@ -664,9 +628,9 @@
             mediaRecorder.start();
             isRecording = true;
             micBtn.classList.add('mark-listening');
-            micHint.textContent = detectedLanguage === 'ur' ? 'Chor do bhejne ke liye' : 'Release to send';
+            micHint.textContent = 'Release to send';
         } catch {
-            micHint.textContent = detectedLanguage === 'ur' ? 'Mic nahi mila' : 'Mic access denied';
+            micHint.textContent = 'Mic access denied';
         }
     }
 
@@ -674,7 +638,7 @@
         if (!isRecording) return;
         isRecording = false;
         micBtn.classList.remove('mark-listening');
-        micHint.textContent = detectedLanguage === 'ur' ? 'Suno...' : 'Processing...';
+        micHint.textContent = 'Processing...';
         window.markAnimator.play('idle');
         try { mediaRecorder.stop(); } catch(_){}
     }
@@ -693,20 +657,15 @@
     async function processTextInput(text) {
         showCaption(text, false);
 
-        const langPref = detectLanguagePreference(text);
-        if (langPref && !languageLocked) { detectedLanguage = langPref; languageLocked = true; }
-        else if (!languageLocked) { detectedLanguage = detectLanguageAdvanced(text); }
-
         const name = tryExtractName(text);
         if (name) saveMemory({ name });
-        if (languageLocked) saveMemory({ language: detectedLanguage });
 
         const userAnim = window.markSituationDetector.detect(text, 'user');
         if (userAnim && userAnim !== 'speak') window.markAnimator.play(userAnim);
 
         setTimeout(showThinking, 400);
         await processUserMessage(text);
-        micHint.textContent = detectedLanguage === 'ur' ? 'Dabao aur bolo' : 'Hold to talk';
+        micHint.textContent = 'Hold to talk';
     }
 
     // ============================================================
@@ -715,9 +674,7 @@
     async function transcribeAndProcess(blob, mime) {
         if (!backendAlive) {
             hideThinking();
-            showCaption(detectedLanguage === 'ur'
-                ? 'Voice abhi available nahi. Type kar ke baat karo.'
-                : 'Voice not available right now. Please type instead.');
+            showCaption('Voice not available right now. Please type instead.');
             micHint.textContent = 'Hold to talk';
             resetIdleTimer();
             return;
@@ -738,15 +695,15 @@
             const data = await res.json();
             const text = data.text ? data.text.trim() : '';
 
-            if (!text) { hideThinking(); micHint.textContent = detectedLanguage==='ur'?'Dabao aur bolo':'Hold to talk'; resetIdleTimer(); return; }
-            if (isEcho(text)) { hideThinking(); micHint.textContent = detectedLanguage==='ur'?'Dabao aur bolo':'Hold to talk'; resetIdleTimer(); return; }
+            if (!text) { hideThinking(); micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
+            if (isEcho(text)) { hideThinking(); micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
 
             hideThinking();
             await processTextInput(text);
         } catch(e) {
             hideThinking();
-            showCaption(detectedLanguage==='ur'?'Voice server se connection nahi mila.':'Could not connect to voice server.');
-            micHint.textContent = detectedLanguage==='ur'?'Dabao aur bolo':'Hold to talk';
+            showCaption('Could not connect to voice server.');
+            micHint.textContent = 'Hold to talk';
             resetIdleTimer();
         }
     }
@@ -812,7 +769,7 @@
         } catch(e) { /* both failed */ }
 
         hideThinking();
-        showCaption(detectedLanguage==='ur'?'Connection problem. Dobara try karo.':'Connection error. Please try again.');
+        showCaption('Connection error. Please try again.');
         resetIdleTimer();
     };
 
