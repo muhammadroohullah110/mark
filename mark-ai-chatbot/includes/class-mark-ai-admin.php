@@ -30,7 +30,7 @@ class Mark_AI_Admin {
 
         // Submenus
         add_submenu_page('mark-ai', 'Dashboard', 'Dashboard', 'manage_options', 'mark-ai', [$this, 'render_dashboard']);
-        add_submenu_page('mark-ai', 'Stores', 'Stores', 'manage_options', 'mark-ai-stores', [$this, 'render_stores']);
+        add_submenu_page('mark-ai', 'My Store', 'My Store', 'manage_options', 'mark-ai-stores', [$this, 'render_stores']);
         add_submenu_page('mark-ai', 'Conversations', 'Conversations', 'manage_options', 'mark-ai-conversations', [$this, 'render_conversations']);
         add_submenu_page('mark-ai', 'Settings', 'Settings', 'manage_options', 'mark-ai-settings', [$this, 'render_settings']);
     }
@@ -50,8 +50,8 @@ class Mark_AI_Admin {
             echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
         }, 1);
 
-        // Google Fonts (combined request — single HTTP call for both families)
-        wp_enqueue_style('mark-ai-fonts', 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap', [], null);
+        // Google Fonts — Open Sans (Celestial High-Key design system)
+        wp_enqueue_style('mark-ai-fonts', 'https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&display=swap', [], null);
 
         // Material Icons (only the weights we use: 400, filled=0)
         wp_enqueue_style('material-icons', 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap', [], null);
@@ -101,9 +101,9 @@ class Mark_AI_Admin {
     private function render_app_shell($page) {
         ?>
         <div id="mark-ai-app" data-page="<?php echo esc_attr($page); ?>">
-            <div style="display:flex;align-items:center;justify-content:center;min-height:400px;color:#aec6ff;">
+            <div style="display:flex;align-items:center;justify-content:center;min-height:400px;color:#4f6169;">
                 <span class="material-symbols-outlined" style="font-size:48px;animation:spin 1s linear infinite;">progress_activity</span>
-                <span style="margin-left:12px;font-family:'Space Grotesk',sans-serif;font-size:18px;">Loading Mark AI...</span>
+                <span style="margin-left:12px;font-family:'Open Sans',sans-serif;font-size:18px;">Loading Mark AI...</span>
             </div>
         </div>
         <style>@keyframes spin{to{transform:rotate(360deg)}}</style>

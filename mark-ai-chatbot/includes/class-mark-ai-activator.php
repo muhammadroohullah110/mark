@@ -2,6 +2,7 @@
 /**
  * Mark AI — Activation & Deactivation
  * Creates custom database tables on plugin activation.
+ * Auto-creates a default store for the site.
  */
 
 defined('ABSPATH') || exit;
@@ -10,11 +11,11 @@ class Mark_AI_Activator {
 
     /**
      * Runs on plugin activation.
-     * Creates custom tables for stores, conversations, and settings.
      */
     public static function activate() {
         self::create_tables();
         self::set_defaults();
+        self::auto_create_store();
         flush_rewrite_rules();
     }
 
@@ -50,7 +51,6 @@ class Mark_AI_Activator {
             walking_enabled tinyint(1) NOT NULL DEFAULT 1,
             sound_effects tinyint(1) NOT NULL DEFAULT 1,
             tts_voice varchar(100) DEFAULT 'en-US-GuyNeural',
-            tts_voice_urdu varchar(100) DEFAULT 'ur-PK-AsadNeural',
             tts_rate varchar(20) DEFAULT '+0%%',
             tts_pitch varchar(20) DEFAULT '+0Hz',
             groq_api_key varchar(255) DEFAULT '',
@@ -102,7 +102,6 @@ class Mark_AI_Activator {
         $defaults = [
             'groq_api_key'     => '',
             'default_voice'    => 'en-US-GuyNeural',
-            'default_voice_ur' => 'ur-PK-AsadNeural',
             'tts_rate'         => '+0%',
             'tts_pitch'        => '+0Hz',
             'llm_model'        => 'llama-3.3-70b-versatile',
@@ -110,13 +109,47 @@ class Mark_AI_Activator {
             'temperature'      => 0.72,
             'widget_enabled'   => 1,
             'widget_position'  => 'bottom-right',
-            'auto_greet'       => 1,
-            'primary_language' => 'en',
+            'auto_greet'          => 1,
+            'primary_language'    => 'en',
+            'widget_accent_color' => '#954921',
         ];
 
         // Only set defaults if not already configured
         if (!get_option('mark_ai_settings')) {
             update_option('mark_ai_settings', $defaults);
         }
+    }
+
+    /**
+     * Auto-create a default store for this WordPress site.
+     * Only creates if no stores exist yet for the current admin.
+     */
+    private static function auto_create_store() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'mark_ai_stores';
+        $uid = get_current_user_id();
+
+        // Skip if user not logged in (CLI activation) or stores already exist
+        if (!$uid) return;
+
+        $count = (int) $wpdb->get_var(
+            $wpdb->prepare("SELECT COUNT(*) FROM $table WHERE owner_id = %d", $uid)
+        );
+        if ($count > 0) return;
+
+        // Create default store with site info
+        $store_id = wp_generate_password(16, false);
+        $wpdb->insert($table, [
+            'store_id'            => $store_id,
+            'store_name'          => get_bloginfo('name') ?: 'My Store',
+            'website_url'         => home_url(),
+            'assistant_name'      => 'Mark',
+            'personality'         => 'friendly',
+            'greeting_style'      => 'casual',
+            'primary_language'    => 'en',
+            'supported_languages' => wp_json_encode(['en']),
+            'is_active'           => 1,
+            'owner_id'            => $uid,
+        ]);
     }
 }

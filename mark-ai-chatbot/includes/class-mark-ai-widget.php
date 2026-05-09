@@ -123,6 +123,7 @@ class Mark_AI_Widget {
             'position'    => $settings['widget_position'] ?? 'bottom-right',
             'storeId'     => $active_store ? $active_store['store_id'] : '',
             'backendUrl'  => !empty($settings['backend_url']) ? $settings['backend_url'] : 'https://mark-ix64.onrender.com',
+            'accentColor' => sanitize_hex_color( $settings['widget_accent_color'] ?? '' ) ?: '#954921',
         ]);
     }
 

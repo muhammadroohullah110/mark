@@ -1,13 +1,17 @@
 <?php
 /**
  * Mark AI — WordPress REST API
- * All REST endpoints for admin dashboard.
- * NO external backend — Groq API called directly from PHP.
+ * All REST endpoints for admin dashboard + public chat.
+ * Security hardened: rate limiting, input validation, output escaping.
  */
 
 defined('ABSPATH') || exit;
 
 class Mark_AI_Rest_API {
+
+    /** Rate limit: max chat requests per IP per minute */
+    private const CHAT_RATE_LIMIT   = 20;
+    private const CHAT_RATE_WINDOW  = 60; // seconds
 
     public function __construct() {
         add_action('rest_api_init', [$this, 'register_routes']);
@@ -82,17 +86,17 @@ class Mark_AI_Rest_API {
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
+        // Chart data for analytics
+        register_rest_route('mark-ai/v1', '/chart-data', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'get_chart_data'],
+            'permission_callback' => [$this, 'admin_check'],
+        ]);
+
         // Test Groq API connection
         register_rest_route('mark-ai/v1', '/test-connection', [
             'methods'             => 'POST',
             'callback'            => [$this, 'test_connection'],
-            'permission_callback' => [$this, 'admin_check'],
-        ]);
-
-        // Test Voice (uses browser SpeechSynthesis — no server call needed)
-        register_rest_route('mark-ai/v1', '/test-voice', [
-            'methods'             => 'POST',
-            'callback'            => [$this, 'test_voice'],
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
@@ -108,10 +112,51 @@ class Mark_AI_Rest_API {
         return current_user_can('manage_options');
     }
 
+    // ── Rate Limiter (for public endpoints) ─────────────
+
+    /**
+     * Check and enforce rate limit using transients.
+     * Returns true if request is allowed, false if rate-limited.
+     */
+    private function check_rate_limit( $identifier, $max_requests = 20, $window = 60 ) {
+        $key   = 'mark_rl_' . md5( $identifier );
+        $data  = get_transient( $key );
+
+        if ( false === $data ) {
+            set_transient( $key, [ 'count' => 1, 'start' => time() ], $window );
+            return true;
+        }
+
+        if ( $data['count'] >= $max_requests ) {
+            return false;
+        }
+
+        $data['count']++;
+        $remaining = $window - ( time() - $data['start'] );
+        if ( $remaining > 0 ) {
+            set_transient( $key, $data, $remaining );
+        }
+        return true;
+    }
+
+    /**
+     * Get visitor IP safely.
+     */
+    private function get_visitor_ip() {
+        $ip = '';
+        if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+            $ips = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
+            $ip  = trim( $ips[0] );
+        } elseif ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+            $ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+        }
+        return filter_var( $ip, FILTER_VALIDATE_IP ) ? $ip : '0.0.0.0';
+    }
+
     // ── Dashboard ───────────────────────────────────────
 
     public function get_dashboard() {
-        $stats = Mark_AI_Database::get_dashboard_stats();
+        $stats  = Mark_AI_Database::get_dashboard_stats();
         $stores = Mark_AI_Database::get_stores();
 
         $store_list = [];
@@ -126,6 +171,12 @@ class Mark_AI_Rest_API {
         }
 
         $stats['stores'] = $store_list;
+
+        // Include setup status for onboarding
+        $settings = get_option('mark_ai_settings', []);
+        $stats['setup_complete'] = ! empty( $settings['groq_api_key'] ) && count( $store_list ) > 0;
+        $stats['has_api_key']    = ! empty( $settings['groq_api_key'] );
+
         return new WP_REST_Response($stats, 200);
     }
 
@@ -133,11 +184,12 @@ class Mark_AI_Rest_API {
 
     public function get_settings() {
         $settings = get_option('mark_ai_settings', []);
-        // Mask Groq key
+        // Never expose full API key — mask it
         if (!empty($settings['groq_api_key'])) {
             $key = $settings['groq_api_key'];
             $settings['groq_api_key_masked'] = substr($key, 0, 8) . '...' . substr($key, -4);
             $settings['has_groq_key'] = true;
+            // Send full key only for admin form pre-fill (they already have it)
         } else {
             $settings['has_groq_key'] = false;
         }
@@ -145,19 +197,38 @@ class Mark_AI_Rest_API {
     }
 
     public function save_settings(WP_REST_Request $request) {
-        $body = $request->get_json_params();
+        $body    = $request->get_json_params();
         $current = get_option('mark_ai_settings', []);
 
         $allowed = [
-            'groq_api_key', 'default_voice', 'default_voice_ur',
+            'groq_api_key', 'default_voice',
             'tts_rate', 'tts_pitch', 'llm_model', 'max_tokens', 'temperature',
             'widget_enabled', 'widget_position', 'auto_greet', 'primary_language',
-            'backend_url',
+            'backend_url', 'widget_accent_color',
         ];
 
         foreach ($allowed as $key) {
             if (isset($body[$key])) {
-                $current[$key] = sanitize_text_field($body[$key]);
+                $value = $body[$key];
+
+                // Type-specific sanitization
+                if ( in_array( $key, [ 'max_tokens', 'temperature' ], true ) ) {
+                    $value = is_numeric( $value ) ? $value : $current[ $key ] ?? '';
+                } elseif ( $key === 'widget_accent_color' ) {
+                    $value = sanitize_hex_color( $value ) ?: '';
+                } elseif ( $key === 'backend_url' || $key === 'widget_position' ) {
+                    $value = sanitize_text_field( $value );
+                } elseif ( $key === 'groq_api_key' ) {
+                    // Only update if a real key is provided (not masked)
+                    if ( strpos( $value, '...' ) !== false || empty( $value ) ) {
+                        continue; // Skip — don't overwrite with masked value
+                    }
+                    $value = sanitize_text_field( $value );
+                } else {
+                    $value = sanitize_text_field( $value );
+                }
+
+                $current[$key] = $value;
             }
         }
 
@@ -170,6 +241,7 @@ class Mark_AI_Rest_API {
     public function list_stores() {
         $stores = Mark_AI_Database::get_stores();
         foreach ($stores as &$s) {
+            // Never expose API keys in list
             if (!empty($s['groq_api_key'])) {
                 $s['groq_api_key'] = substr($s['groq_api_key'], 0, 8) . '...' . substr($s['groq_api_key'], -4);
             }
@@ -199,8 +271,8 @@ class Mark_AI_Rest_API {
     }
 
     public function get_store(WP_REST_Request $request) {
-        $store_id = $request->get_param('store_id');
-        $store = Mark_AI_Database::get_store($store_id);
+        $store_id = sanitize_text_field( $request->get_param('store_id') );
+        $store    = Mark_AI_Database::get_store($store_id);
 
         if (!$store || (int) $store['owner_id'] !== get_current_user_id()) {
             return new WP_REST_Response(['message' => 'Store not found'], 404);
@@ -210,8 +282,8 @@ class Mark_AI_Rest_API {
     }
 
     public function update_store(WP_REST_Request $request) {
-        $store_id = $request->get_param('store_id');
-        $store = Mark_AI_Database::get_store($store_id);
+        $store_id = sanitize_text_field( $request->get_param('store_id') );
+        $store    = Mark_AI_Database::get_store($store_id);
 
         if (!$store || (int) $store['owner_id'] !== get_current_user_id()) {
             return new WP_REST_Response(['message' => 'Store not found'], 404);
@@ -223,7 +295,7 @@ class Mark_AI_Rest_API {
             'store_name', 'website_url', 'assistant_name', 'personality',
             'greeting_style', 'primary_language', 'supported_languages',
             'max_crawl_pages', 'idle_timeout', 'walking_enabled', 'sound_effects',
-            'tts_voice', 'tts_voice_urdu', 'tts_rate', 'tts_pitch',
+            'tts_voice', 'tts_rate', 'tts_pitch',
             'groq_api_key', 'llm_model', 'max_tokens', 'temperature',
             'rate_chat', 'rate_tts', 'rate_transcribe',
             'custom_system_prompt', 'is_active',
@@ -232,12 +304,29 @@ class Mark_AI_Rest_API {
         $updates = [];
         foreach ($allowed as $key) {
             if (isset($body[$key])) {
-                $updates[$key] = is_string($body[$key]) ? sanitize_text_field($body[$key]) : $body[$key];
-            }
-        }
+                $value = $body[$key];
 
-        if (isset($body['custom_system_prompt'])) {
-            $updates['custom_system_prompt'] = wp_kses_post($body['custom_system_prompt']);
+                // Type-specific validation
+                if ( in_array( $key, [ 'max_crawl_pages', 'idle_timeout', 'max_tokens', 'rate_chat', 'rate_tts', 'rate_transcribe' ], true ) ) {
+                    $value = max( 1, intval( $value ) );
+                } elseif ( $key === 'temperature' ) {
+                    $value = max( 0.0, min( 2.0, floatval( $value ) ) );
+                } elseif ( $key === 'is_active' ) {
+                    $value = $value ? 1 : 0;
+                } elseif ( $key === 'website_url' ) {
+                    $value = esc_url_raw( $value );
+                } elseif ( $key === 'custom_system_prompt' ) {
+                    $value = wp_kses_post( $value );
+                } elseif ( $key === 'groq_api_key' ) {
+                    // Don't overwrite with masked value
+                    if ( strpos( $value, '...' ) !== false ) continue;
+                    $value = sanitize_text_field( $value );
+                } else {
+                    $value = is_string( $value ) ? sanitize_text_field( $value ) : $value;
+                }
+
+                $updates[$key] = $value;
+            }
         }
 
         if (!empty($updates)) {
@@ -253,8 +342,8 @@ class Mark_AI_Rest_API {
     }
 
     public function delete_store(WP_REST_Request $request) {
-        $store_id = $request->get_param('store_id');
-        $store = Mark_AI_Database::get_store($store_id);
+        $store_id = sanitize_text_field( $request->get_param('store_id') );
+        $store    = Mark_AI_Database::get_store($store_id);
 
         if (!$store || (int) $store['owner_id'] !== get_current_user_id()) {
             return new WP_REST_Response(['message' => 'Store not found'], 404);
@@ -267,8 +356,8 @@ class Mark_AI_Rest_API {
     // ── Analytics ───────────────────────────────────────
 
     public function get_store_analytics(WP_REST_Request $request) {
-        $store_id = $request->get_param('store_id');
-        $store = Mark_AI_Database::get_store($store_id);
+        $store_id = sanitize_text_field( $request->get_param('store_id') );
+        $store    = Mark_AI_Database::get_store($store_id);
 
         if (!$store || (int) $store['owner_id'] !== get_current_user_id()) {
             return new WP_REST_Response(['message' => 'Store not found'], 404);
@@ -280,15 +369,15 @@ class Mark_AI_Rest_API {
     // ── Conversations ──────────────────────────────────
 
     public function get_conversations(WP_REST_Request $request) {
-        $store_id = $request->get_param('store_id');
-        $store = Mark_AI_Database::get_store($store_id);
+        $store_id = sanitize_text_field( $request->get_param('store_id') );
+        $store    = Mark_AI_Database::get_store($store_id);
 
         if (!$store || (int) $store['owner_id'] !== get_current_user_id()) {
             return new WP_REST_Response(['message' => 'Store not found'], 404);
         }
 
-        $limit = (int) ($request->get_param('limit') ?? 50);
-        $offset = (int) ($request->get_param('offset') ?? 0);
+        $limit  = min( 100, max( 1, intval( $request->get_param('limit') ?? 50 ) ) );
+        $offset = max( 0, intval( $request->get_param('offset') ?? 0 ) );
 
         $convos = Mark_AI_Database::get_conversations($store_id, $limit, $offset);
         return new WP_REST_Response(['conversations' => $convos], 200);
@@ -297,8 +386,8 @@ class Mark_AI_Rest_API {
     // ── Embed Code ─────────────────────────────────────
 
     public function get_embed_code(WP_REST_Request $request) {
-        $store_id = $request->get_param('store_id');
-        $store = Mark_AI_Database::get_store($store_id);
+        $store_id = sanitize_text_field( $request->get_param('store_id') );
+        $store    = Mark_AI_Database::get_store($store_id);
 
         if (!$store || (int) $store['owner_id'] !== get_current_user_id()) {
             return new WP_REST_Response(['message' => 'Store not found'], 404);
@@ -320,20 +409,49 @@ class Mark_AI_Rest_API {
         ], 200);
     }
 
+    // ── Chart Data (Analytics) ────────────────────────
+
+    public function get_chart_data( WP_REST_Request $request ) {
+        $days = min( 90, max( 7, intval( $request->get_param('days') ?? 14 ) ) );
+
+        $stores    = Mark_AI_Database::get_stores();
+        $store_ids = array_column( $stores, 'store_id' );
+
+        $daily  = Mark_AI_Database::get_daily_conversations( $store_ids, $days );
+        $hourly = Mark_AI_Database::get_hourly_distribution( $store_ids );
+
+        return new WP_REST_Response([
+            'daily'  => $daily,
+            'hourly' => $hourly,
+            'days'   => $days,
+        ], 200);
+    }
+
     // ── Test Groq Connection ───────────────────────────
 
     public function test_connection(WP_REST_Request $request) {
         $settings = get_option('mark_ai_settings', []);
-        $api_key = $settings['groq_api_key'] ?? '';
+        $api_key  = $settings['groq_api_key'] ?? '';
 
         if (empty($api_key)) {
             return new WP_REST_Response([
                 'connected' => false,
-                'error'     => 'No Groq API key configured. Add it in Settings.',
+                'error'     => 'No Groq API key configured.',
+                'hint'      => 'Go to Settings and enter your Groq API key. Get one free at console.groq.com.',
+                'code'      => 'no_key',
             ], 200);
         }
 
-        // Test with a simple Groq API call
+        // Quick format check
+        if ( strpos( $api_key, 'gsk_' ) !== 0 ) {
+            return new WP_REST_Response([
+                'connected' => false,
+                'error'     => 'API key format looks invalid.',
+                'hint'      => 'Groq keys start with "gsk_". Check if you copied the full key from console.groq.com.',
+                'code'      => 'bad_format',
+            ], 200);
+        }
+
         $response = wp_remote_post('https://api.groq.com/openai/v1/chat/completions', [
             'timeout' => 10,
             'headers' => [
@@ -348,9 +466,16 @@ class Mark_AI_Rest_API {
         ]);
 
         if (is_wp_error($response)) {
+            $err = $response->get_error_message();
             return new WP_REST_Response([
                 'connected' => false,
-                'error'     => $response->get_error_message(),
+                'error'     => 'Connection failed: ' . $err,
+                'hint'      => strpos( $err, 'resolve' ) !== false || strpos( $err, 'DNS' ) !== false
+                    ? 'Your server cannot reach Groq. Check your hosting firewall or DNS settings.'
+                    : ( strpos( $err, 'timed out' ) !== false
+                        ? 'Request timed out. Groq servers may be busy — try again in a minute.'
+                        : 'Check your server\'s outbound HTTP connections and try again.' ),
+                'code'      => 'network',
             ], 200);
         }
 
@@ -358,48 +483,68 @@ class Mark_AI_Rest_API {
         if ($code === 200) {
             return new WP_REST_Response([
                 'connected' => true,
-                'message'   => 'Groq API connected successfully!',
+                'message'   => 'Groq API connected successfully! Mark is ready to chat.',
             ], 200);
         }
 
         $body = json_decode(wp_remote_retrieve_body($response), true);
+        $api_error = $body['error']['message'] ?? '';
+
+        // Provide specific recovery hints based on HTTP status
+        $hints = [
+            401 => 'Your API key is invalid or expired. Generate a new key at console.groq.com.',
+            403 => 'Access denied. Your Groq account may be suspended — check your account at console.groq.com.',
+            429 => 'Rate limit exceeded. Groq free tier has limits — wait a few seconds and try again.',
+            500 => 'Groq server error. This is on their end — try again in a minute.',
+            503 => 'Groq is temporarily unavailable. Try again in a few minutes.',
+        ];
+
         return new WP_REST_Response([
             'connected' => false,
-            'error'     => $body['error']['message'] ?? 'API returned status ' . $code,
-        ], 200);
-    }
-
-    // ── Test Voice ─────────────────────────────────────
-
-    public function test_voice(WP_REST_Request $request) {
-        return new WP_REST_Response([
-            'message' => 'Voice test uses browser SpeechSynthesis. Click the play button to hear it.',
+            'error'     => $api_error ?: 'API returned status ' . $code,
+            'hint'      => $hints[ $code ] ?? 'Unexpected error (HTTP ' . $code . '). Try generating a new API key at console.groq.com.',
+            'code'      => 'api_' . $code,
         ], 200);
     }
 
     // ── Public Chat (Frontend Widget) ─────────────────
 
     public function handle_chat(WP_REST_Request $request) {
-        $body = $request->get_json_params();
+        // ── Rate limiting ──
+        $visitor_ip = $this->get_visitor_ip();
+        if ( ! $this->check_rate_limit( 'chat_' . $visitor_ip, self::CHAT_RATE_LIMIT, self::CHAT_RATE_WINDOW ) ) {
+            return new WP_REST_Response([
+                'reply' => 'You\'re sending messages too fast. Please wait a moment.',
+            ], 429);
+        }
+
+        $body       = $request->get_json_params();
         $message    = sanitize_text_field($body['message'] ?? '');
         $session_id = sanitize_text_field($body['session_id'] ?? '');
         $language   = sanitize_text_field($body['language'] ?? 'en');
         $store_id   = sanitize_text_field($body['store_id'] ?? '');
-        $history    = $body['history'] ?? []; // Conversation history array
+        $history    = $body['history'] ?? [];
 
         if (empty($message)) {
             return new WP_REST_Response(['message' => 'Message is required.'], 400);
         }
 
+        // ── Message length check ──
+        if ( mb_strlen( $message ) > 2000 ) {
+            return new WP_REST_Response([
+                'reply' => 'Your message is too long. Please keep it under 2000 characters.',
+            ], 400);
+        }
+
         // Get API key: try store-specific first, then global
-        $api_key = '';
-        $store = null;
+        $api_key        = '';
+        $store          = null;
         $assistant_name = 'Mark';
-        $personality = 'friendly';
-        $custom_prompt = '';
-        $llm_model = 'llama-3.3-70b-versatile';
-        $max_tokens = 200;
-        $temperature = 0.72;
+        $personality    = 'friendly';
+        $custom_prompt  = '';
+        $llm_model      = 'llama-3.3-70b-versatile';
+        $max_tokens     = 200;
+        $temperature    = 0.72;
 
         if (!empty($store_id)) {
             $store = Mark_AI_Database::get_store($store_id);
@@ -408,8 +553,8 @@ class Mark_AI_Rest_API {
                 $personality    = $store['personality'] ?: 'friendly';
                 $custom_prompt  = $store['custom_system_prompt'] ?? '';
                 $llm_model      = $store['llm_model'] ?: 'llama-3.3-70b-versatile';
-                $max_tokens     = (int) ($store['max_tokens'] ?: 200);
-                $temperature    = (float) ($store['temperature'] ?: 0.72);
+                $max_tokens     = min( 500, max( 50, (int) ($store['max_tokens'] ?: 200) ) );
+                $temperature    = max( 0.0, min( 2.0, (float) ($store['temperature'] ?: 0.72) ) );
                 if (!empty($store['groq_api_key'])) {
                     $api_key = $store['groq_api_key'];
                 }
@@ -419,7 +564,7 @@ class Mark_AI_Rest_API {
         // Fallback to global key
         if (empty($api_key)) {
             $settings = get_option('mark_ai_settings', []);
-            $api_key = $settings['groq_api_key'] ?? '';
+            $api_key  = $settings['groq_api_key'] ?? '';
         }
 
         if (empty($api_key)) {
@@ -428,13 +573,12 @@ class Mark_AI_Rest_API {
             ], 200);
         }
 
-        // Build system prompt — Mark's full personality (English only for V1)
+        // Build system prompt
         $lang_instruction = 'Respond in English.';
-
-        $system_prompt = !empty($custom_prompt) ? $custom_prompt : $this->build_mark_system_prompt($assistant_name, $personality, $lang_instruction);
+        $system_prompt    = !empty($custom_prompt) ? $custom_prompt : $this->build_mark_system_prompt($assistant_name, $personality, $lang_instruction);
 
         // Handle special messages
-        $is_init = ($message === '__INIT__');
+        $is_init      = ($message === '__INIT__');
         $is_returning = (strpos($message, '__RETURNING__') === 0);
 
         if ($is_init) {
@@ -442,7 +586,6 @@ class Mark_AI_Rest_API {
                 . 'Ask the visitor their name. '
                 . 'Keep it SHORT (1-2 sentences), fun, and warm. Add personality.';
         } elseif ($is_returning) {
-            // Extract returning user info
             $message = str_replace('__RETURNING__:', '', $message);
             $message = 'A returning visitor just came back. ' . $message . ' '
                 . 'Give them a warm, personalized welcome back greeting. '
@@ -458,9 +601,9 @@ class Mark_AI_Rest_API {
         if (!empty($history) && is_array($history)) {
             $history = array_slice($history, -14); // Keep last 14 messages max
             foreach ($history as $msg) {
-                $role = in_array($msg['role'] ?? '', ['user', 'assistant']) ? $msg['role'] : 'user';
+                $role    = in_array($msg['role'] ?? '', ['user', 'assistant', 'system'], true) ? $msg['role'] : 'user';
                 $content = sanitize_text_field($msg['content'] ?? '');
-                if (!empty($content)) {
+                if (!empty($content) && mb_strlen($content) <= 2000) {
                     $api_messages[] = ['role' => $role, 'content' => $content];
                 }
             }
@@ -503,7 +646,7 @@ class Mark_AI_Rest_API {
 
         // Log the conversation (skip init/returning greetings)
         if (!$is_init && !$is_returning) {
-            $visitor_hash = md5(sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? '') . sanitize_text_field($_SERVER['HTTP_USER_AGENT'] ?? ''));
+            $visitor_hash = md5( $visitor_ip . sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ?? '' ) ) );
             if ($store) {
                 Mark_AI_Database::log_conversation([
                     'store_id'      => $store_id,
@@ -553,20 +696,20 @@ class Mark_AI_Rest_API {
      * Trigger RAG crawl on the Python backend.
      * Non-blocking — fires and forgets so store creation isn't delayed.
      */
-    private function trigger_rag_crawl( $store_id, $website_url ) {
-        $settings    = get_option( 'mark_ai_settings', [] );
-        $backend_url = ! empty( $settings['backend_url'] )
+    private function trigger_rag_crawl($store_id, $website_url) {
+        $settings    = get_option('mark_ai_settings', []);
+        $backend_url = !empty($settings['backend_url'])
             ? $settings['backend_url']
             : 'https://mark-ix64.onrender.com';
 
-        wp_remote_post( $backend_url . '/api/rag-crawl', [
-            'timeout'  => 3, // Don't wait — fire and forget
+        wp_remote_post($backend_url . '/api/rag-crawl', [
+            'timeout'  => 3,
             'blocking' => false,
-            'headers'  => [ 'Content-Type' => 'application/json' ],
-            'body'     => wp_json_encode( [
+            'headers'  => ['Content-Type' => 'application/json'],
+            'body'     => wp_json_encode([
                 'store_id'    => $store_id,
                 'website_url' => $website_url,
-            ] ),
-        ] );
+            ]),
+        ]);
     }
 }

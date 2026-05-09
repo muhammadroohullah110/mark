@@ -77,6 +77,7 @@
     let ttsAvailable      = false;
     let backendAlive      = false;
     let conversationHistory = [];
+    const SESSION_ID = 'mark_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
     // ============================================================
     // BUILD DOM
@@ -186,7 +187,7 @@
             /(?:my name is|i'm|i am|call me|this is)\s+([a-z]{2,15})/i,
             /(?:mera naam|naam hai|naam)\s+([a-z]{2,15})/i,
         ];
-        const skip = ['hello','hi','hey','yes','no','ok','sure','please','show','find','english','urdu','want','need','the','and','but'];
+        const skip = ['hello','hi','hey','yes','no','ok','sure','please','show','find','english','want','need','the','and','but'];
         for (const p of patterns) {
             const m = text.match(p);
             if (m && m[1]) {
@@ -485,7 +486,7 @@
             const res = await fetch(WP_REST + 'chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE },
-                body: JSON.stringify({ message: msg, language: language || detectedLanguage, store_id: STORE_ID }),
+                body: JSON.stringify({ message: msg, language: language || detectedLanguage, store_id: STORE_ID, session_id: SESSION_ID }),
                 signal: AbortSignal.timeout(15000)
             });
             const data = await res.json();
@@ -788,17 +789,33 @@
     // CHAT — Backend (primary) → WP REST (fallback)
     // Backend has: Mark's soul, product catalog, conversation context
     // ============================================================
-    window.processWithOpenAI = async function(userInput) {
+    /**
+     * Chat handler — Backend (primary) then WP REST (fallback).
+     * @param {string} userInput — the user's message
+     * @param {string} ragContext — optional RAG context from mark-brain.js
+     */
+    window.processChatMessage = async function(userInput, ragContext) {
         conversationHistory.push({ role: 'user', content: userInput });
+
+        // Build the enriched message with RAG context (if available)
+        const enrichedInput = ragContext
+            ? userInput + ragContext
+            : userInput;
 
         // Try Python backend first (full Mark personality + products + RAG)
         if (backendAlive) {
             try {
+                // For backend, send RAG context as a separate system hint
+                const messages = conversationHistory.slice(-12);
+                if (ragContext) {
+                    messages.push({ role: 'system', content: ragContext });
+                }
+
                 const res = await fetch(`${BACKEND}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        messages: conversationHistory.slice(-12),
+                        messages: messages,
                         user_language: detectedLanguage,
                         store_id: STORE_ID
                     })
@@ -819,8 +836,14 @@
             }
         }
 
-        // Fallback: WP REST (basic Groq chat, no products/personality)
+        // Fallback: WP REST — inject RAG context into history so Groq sees it
         try {
+            const historyForWP = conversationHistory.slice(-12);
+            if (ragContext) {
+                // Add RAG context as a system message in the history
+                historyForWP.push({ role: 'system', content: ragContext });
+            }
+
             const res = await fetch(WP_REST + 'chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE },
@@ -828,7 +851,8 @@
                     message: userInput,
                     language: detectedLanguage,
                     store_id: STORE_ID,
-                    history: conversationHistory.slice(-12)
+                    session_id: SESSION_ID,
+                    history: historyForWP
                 })
             });
             const data = await res.json();

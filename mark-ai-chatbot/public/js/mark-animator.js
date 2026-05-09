@@ -163,7 +163,7 @@ class MarkAnimator {
 
 // ============================================================
 // SITUATION DETECTOR — picks animation from text
-// Works for English AND Roman Urdu
+// Works for English text analysis
 // ============================================================
 
 class MarkSituationDetector {
@@ -184,16 +184,16 @@ class MarkSituationDetector {
     }
 
     _isGreeting(t) {
-        return /\b(hello|hi |welcome|ayie|hey there|hey hey|good morning|good evening|greetings|how are you|assalam|salaam|adaab|namaste|kya haal)\b/.test(t);
+        return /\b(hello|hi |welcome|ayie|hey there|hey hey|good morning|good evening|greetings|how are you)\b/.test(t);
     }
     _isExcited(t) {
-        return /\b(amazing|fantastic|great deal|special offer|love it|perfect|best value|incredible|wow|congratulations|just for you|only a few left|zabardast|kamaal|behtareen|shaandar|wah|maza|awesome)\b/.test(t);
+        return /\b(amazing|fantastic|great deal|special offer|love it|perfect|best value|incredible|wow|congratulations|just for you|only a few left|awesome|wonderful)\b/.test(t);
     }
     _isCompliment(t) {
-        return /\b(you('re| are) (cute|sweet|great|awesome|amazing|smart|funny|handsome|adorable|the best)|love you|good job|well done|tum bohat|aap bohat|pyaare|cute ho|achay|sweet ho)\b/.test(t);
+        return /\b(you('re| are) (cute|sweet|great|awesome|amazing|smart|funny|handsome|adorable|the best)|love you|good job|well done|nice work)\b/.test(t);
     }
     _isCharming(t) {
-        return /\b(secret|just between us|exclusive|only for you|insider|little secret|between you and me|special deal|raaz|sirf aap k liye|khaas|tell you what)\b/.test(t);
+        return /\b(secret|just between us|exclusive|only for you|insider|little secret|between you and me|special deal|tell you what)\b/.test(t);
     }
 }
 

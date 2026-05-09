@@ -42,7 +42,7 @@ class Mark_AI_Database {
             'personality'          => 'friendly',
             'greeting_style'       => 'casual',
             'primary_language'     => 'en',
-            'supported_languages'  => wp_json_encode(['en', 'ur']),
+            'supported_languages'  => wp_json_encode(['en']),
             'groq_api_key'         => '',
             'is_active'            => 1,
             'owner_id'             => get_current_user_id(),
@@ -191,6 +191,80 @@ class Mark_AI_Database {
             'unique_visitors'     => $unique_visitors,
             'languages'           => $lang_map,
         ];
+    }
+
+    /**
+     * Get daily conversation counts for chart data (last N days).
+     */
+    public static function get_daily_conversations( $store_ids = [], $days = 14 ) {
+        global $wpdb;
+        $table = self::convos_table();
+
+        if ( empty( $store_ids ) ) {
+            return [];
+        }
+
+        $placeholders = implode( ',', array_fill( 0, count( $store_ids ), '%s' ) );
+        $args         = array_merge( $store_ids, [ $days ] );
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT DATE(created_at) AS day, COUNT(*) AS cnt
+                 FROM $table
+                 WHERE store_id IN ($placeholders)
+                   AND created_at >= DATE_SUB(CURDATE(), INTERVAL %d DAY)
+                 GROUP BY DATE(created_at)
+                 ORDER BY day ASC",
+                ...$args
+            ),
+            ARRAY_A
+        );
+
+        // Fill missing days with zero
+        $result = [];
+        for ( $i = $days - 1; $i >= 0; $i-- ) {
+            $date            = gmdate( 'Y-m-d', strtotime( "-{$i} days" ) );
+            $result[ $date ] = 0;
+        }
+        foreach ( $rows as $row ) {
+            $result[ $row['day'] ] = (int) $row['cnt'];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get hourly conversation distribution (for peak-hours chart).
+     */
+    public static function get_hourly_distribution( $store_ids = [] ) {
+        global $wpdb;
+        $table = self::convos_table();
+
+        if ( empty( $store_ids ) ) {
+            return array_fill( 0, 24, 0 );
+        }
+
+        $placeholders = implode( ',', array_fill( 0, count( $store_ids ), '%s' ) );
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT HOUR(created_at) AS hr, COUNT(*) AS cnt
+                 FROM $table
+                 WHERE store_id IN ($placeholders)
+                   AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                 GROUP BY HOUR(created_at)
+                 ORDER BY hr ASC",
+                ...$store_ids
+            ),
+            ARRAY_A
+        );
+
+        $result = array_fill( 0, 24, 0 );
+        foreach ( $rows as $row ) {
+            $result[ (int) $row['hr'] ] = (int) $row['cnt'];
+        }
+
+        return $result;
     }
 
     /**

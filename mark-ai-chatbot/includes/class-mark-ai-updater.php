@@ -90,7 +90,7 @@ class Mark_AI_Updater {
         // First check for an attached ZIP asset (preferred)
         if (!empty($release->assets)) {
             foreach ($release->assets as $asset) {
-                if (str_ends_with($asset->name, '.zip')) {
+                if (substr($asset->name, -4) === '.zip') {
                     return $asset->browser_download_url;
                 }
             }
@@ -155,7 +155,7 @@ class Mark_AI_Updater {
             'requires_php'  => '7.4',
             'last_updated'  => $release['published'],
             'sections'      => [
-                'description'  => 'AI-powered 3D robot shopping companion. Voice-first, multilingual, friend-first salesman.',
+                'description'  => 'AI-powered 3D robot shopping companion. Voice-first, friend-first salesman with RAG navigation.',
                 'changelog'    => nl2br(esc_html($release['description'])),
             ],
         ];
