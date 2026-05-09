@@ -130,6 +130,25 @@
         return `<div style="height:${height};border-radius:12px;background:linear-gradient(90deg,#eeeeee 25%,#e2e2e2 50%,#eeeeee 75%);background-size:200% 100%;animation:markShimmer 1.5s infinite;"></div>`;
     }
 
+    /** Cute robot head loader — replaces boring spinners */
+    function robotLoader(text = 'Loading...', size = 32) {
+        return `<div style="display:flex;align-items:center;gap:12px;color:#4f6169;padding:40px;">
+            <div style="animation:markRobotBob 1s ease-in-out infinite;">
+                <svg width="${size}" height="${size}" viewBox="0 0 20 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="10" y1="0.5" x2="10" y2="3" stroke="#954921" stroke-width="1" stroke-linecap="round"/>
+                    <circle cx="10" cy="0.5" r="0.8" fill="#fc9b6c"/>
+                    <rect x="3" y="3" width="14" height="10" rx="3" fill="#954921"/>
+                    <circle cx="7" cy="7.5" r="2" fill="white"/>
+                    <circle cx="13" cy="7.5" r="2" fill="white"/>
+                    <circle cx="7" cy="7.5" r="0.9" fill="#1a1a1a"/>
+                    <circle cx="13" cy="7.5" r="0.9" fill="#1a1a1a"/>
+                    <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#fc9b6c" stroke-width="0.7" fill="none" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <span style="font-size:14px;">${text}</span>
+        </div>`;
+    }
+
     function injectKeyframes() {
         if (document.getElementById('mark-ai-keyframes')) return;
         const style = document.createElement('style');
@@ -138,6 +157,7 @@
             @keyframes markShimmer { 0%{background-position:200% 0}100%{background-position:-200% 0} }
             @keyframes markPulse { 0%,100%{opacity:1}50%{opacity:0.4} }
             @keyframes markSpin { 0%{transform:rotate(0deg)}100%{transform:rotate(360deg)} }
+            @keyframes markRobotBob { 0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-6px) rotate(-4deg)}50%{transform:translateY(0) rotate(0deg)}75%{transform:translateY(-6px) rotate(4deg)} }
             .mark-ai-app-root input:focus,.mark-ai-app-root textarea:focus,.mark-ai-app-root select:focus {
                 border-color:#4f6169 !important;box-shadow:0 0 0 2px rgba(79,97,105,0.15) !important;outline:none !important;
             }
@@ -366,7 +386,7 @@
         const personality = store?.personality || 'friendly';
         const greetings = {
             friendly: "Hey there! I'm " + name + ", your friendly shopping buddy! What can I help you find today?",
-            professional: "Welcome! I'm " + name + ", your shopping assistant. How may I assist you?",
+            professional: "Welcome! I'm " + name + ", your website assistant. How may I assist you?",
             playful: "Beep boop! I'm " + name + " -- a tiny robot from Mars here to help you shop! What are we looking for?",
         };
         const greeting = greetings[personality] || greetings.friendly;
@@ -458,14 +478,14 @@
     function renderOnboarding() {
         return `
         <div style="max-width:640px;margin:0 auto;text-align:center;padding:40px 0;">
-            <!-- Welcome Header -->
+            <!-- Welcome Header with Robot GIF -->
             <div style="margin-bottom:48px;">
-                <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#fc9b6c,#954921);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;box-shadow:0 8px 30px rgba(149,73,33,0.3);">
-                    <span class="material-symbols-outlined" style="font-size:40px;color:#fff;">smart_toy</span>
+                <div style="width:180px;height:180px;border-radius:50%;overflow:hidden;margin:0 auto 24px;box-shadow:0 8px 40px rgba(149,73,33,0.35);border:4px solid rgba(252,155,108,0.3);">
+                    <img src="${markAI.pluginUrl}assets/mark-welcome.gif" alt="Mark Robot" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:linear-gradient(135deg,#fc9b6c,#954921);display:flex;align-items:center;justify-content:center;\\'><svg width=80 height=80 viewBox=\\'0 0 20 20\\' fill=\\'none\\'><line x1=10 y1=1 x2=10 y2=3.5 stroke=white stroke-width=1.2 stroke-linecap=round/><circle cx=10 cy=1 r=1 fill=white/><rect x=3.5 y=3.5 width=13 height=9 rx=3 fill=white opacity=0.9/><circle cx=7.2 cy=8 r=1.8 fill=#954921/><circle cx=12.8 cy=8 r=1.8 fill=#954921/><path d=\\'M7.5 10.5 Q10 12.5 12.5 10.5\\' stroke=#954921 stroke-width=0.8 fill=none stroke-linecap=round/></svg></div>';" />
                 </div>
                 <h1 style="${T.headline}font-size:36px;font-weight:300;letter-spacing:-0.02em;margin:0 0 12px;">Welcome to Mark AI</h1>
                 <p style="color:#42484a;font-size:18px;line-height:1.6;margin:0;">
-                    Let's get your AI shopping companion set up in under 2 minutes.
+                    Meet your AI robot assistant! Let's set it up in under 2 minutes.
                 </p>
             </div>
 
@@ -690,10 +710,7 @@
        ================================================================ */
     async function loadStorePage() {
         const content = $('#mark-page-content');
-        content.innerHTML = `<div style="display:flex;align-items:center;gap:12px;color:#4f6169;padding:60px;">
-            <span class="material-symbols-outlined" style="animation:markSpin 1s linear infinite;font-size:24px;">progress_activity</span>
-            <span style="font-size:16px;">Loading store...</span>
-        </div>`;
+        content.innerHTML = robotLoader('Loading store...');
 
         try {
             const data = await api('GET', 'dashboard');
@@ -719,10 +736,7 @@
 
     async function openStore(storeId) {
         const content = $('#mark-page-content');
-        content.innerHTML = `<div style="display:flex;align-items:center;gap:12px;color:#4f6169;padding:60px;">
-            <span class="material-symbols-outlined" style="animation:markSpin 1s linear infinite;font-size:24px;">progress_activity</span>
-            <span style="font-size:16px;">Loading store...</span>
-        </div>`;
+        content.innerHTML = robotLoader('Loading store...');
         try {
             const data = await api('GET', 'stores/' + storeId);
             currentStore = data.store || data;
@@ -916,11 +930,11 @@
     }
 
     async function testVoice() {
-        const text = 'Hey there! I am Mark, your personal shopping companion.';
+        const text = 'Hey there! I am Mark, your friendly robot assistant.';
         const preview = $('#voice-preview'), previewContent = $('#voice-preview-content');
         if (preview && previewContent) {
             preview.style.display = 'block';
-            previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><div style="width:40px;height:40px;border-radius:50%;background:rgba(225,245,254,0.6);display:flex;align-items:center;justify-content:center;"><span class="material-symbols-outlined" style="font-size:20px;color:#4f6169;animation:markSpin 1s linear infinite;">progress_activity</span></div><span style="font-size:14px;color:#42484a;">Generating voice...</span></div>`;
+            previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><div style="animation:markRobotBob 0.8s ease-in-out infinite;font-size:28px;">🤖</div><span style="font-size:14px;color:#42484a;">Generating voice...</span></div>`;
         }
         const settings = markAI || {};
         const backendUrl = currentStore?.backend_url || settings.backendUrl || 'https://mark-ix64.onrender.com';
@@ -989,7 +1003,7 @@
        ================================================================ */
     async function loadConversationsTab(storeId) {
         const container = $('#tab-content');
-        container.innerHTML = `<div style="display:flex;align-items:center;gap:12px;color:#4f6169;padding:40px;"><span class="material-symbols-outlined" style="animation:markSpin 1s linear infinite;font-size:24px;">progress_activity</span><span style="font-size:14px;">Loading conversations...</span></div>`;
+        container.innerHTML = robotLoader('Loading conversations...');
         try {
             const [analyticsData, convosData] = await Promise.all([api('GET', 'stores/' + storeId + '/analytics'), api('GET', 'stores/' + storeId + '/conversations')]);
             const convos = convosData.conversations || [];
@@ -1022,7 +1036,7 @@
        ================================================================ */
     async function loadEmbedTab(storeId) {
         const container = $('#tab-content');
-        container.innerHTML = `<div style="display:flex;align-items:center;gap:12px;color:#4f6169;padding:40px;"><span class="material-symbols-outlined" style="animation:markSpin 1s linear infinite;font-size:24px;">progress_activity</span><span style="font-size:14px;">Loading embed code...</span></div>`;
+        container.innerHTML = robotLoader('Loading embed code...');
         try {
             const data = await api('GET', 'stores/' + storeId + '/embed');
             container.innerHTML = `
@@ -1193,7 +1207,7 @@
     async function testConnection() {
         const btn = $('#test-conn-btn'), result = $('#conn-test-result');
         if (btn) btn.disabled = true;
-        if (result) result.innerHTML = `<span style="color:#4f6169;font-size:13px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="animation:markSpin 1s linear infinite;font-size:16px;">progress_activity</span> Testing connection...</span>`;
+        if (result) result.innerHTML = `<span style="color:#4f6169;font-size:13px;display:flex;align-items:center;gap:8px;"><span style="display:inline-block;animation:markRobotBob 0.8s ease-in-out infinite;font-size:16px;">🤖</span> Testing connection...</span>`;
         try {
             const data = await api('POST', 'test-connection');
             if (data.connected) {

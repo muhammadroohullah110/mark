@@ -24,7 +24,7 @@ class Mark_AI_Admin {
             'manage_options',
             'mark-ai',
             [$this, 'render_dashboard'],
-            'dashicons-format-chat',
+            $this->get_robot_icon(),
             26
         );
 
@@ -33,6 +33,35 @@ class Mark_AI_Admin {
         add_submenu_page('mark-ai', 'My Store', 'My Store', 'manage_options', 'mark-ai-stores', [$this, 'render_stores']);
         add_submenu_page('mark-ai', 'Conversations', 'Conversations', 'manage_options', 'mark-ai-conversations', [$this, 'render_conversations']);
         add_submenu_page('mark-ai', 'Settings', 'Settings', 'manage_options', 'mark-ai-settings', [$this, 'render_settings']);
+    }
+
+    /**
+     * Custom robot SVG icon for WordPress admin menu (base64 data URI).
+     */
+    private function get_robot_icon() {
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none">'
+            // antenna
+            . '<line x1="10" y1="1" x2="10" y2="3.5" stroke="black" stroke-width="1.2" stroke-linecap="round"/>'
+            . '<circle cx="10" cy="1" r="1" fill="black"/>'
+            // head
+            . '<rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="black"/>'
+            // eyes
+            . '<circle cx="7.2" cy="8" r="1.8" fill="white"/>'
+            . '<circle cx="12.8" cy="8" r="1.8" fill="white"/>'
+            . '<circle cx="7.2" cy="8" r="0.8" fill="black"/>'
+            . '<circle cx="12.8" cy="8" r="0.8" fill="black"/>'
+            // mouth
+            . '<path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="white" stroke-width="0.8" fill="none" stroke-linecap="round"/>'
+            // body
+            . '<rect x="5.5" y="13.5" width="9" height="4.5" rx="1.5" fill="black"/>'
+            // arms
+            . '<line x1="3" y1="14.5" x2="5.5" y2="15.5" stroke="black" stroke-width="1.2" stroke-linecap="round"/>'
+            . '<line x1="17" y1="14.5" x2="14.5" y2="15.5" stroke="black" stroke-width="1.2" stroke-linecap="round"/>'
+            // chest light
+            . '<circle cx="10" cy="15.8" r="1.2" fill="white" opacity="0.6"/>'
+            . '</svg>';
+
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 
     /**
@@ -101,12 +130,26 @@ class Mark_AI_Admin {
     private function render_app_shell($page) {
         ?>
         <div id="mark-ai-app" data-page="<?php echo esc_attr($page); ?>">
-            <div style="display:flex;align-items:center;justify-content:center;min-height:400px;color:#4f6169;">
-                <span class="material-symbols-outlined" style="font-size:48px;animation:spin 1s linear infinite;">progress_activity</span>
-                <span style="margin-left:12px;font-family:'Open Sans',sans-serif;font-size:18px;">Loading Mark AI...</span>
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;color:#4f6169;gap:16px;">
+                <div class="mark-robot-loader">
+                    <svg width="56" height="56" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <line x1="10" y1="1" x2="10" y2="3.5" stroke="#954921" stroke-width="1.2" stroke-linecap="round"/>
+                        <circle cx="10" cy="1" r="1" fill="#fc9b6c"/>
+                        <rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="#954921"/>
+                        <circle cx="7.2" cy="8" r="1.8" fill="white"/>
+                        <circle cx="12.8" cy="8" r="1.8" fill="white"/>
+                        <circle cx="7.2" cy="8" r="0.8" fill="#1a1a1a"/>
+                        <circle cx="12.8" cy="8" r="0.8" fill="#1a1a1a"/>
+                        <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#fc9b6c" stroke-width="0.8" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span style="font-family:'Open Sans',sans-serif;font-size:16px;font-weight:400;color:#4f6169;">Loading Mark AI...</span>
             </div>
         </div>
-        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+        <style>
+            .mark-robot-loader{animation:markRobotBob 1s ease-in-out infinite;}
+            @keyframes markRobotBob{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-8px) rotate(-5deg)}50%{transform:translateY(0) rotate(0deg)}75%{transform:translateY(-8px) rotate(5deg)}}
+        </style>
         <?php
     }
 }
