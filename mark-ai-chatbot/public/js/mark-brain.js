@@ -16,18 +16,27 @@ const MARK_WP_NONCE = MARK_CFG.nonce || '';
 const MARK_STORE_ID = MARK_CFG.storeId || '';
 const MARK_LANGUAGE = MARK_CFG.language || 'en';
 
-// Navigation intent keywords (English)
-const NAV_KEYWORDS = [
-    'show', 'find', 'looking for', 'want to see', 'take me', 'go to',
-    'browse', 'search', 'see', 'check', 'open', 'shop', 'buy', 'order',
-    'new arrival', 'latest', 'collection', 'category', 'cart', 'checkout',
-    'sale', 'offer', 'discount', 'deal', 'trending', 'popular', 'best seller',
-    'product', 'page', 'store', 'section', 'where',
+// ── Navigation Intent Detection ────────────────────────────
+// Only trigger redirect for STRONG navigation commands
+const NAV_STRONG = [
+    'take me', 'go to', 'open', 'navigate', 'redirect',
+    'show me the page', 'checkout', 'cart',
 ];
 
-function isNavigationIntent(message) {
+// Weaker intent — ask Mark to talk about it AND offer to navigate
+const NAV_BROWSE = [
+    'show', 'find', 'looking for', 'want to see',
+    'browse', 'search', 'see', 'check', 'shop', 'buy', 'order',
+    'new arrival', 'latest', 'collection', 'category',
+    'sale', 'offer', 'discount', 'deal', 'trending', 'popular', 'best seller',
+    'product', 'where',
+];
+
+function classifyIntent(message) {
     const msg = message.toLowerCase();
-    return NAV_KEYWORDS.some(kw => msg.includes(kw));
+    if (NAV_STRONG.some(kw => msg.includes(kw))) return 'navigate';
+    if (NAV_BROWSE.some(kw => msg.includes(kw))) return 'browse';
+    return 'chat';
 }
 
 async function ragSearch(query) {
@@ -36,12 +45,14 @@ async function ragSearch(query) {
         const response = await fetch(`${MARK_BACKEND}/api/rag-search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, top_k: 3, store_id: MARK_STORE_ID })
+            body: JSON.stringify({ query, top_k: 3, store_id: MARK_STORE_ID }),
+            signal: AbortSignal.timeout(8000)
         });
         const data = await response.json();
         if (data.status === 'indexing') return [];
         return data.results || [];
     } catch (e) {
+        console.log('[Mark Brain] RAG search failed:', e.message);
         return [];
     }
 }
@@ -54,14 +65,20 @@ function redirectToPage(url, title) {
 
 // Main entry — called from chatbot.js
 async function processUserMessage(userMessage) {
-    if (isNavigationIntent(userMessage)) {
+    const intent = classifyIntent(userMessage);
+
+    if (intent === 'navigate') {
+        // Strong navigation — try to redirect immediately
         const results = await ragSearch(userMessage);
         if (results.length > 0 && results[0].score >= 0.04) {
             redirectToPage(results[0].url, results[0].title);
             return;
         }
     }
-    // Chat with AI
+
+    // For 'browse' intent and 'chat' — let Mark talk about it
+    // The RAG-to-chat pipeline in the backend will inject relevant
+    // page content so Mark can answer knowledgeably
     if (typeof processWithOpenAI === 'function') {
         await processWithOpenAI(userMessage);
     }

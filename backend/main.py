@@ -30,7 +30,7 @@ from config import (
     STORE_CONFIG,
 )
 from rag_engine import MarkRAG
-from database import get_store, log_conversation_db, init_db
+from database import get_store, get_all_active_stores, log_conversation_db, init_db
 from admin_routes import router as admin_router
 
 load_dotenv()
@@ -65,6 +65,55 @@ app.add_middleware(
 
 # ── Mount Admin Routes ───────────────────────────────────────
 app.include_router(admin_router)
+
+
+# ── Startup: Pre-warm RAG for all active stores ──────────────
+def _prewarm_all_stores():
+    """On server boot, crawl all active stores so RAG is ready before first user."""
+    try:
+        stores = get_all_active_stores()
+        print(f"🚀 Pre-warming RAG for {len(stores)} active store(s)...")
+        for store in stores:
+            sid = store["store_id"]
+            url = store.get("website_url", "")
+            if not url:
+                continue
+            with _rag_lock:
+                if sid not in _rag_instances:
+                    max_p = store.get("max_crawl_pages", 120) or 120
+                    r = MarkRAG(url, max_pages=max_p)
+                    _rag_instances[sid] = r
+                    threading.Thread(target=r.initialize, daemon=True).start()
+                    print(f"   → Warming store '{store.get('store_name', sid)}' ({url})")
+            time.sleep(0.5)  # Stagger crawls to avoid hammering
+    except Exception as e:
+        print(f"⚠️  Pre-warm error: {e}")
+
+
+# ── Auto-Reindex: Refresh all RAG indexes every 6 hours ──────
+def _auto_reindex_loop():
+    """Background thread: re-crawl all stores every 6 hours for fresh content."""
+    INTERVAL = 6 * 60 * 60  # 6 hours
+    while True:
+        time.sleep(INTERVAL)
+        try:
+            print("🔄 Auto-reindex: refreshing all RAG indexes...")
+            with _rag_lock:
+                for sid, rag_inst in _rag_instances.items():
+                    if rag_inst.ready:
+                        threading.Thread(target=rag_inst.reindex, daemon=True).start()
+                        time.sleep(2)  # Stagger to avoid thundering herd
+            print("✅ Auto-reindex triggered for all stores")
+        except Exception as e:
+            print(f"⚠️  Auto-reindex error: {e}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database and pre-warm all store RAG indexes on boot."""
+    init_db()
+    threading.Thread(target=_prewarm_all_stores, daemon=True).start()
+    threading.Thread(target=_auto_reindex_loop, daemon=True).start()
 
 # ── Serve Admin Panel Static Files ───────────────────────────
 admin_dir = Path(__file__).parent.parent / "admin"

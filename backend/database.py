@@ -160,6 +160,15 @@ def get_store(store_id: str) -> dict | None:
         return dict(row) if row else None
 
 
+def get_all_active_stores() -> list:
+    """Return all active stores (for startup RAG pre-warm)."""
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT * FROM stores WHERE is_active = 1 AND website_url IS NOT NULL AND website_url != ''",
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def get_stores_by_owner(owner_id: int) -> list:
     with get_db() as db:
         rows = db.execute(

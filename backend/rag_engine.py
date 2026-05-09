@@ -502,6 +502,18 @@ class MarkRAG:
         return '\n'.join(parts) if parts else 'Store information not yet available.'
 
     def reindex(self):
-        """Re-crawl and rebuild the index (e.g. after new products added)."""
-        self.ready = False
-        threading.Thread(target=self.initialize, daemon=True).start()
+        """Re-crawl and rebuild the index (e.g. after new products added).
+        Keeps old data available while re-crawling — zero downtime."""
+        print(f"🔄 Reindexing {self.base_url}...")
+        try:
+            pages = self.crawl()
+            if pages:
+                with self._lock:
+                    if self.build_index(pages):
+                        self.pages = pages
+                        self.ready = True
+                        print(f"✅ Reindex complete — {len(pages)} pages")
+            else:
+                print(f"⚠️  Reindex returned no pages — keeping old index")
+        except Exception as e:
+            print(f"❌ Reindex error: {e} — keeping old index")

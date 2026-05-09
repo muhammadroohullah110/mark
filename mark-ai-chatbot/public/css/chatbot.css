@@ -76,8 +76,12 @@
 }
 
 @media (max-width:768px) {
-    #mark-widget { width:95px; height:95px; }
-    #mark-widget.mark-talking { width:260px !important; height:260px !important; }
+    #mark-widget { width:90px; height:90px; }
+    #mark-widget.mark-talking { width:240px !important; height:240px !important; }
+}
+@media (min-width:769px) and (max-width:1024px) {
+    #mark-widget { width:100px; height:100px; }
+    #mark-widget.mark-talking { width:280px !important; height:280px !important; }
 }
 
 /* ── HINT BUBBLE ── */
@@ -104,15 +108,23 @@
 /* ── THREE.JS CONTAINER ── */
 #mark-three-container {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;       /* Let touch/pointer pass through to widget */
+    touch-action: none;
+}
+#mark-three-container canvas {
+    pointer-events: none;       /* Canvas must not steal touch events */
+    touch-action: none;
 }
 
 /* ── CHAT UI (hidden until talking) ── */
 .mark-chat-ui {
     opacity: 0; pointer-events: none;
     transition: opacity 0.5s ease 0.4s;
+    visibility: hidden;
 }
 #mark-ai-chatbot-root.mark-talking .mark-chat-ui {
     opacity: 1; pointer-events: all;
+    visibility: visible;
 }
 
 /* ── LIVE CAPTION ── */
@@ -121,12 +133,13 @@
     transform: translate(-50%, -260px);
     font-size: clamp(15px, 2vw, 20px); font-weight: 500; color: #fff;
     text-align: center; min-width: 240px; max-width: 600px;
-    background: rgba(20,20,35,0.85);
+    background: rgba(20,20,35,0.92);
     backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     padding: 14px 24px; border-radius: 20px;
-    border: 1px solid rgba(168,85,247,0.3);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
-    z-index: 10001; line-height: 1.45;
+    border: 1px solid rgba(168,85,247,0.4);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 20px rgba(168,85,247,0.15);
+    z-index: 10005; line-height: 1.45;
     transition: opacity 0.4s ease;
 }
 @media(max-width:768px) {
