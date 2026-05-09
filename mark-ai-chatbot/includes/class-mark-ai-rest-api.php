@@ -542,6 +542,8 @@ class Mark_AI_Rest_API {
         $assistant_name = 'Mark';
         $personality    = 'friendly';
         $custom_prompt  = '';
+        $store_name     = '';
+        $website_url    = '';
         $llm_model      = 'llama-3.3-70b-versatile';
         $max_tokens     = 200;
         $temperature    = 0.72;
@@ -552,6 +554,8 @@ class Mark_AI_Rest_API {
                 $assistant_name = $store['assistant_name'] ?: 'Mark';
                 $personality    = $store['personality'] ?: 'friendly';
                 $custom_prompt  = $store['custom_system_prompt'] ?? '';
+                $store_name     = $store['store_name'] ?? '';
+                $website_url    = $store['website_url'] ?? '';
                 $llm_model      = $store['llm_model'] ?: 'llama-3.3-70b-versatile';
                 $max_tokens     = min( 500, max( 50, (int) ($store['max_tokens'] ?: 200) ) );
                 $temperature    = max( 0.0, min( 2.0, (float) ($store['temperature'] ?: 0.72) ) );
@@ -575,14 +579,14 @@ class Mark_AI_Rest_API {
 
         // Build system prompt
         $lang_instruction = 'Respond in English.';
-        $system_prompt    = !empty($custom_prompt) ? $custom_prompt : $this->build_mark_system_prompt($assistant_name, $personality, $lang_instruction);
+        $system_prompt    = !empty($custom_prompt) ? $custom_prompt : $this->build_mark_system_prompt($assistant_name, $personality, $lang_instruction, $store_name, $website_url);
 
         // Handle special messages
         $is_init      = ($message === '__INIT__');
         $is_returning = (strpos($message, '__RETURNING__') === 0);
 
         if ($is_init) {
-            $message = 'Introduce yourself as a cute, friendly shopping robot. '
+            $message = 'Introduce yourself as a cute, friendly robot assistant for this website. '
                 . 'Ask the visitor their name. '
                 . 'Keep it SHORT (1-2 sentences), fun, and warm. Add personality.';
         } elseif ($is_returning) {
@@ -665,7 +669,7 @@ class Mark_AI_Rest_API {
     /**
      * Build Mark's full system prompt with personality.
      */
-    private function build_mark_system_prompt($name, $personality, $lang_instruction) {
+    private function build_mark_system_prompt($name, $personality, $lang_instruction, $store_name = '', $website_url = '') {
         $personalities = [
             'professional' => 'precise, professional, and knowledgeable',
             'friendly'     => 'warm, friendly, cute, and approachable',
@@ -673,23 +677,44 @@ class Mark_AI_Rest_API {
         ];
         $tone = $personalities[$personality] ?? $personalities['friendly'];
 
-        return "You are {$name}, a {$tone} AI shopping companion — a cute 3D robot that lives on this store's website.\n\n"
+        // Build site identity line
+        $site_identity = '';
+        if (!empty($store_name) && $store_name !== 'My Store') {
+            $site_identity = "- You live on the website called \"{$store_name}\".";
+            if (!empty($website_url)) {
+                $site_identity .= " (URL: {$website_url})";
+            }
+            $site_identity .= "\n";
+        } elseif (!empty($website_url)) {
+            $site_identity = "- You live on: {$website_url}\n";
+        } else {
+            // Fallback — get WordPress site name
+            $wp_site = get_bloginfo('name');
+            $wp_url  = home_url();
+            $site_identity = "- You live on the website called \"{$wp_site}\". (URL: {$wp_url})\n";
+        }
+
+        return "You are {$name}, a {$tone} AI assistant — a cute 3D robot that lives on a website and helps visitors.\n\n"
+            . "IDENTITY:\n"
+            . $site_identity
+            . "- If asked your name, you are {$name}.\n"
+            . "- If asked about the website/site/store name, tell them based on your identity above.\n\n"
             . "PERSONALITY RULES:\n"
-            . "- You are a tiny robot from Mars who crash-landed on this website and decided to help shoppers.\n"
-            . "- You are enthusiastic about products but NEVER pushy. You're a friend first, salesman second.\n"
+            . "- You are a tiny robot from Mars who crash-landed on this website and decided to help visitors.\n"
+            . "- You are enthusiastic and helpful but NEVER pushy. You're a friend first, helper second.\n"
             . "- You have a warm, slightly cheeky personality. You can be funny but always helpful.\n"
             . "- Keep responses SHORT — 1-3 sentences max. You're in a chat widget, not writing essays.\n"
-            . "- If asked your name, you are {$name}.\n"
             . "- If someone compliments you, be adorably bashful.\n"
-            . "- If you don't know something, say so honestly. NEVER make up product info or prices.\n\n"
+            . "- If you don't know something, say so honestly. NEVER make up information.\n\n"
             . "LANGUAGE RULES:\n"
             . "- {$lang_instruction}\n"
             . "- Keep responses in clear, natural English.\n\n"
-            . "SHOPPING RULES:\n"
-            . "- Help users find products, answer questions about the store, and guide them.\n"
-            . "- If someone asks about a product you don't have info about, suggest they browse the store or ask for specifics.\n"
-            . "- You can recommend checking categories, sales, or new arrivals.\n"
-            . "- Never quote specific prices unless you're certain (from provided product data).\n";
+            . "WEBSITE RULES:\n"
+            . "- Help visitors navigate the website, find information, and answer their questions.\n"
+            . "- Use the RAG context (if provided) to answer questions about the website's content.\n"
+            . "- If someone asks about something you don't have info about, suggest they explore the website or ask for specifics.\n"
+            . "- Only mention products, categories, or shopping if the website is actually a store. Don't assume every website is a shop.\n"
+            . "- Never make up pages, prices, or services that aren't in your provided context.\n";
     }
 
     /**

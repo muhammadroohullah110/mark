@@ -1,5 +1,5 @@
 /**
- * Mark AI — 3D Robot Shopping Companion (WP Plugin)
+ * Mark AI — 3D Robot Website Companion (WP Plugin)
  * Floating 3D robot widget: walks, talks, voice+text, RAG navigation.
  * Primary: Python backend (Render) for chat/TTS/STT/RAG.
  * Fallback: WP REST (PHP→Groq) for basic text chat.
@@ -505,7 +505,7 @@
         hideThinking();
         const fb = type === 'returning'
             ? `${name}! Welcome back! What are you looking for today?`
-            : "Hey hey! I'm Mark, your shopping buddy. What's your name?";
+            : "Hey hey! I'm Mark, your friendly robot assistant. What's your name?";
         showCaption(fb); speak(fb);
     }
 

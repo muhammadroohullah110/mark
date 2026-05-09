@@ -3,7 +3,7 @@
  * Plugin Name: Mark AI — Shopping Companion
  * Plugin URI:  https://github.com/muhammadroohullah110/mark.git
  * Description: AI-powered 3D robot shopping companion. Voice-first, friend-first salesman with RAG navigation. Installs a floating 3D chatbot widget on your store.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Muhammad Roohullah
  * Author URI:  https://www.linkedin.com/in/medicalairesearcher
  * License:     GPL v2 or later
@@ -20,7 +20,7 @@ if (defined('MARK_AI_VERSION')) {
 }
 
 // ── Plugin Constants ────────────────────────────────────────
-define('MARK_AI_VERSION', '1.0.0');
+define('MARK_AI_VERSION', '1.1.0');
 define('MARK_AI_PATH', plugin_dir_path(__FILE__));
 define('MARK_AI_URL', plugin_dir_url(__FILE__));
 define('MARK_AI_BASENAME', plugin_basename(__FILE__));
