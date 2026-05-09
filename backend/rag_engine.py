@@ -424,27 +424,82 @@ class MarkRAG:
                         'title': self.pages[idx]['title'],
                         'score': round(float(boosted_scores[idx]), 4),
                         'page_type': self.pages[idx].get('page_type', 'generic'),
+                        'snippet': self._make_snippet(self.pages[idx]['content'], clean_query),
                     })
 
         return results
 
+    def search_for_chat(self, query: str, top_k: int = 5, threshold: float = 0.01) -> str:
+        """Search RAG and return formatted context string for LLM injection.
+        Lower threshold than navigation — we want to find anything relevant."""
+        results = self.search(query, top_k=top_k, threshold=threshold)
+        if not results:
+            return ''
+
+        parts = []
+        for r in results:
+            snippet = r.get('snippet', '')
+            if snippet:
+                parts.append(f"[{r['page_type'].upper()}] {r['title']}\n{snippet}\nURL: {r['url']}")
+        return '\n\n'.join(parts) if parts else ''
+
+    @staticmethod
+    def _make_snippet(content: str, query: str, max_len: int = 300) -> str:
+        """Extract the most relevant snippet from page content around query terms."""
+        words = query.split()
+        content_lower = content.lower()
+
+        # Find the best window containing the most query terms
+        best_start = 0
+        best_score = 0
+        window = max_len
+
+        for i in range(0, len(content) - window + 1, 50):
+            chunk = content_lower[i:i + window]
+            score = sum(1 for w in words if w in chunk)
+            if score > best_score:
+                best_score = score
+                best_start = i
+
+        snippet = content[best_start:best_start + window].strip()
+        # Clean up — don't start mid-word
+        if best_start > 0:
+            space = snippet.find(' ')
+            if space > 0 and space < 30:
+                snippet = snippet[space + 1:]
+        # Don't end mid-word
+        last_space = snippet.rfind(' ')
+        if last_space > max_len - 40:
+            snippet = snippet[:last_space]
+
+        return snippet.strip()
+
     def get_brand_context(self) -> str:
-        """Return a summary string for the LLM system prompt."""
+        """Return a rich summary string for the LLM system prompt."""
         parts = []
         if self.brand_info.get('name'):
-            parts.append(f"Store: {self.brand_info['name']}")
+            parts.append(f"Store Name: {self.brand_info['name']}")
         if self.brand_info.get('description'):
-            parts.append(f"About: {self.brand_info['description']}")
+            desc = self.brand_info['description'][:200]
+            parts.append(f"About: {desc}")
         if self.categories:
-            cat_names = list(set(c['name'] for c in self.categories))[:15]
+            cat_names = list(set(c['name'] for c in self.categories))[:20]
             parts.append(f"Categories: {', '.join(cat_names)}")
         if self.pages:
             product_pages = [p for p in self.pages if p.get('page_type') == 'product']
+            category_pages = [p for p in self.pages if p.get('page_type') == 'category']
             if product_pages:
-                parts.append(f"Products indexed: {len(product_pages)}")
-            total = len(self.pages)
-            parts.append(f"Total pages indexed: {total}")
-        return ' | '.join(parts) if parts else 'Store information not yet available.'
+                product_names = [p['title'] for p in product_pages[:30]]
+                parts.append(f"Products ({len(product_pages)} total): {', '.join(product_names)}")
+            if category_pages:
+                cat_titles = [p['title'] for p in category_pages[:15]]
+                parts.append(f"Category pages: {', '.join(cat_titles)}")
+            service_pages = [p for p in self.pages if p.get('page_type') == 'service']
+            if service_pages:
+                svc_names = [p['title'] for p in service_pages[:10]]
+                parts.append(f"Services: {', '.join(svc_names)}")
+            parts.append(f"Total pages indexed: {len(self.pages)}")
+        return '\n'.join(parts) if parts else 'Store information not yet available.'
 
     def reindex(self):
         """Re-crawl and rebuild the index (e.g. after new products added)."""

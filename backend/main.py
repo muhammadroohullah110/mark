@@ -532,6 +532,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     messages_for_api = [{"role": "system", "content": system_instruction}]
 
     cleaned = []
+    last_user_msg = ""
     for m in filtered[-10:]:
         d = m.dict()
         if d["role"] == "user" and d["content"].strip() == "__INIT__":
@@ -539,7 +540,28 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         elif d["role"] == "user" and d["content"].startswith("__RETURNING__:"):
             info = d["content"].replace("__RETURNING__:", "").strip()
             d["content"] = f"[Returning customer is back. {info}. Greet them warmly BY NAME — do NOT ask their name or language again. Jump straight to being helpful.]"
+        if d["role"] == "user":
+            last_user_msg = d["content"]
         cleaned.append(d)
+
+    # ── RAG Context Injection (per-query) ──────────────────────
+    # Search RAG with the user's latest message and inject matching
+    # page content so the LLM can answer questions about the store
+    if rag_instance and rag_instance.ready and last_user_msg and not last_user_msg.startswith("["):
+        rag_context = rag_instance.search_for_chat(last_user_msg, top_k=4)
+        if rag_context:
+            messages_for_api.append({
+                "role": "system",
+                "content": (
+                    "══ WEBSITE KNOWLEDGE (retrieved from store's actual pages) ══\n"
+                    "Use the following real content from the store's website to answer the customer's question. "
+                    "Quote specific details (product names, prices, descriptions, policies) when relevant. "
+                    "If the answer is clearly in this content, use it confidently. "
+                    "If not, say you're not sure but offer to help them browse.\n\n"
+                    f"{rag_context}"
+                ),
+            })
+
     messages_for_api.extend(cleaned)
 
     try:
