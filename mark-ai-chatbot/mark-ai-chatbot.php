@@ -1,12 +1,13 @@
 <?php
 /**
- * Plugin Name: Mark AI — Shopping Companion
- * Plugin URI:  https://github.com/muhammadroohullah110/mark.git
- * Description: AI-powered 3D robot shopping companion. Voice-first, friend-first salesman with RAG navigation. Installs a floating 3D chatbot widget on your store.
+ * Plugin Name: Mark AI — Website Companion
+ * Plugin URI:  https://github.com/muhammadroohullah110/mark
+ * Description: AI-powered 3D robot website companion with voice chat, intelligent navigation, and anti-hallucination. Installs a floating 3D chatbot widget on your site.
  * Version:     1.1.0
  * Author:      Muhammad Roohullah
  * Author URI:  https://www.linkedin.com/in/medicalairesearcher
  * License:     GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: mark-ai-chatbot
  * Requires at least: 5.8
  * Requires PHP: 7.4

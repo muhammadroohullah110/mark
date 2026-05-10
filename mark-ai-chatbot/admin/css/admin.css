@@ -7,9 +7,7 @@
    overrides.
    ============================================================ */
 
-/* -- Google Fonts (loaded via PHP enqueue, fallback here) -- */
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+/* Google Fonts loaded via wp_enqueue_style in class-mark-ai-admin.php */
 
 /* -- Reset WP Admin Styles Inside Our App -- */
 #mark-ai-app {
