@@ -478,10 +478,26 @@
     function renderOnboarding() {
         return `
         <div style="max-width:640px;margin:0 auto;text-align:center;padding:40px 0;">
-            <!-- Welcome Header with Robot GIF -->
+            <!-- Welcome Header with Robot -->
             <div style="margin-bottom:48px;">
-                <div style="width:180px;height:180px;border-radius:50%;overflow:hidden;margin:0 auto 24px;box-shadow:0 8px 40px rgba(149,73,33,0.35);border:4px solid rgba(252,155,108,0.3);">
-                    <img src="${markAI.pluginUrl}assets/mark-welcome.gif" alt="Mark Robot" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;background:linear-gradient(135deg,#fc9b6c,#954921);display:flex;align-items:center;justify-content:center;\\'><svg width=80 height=80 viewBox=\\'0 0 20 20\\' fill=\\'none\\'><line x1=10 y1=1 x2=10 y2=3.5 stroke=white stroke-width=1.2 stroke-linecap=round/><circle cx=10 cy=1 r=1 fill=white/><rect x=3.5 y=3.5 width=13 height=9 rx=3 fill=white opacity=0.9/><circle cx=7.2 cy=8 r=1.8 fill=#954921/><circle cx=12.8 cy=8 r=1.8 fill=#954921/><path d=\\'M7.5 10.5 Q10 12.5 12.5 10.5\\' stroke=#954921 stroke-width=0.8 fill=none stroke-linecap=round/></svg></div>';" />
+                <div id="mark-welcome-visual" style="width:180px;height:180px;border-radius:50%;overflow:hidden;margin:0 auto 24px;box-shadow:0 8px 40px rgba(149,73,33,0.35);border:4px solid rgba(252,155,108,0.3);position:relative;">
+                    <img src="${markAI.pluginUrl}assets/mark-welcome.gif" alt="Mark Robot" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                    <div style="display:none;width:100%;height:100%;background:linear-gradient(135deg,#fc9b6c,#954921);align-items:center;justify-content:center;">
+                        <div style="animation:markRobotBob 1.5s ease-in-out infinite;">
+                            <svg width="90" height="90" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <line x1="10" y1="0.5" x2="10" y2="3" stroke="white" stroke-width="1" stroke-linecap="round"/>
+                                <circle cx="10" cy="0.5" r="0.8" fill="rgba(255,255,255,0.8)"/>
+                                <rect x="3" y="3" width="14" height="10" rx="3" fill="white" opacity="0.95"/>
+                                <circle cx="7" cy="7.5" r="2" fill="#954921"/>
+                                <circle cx="13" cy="7.5" r="2" fill="#954921"/>
+                                <circle cx="7.3" cy="7.2" r="0.6" fill="white"/>
+                                <circle cx="13.3" cy="7.2" r="0.6" fill="white"/>
+                                <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#954921" stroke-width="0.7" fill="none" stroke-linecap="round"/>
+                                <rect x="5.5" y="14" width="9" height="4.5" rx="1.5" fill="white" opacity="0.85"/>
+                                <circle cx="10" cy="16.2" r="1" fill="#fc9b6c"/>
+                            </svg>
+                        </div>
+                    </div>
                 </div>
                 <h1 style="${T.headline}font-size:36px;font-weight:300;letter-spacing:-0.02em;margin:0 0 12px;">Welcome to Mark AI</h1>
                 <p style="color:#42484a;font-size:18px;line-height:1.6;margin:0;">
@@ -592,8 +608,13 @@
                 toast('Settings saved, but API key test failed: ' + (test.error || 'Unknown error'), 'error');
             }
 
-            // Reload dashboard
+            // Reload dashboard then start tour
             navigate('dashboard');
+            try {
+                if (!localStorage.getItem('mark_ai_tour_complete')) {
+                    setTimeout(() => startTour(), 1500);
+                }
+            } catch(_) {}
         } catch (e) {
             toast('Setup error: ' + e.message, 'error');
         }
@@ -624,9 +645,14 @@
                     <h1 style="${T.headline}font-size:48px;line-height:56px;letter-spacing:-0.02em;font-weight:300;margin:0 0 8px;">Overview</h1>
                     <p style="font-family:'Open Sans',sans-serif;font-size:18px;color:#42484a;line-height:1.6;margin:0;">Monitor your Mark AI performance.</p>
                 </div>
-                ${store ? `<button style="${T.btnSecondary}" onclick="markAdmin.showPreview()">
-                    <span class="material-symbols-outlined" style="font-size:18px;">visibility</span> Preview Widget
-                </button>` : ''}
+                <div style="display:flex;gap:10px;">
+                    <button style="${T.btnSecondary}" onclick="markAdmin.startTour()">
+                        <span class="material-symbols-outlined" style="font-size:18px;">school</span> Take a Tour
+                    </button>
+                    ${store ? `<button style="${T.btnSecondary}" onclick="markAdmin.showPreview()">
+                        <span class="material-symbols-outlined" style="font-size:18px;">visibility</span> Preview Widget
+                    </button>` : ''}
+                </div>
             </div>
 
             <!-- Stats Grid -->
@@ -1176,6 +1202,10 @@
                         </div>
                         <p style="font-size:11px;color:#73787a;margin:4px 0 0;">Chat bubble & robot glow color</p>
                     </div>
+                    <div><label style="${T.label}">Greeting Sound</label>
+                        <input type="text" id="g-greeting-sound" value="${esc(s.greeting_sound_text || 'Ayie!')}" maxlength="30" style="${T.input}" placeholder="Ayie!" />
+                        <p style="font-size:11px;color:#73787a;margin:4px 0 0;">What Mark says when clicked</p>
+                    </div>
                 </div>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:32px;">
@@ -1199,7 +1229,8 @@
             widget_enabled: $('#g-widget-enabled').value,
             widget_position: $('#g-widget-position').value,
             auto_greet: $('#g-auto-greet').value,
-            widget_accent_color: /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : '#954921',
+            widget_accent_color: /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : '#667eea',
+            greeting_sound_text: ($('#g-greeting-sound') || {}).value?.trim() || 'Ayie!',
         };
         try { await api('POST', 'settings', data); toast('Global settings saved!', 'success'); } catch (e) { toast(e.message, 'error'); }
     }
@@ -1241,6 +1272,142 @@
     function closeModal(event) { if (event && event.target !== event.currentTarget) return; const c = $('#mark-modal-container'); if (c) c.innerHTML = ''; }
 
     /* ================================================================
+       GUIDED TOUR — First-time user walkthrough
+       ================================================================ */
+    const TOUR_STEPS = [
+        {
+            title: "Welcome to Mark AI! 🤖",
+            body: "Let's take a quick tour of your AI robot assistant. This will only take a minute!",
+            icon: "rocket_launch",
+            position: 'center'
+        },
+        {
+            target: '.mark-nav-item[onclick*="dashboard"],.mark-nav-item:first-child',
+            title: "Dashboard",
+            body: "Your command center. See conversation trends, peak chat hours, and a quick preview of your robot.",
+            icon: "dashboard",
+            position: 'right'
+        },
+        {
+            target: '.mark-nav-item[onclick*="store"],.mark-nav-item:nth-child(2)',
+            title: "My Store",
+            body: "Configure your robot's name, personality, voice, and see your embed code here.",
+            icon: "storefront",
+            position: 'right'
+        },
+        {
+            target: '.mark-nav-item[onclick*="conversation"],.mark-nav-item:nth-child(3)',
+            title: "Conversations",
+            body: "Read all chat logs between Mark and your visitors. Great for understanding what customers ask!",
+            icon: "chat",
+            position: 'right'
+        },
+        {
+            target: '.mark-nav-item[onclick*="settings"],.mark-nav-item:nth-child(4)',
+            title: "Settings",
+            body: "Global settings: API key, widget color, position, greeting sound, and connection test.",
+            icon: "settings",
+            position: 'right'
+        },
+        {
+            title: "You're all set! 🎉",
+            body: "Mark is now live on your website. Go visit your site to see your cute robot assistant in action!",
+            icon: "celebration",
+            position: 'center'
+        },
+    ];
+
+    let tourStep = 0;
+    let tourOverlay = null;
+
+    function startTour() {
+        tourStep = 0;
+        // Create tour overlay
+        tourOverlay = document.createElement('div');
+        tourOverlay.id = 'mark-tour-overlay';
+        tourOverlay.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,0.65);transition:opacity 0.3s;';
+        document.body.appendChild(tourOverlay);
+        showTourStep(0);
+    }
+
+    function showTourStep(idx) {
+        tourStep = idx;
+        if (idx >= TOUR_STEPS.length) { endTour(); return; }
+
+        const step = TOUR_STEPS[idx];
+        const isCenter = step.position === 'center' || !step.target;
+        const progress = TOUR_STEPS.map((_, i) =>
+            `<span style="width:8px;height:8px;border-radius:50%;background:${i === idx ? '#954921' : 'rgba(149,73,33,0.3)'};display:inline-block;"></span>`
+        ).join('');
+
+        // Remove previous spotlight
+        const prevSpot = document.getElementById('mark-tour-spotlight');
+        if (prevSpot) prevSpot.remove();
+
+        let cardStyle = 'position:fixed;z-index:999999;background:white;border-radius:16px;padding:32px;max-width:380px;width:90%;'
+            + 'box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:Open Sans,sans-serif;';
+
+        if (isCenter) {
+            cardStyle += 'top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;';
+        } else {
+            // Find target element and position near it
+            const targetEl = document.querySelector(step.target);
+            if (targetEl) {
+                const rect = targetEl.getBoundingClientRect();
+                // Add spotlight border around target
+                const spot = document.createElement('div');
+                spot.id = 'mark-tour-spotlight';
+                spot.style.cssText = `position:fixed;z-index:999998;top:${rect.top - 4}px;left:${rect.left - 4}px;width:${rect.width + 8}px;height:${rect.height + 8}px;`
+                    + 'border:3px solid #fc9b6c;border-radius:8px;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,0.55);';
+                document.body.appendChild(spot);
+
+                cardStyle += `top:${rect.top}px;left:${rect.right + 20}px;`;
+                // If card goes off right edge, position below target instead
+                if (rect.right + 420 > window.innerWidth) {
+                    cardStyle = cardStyle.replace(`left:${rect.right + 20}px`, `left:50%;transform:translateX(-50%)`);
+                    cardStyle = cardStyle.replace(`top:${rect.top}px`, `top:${rect.bottom + 16}px`);
+                }
+            } else {
+                cardStyle += 'top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;';
+            }
+        }
+
+        const isLast = idx === TOUR_STEPS.length - 1;
+        const isFirst = idx === 0;
+
+        tourOverlay.innerHTML = `
+            <div style="${cardStyle}">
+                <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#fc9b6c,#954921);display:flex;align-items:center;justify-content:center;margin:${isCenter ? '0 auto' : '0'} 0 16px;">
+                    <span class="material-symbols-outlined" style="color:white;font-size:24px;">${step.icon}</span>
+                </div>
+                <h3 style="font-size:20px;font-weight:600;margin:0 0 8px;color:#1a1c1c;">${step.title}</h3>
+                <p style="font-size:14px;color:#42484a;line-height:1.6;margin:0 0 24px;">${step.body}</p>
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div style="display:flex;gap:6px;">${progress}</div>
+                    <div style="display:flex;gap:8px;">
+                        ${!isLast ? `<button onclick="markAdmin.skipTour()" style="padding:8px 16px;border:1px solid #c2c7ca;border-radius:8px;background:none;color:#42484a;cursor:pointer;font-size:13px;">Skip</button>` : ''}
+                        ${!isFirst && !isLast ? `<button onclick="markAdmin.prevTourStep()" style="padding:8px 16px;border:1px solid #c2c7ca;border-radius:8px;background:none;color:#42484a;cursor:pointer;font-size:13px;">Back</button>` : ''}
+                        <button onclick="markAdmin.nextTourStep()" style="padding:8px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#fc9b6c,#954921);color:white;cursor:pointer;font-size:13px;font-weight:600;">
+                            ${isFirst ? "Let's Go!" : isLast ? 'Finish' : 'Next'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function nextTourStep() { showTourStep(tourStep + 1); }
+    function prevTourStep() { showTourStep(Math.max(0, tourStep - 1)); }
+    function skipTour() { endTour(); }
+
+    function endTour() {
+        try { localStorage.setItem('mark_ai_tour_complete', '1'); } catch(_) {}
+        const spot = document.getElementById('mark-tour-spotlight');
+        if (spot) spot.remove();
+        if (tourOverlay) { tourOverlay.remove(); tourOverlay = null; }
+    }
+
+    /* ================================================================
        PUBLIC API
        ================================================================ */
     window.markAdmin = {
@@ -1250,6 +1417,7 @@
         copyCode, copyText, closeModal,
         saveGlobalSettings, testConnection,
         completeSetup, showPreview,
+        startTour, nextTourStep, prevTourStep, skipTour,
     };
 
     /* ================================================================

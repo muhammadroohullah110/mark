@@ -36,7 +36,10 @@ class MarkAnimator {
     // PUBLIC: switch to a procedural overlay state
     play(state) {
         if (!this.robot) return;
-        if (this.state === state) return;
+        if (this.state === state) {
+            this.timer = 0; // restart same animation (don't skip)
+            return;
+        }
         this._reset();
         this.state = state;
         this.timer = 0;
@@ -77,19 +80,19 @@ class MarkAnimator {
 
     // ── SPEAK — visible head bob & nod while talking ────────────
     _speak(t) {
-        this.robot.position.y = this.basePos.y + Math.sin(t * 3.5) * 0.18;
-        this.robot.rotation.x = Math.sin(t * 4.2) * 0.07;
-        this.robot.rotation.z = Math.sin(t * 2.8) * 0.04;
+        this.robot.position.y = this.basePos.y + Math.sin(t * 3.5) * 0.35;
+        this.robot.rotation.x = Math.sin(t * 4.2) * 0.12;
+        this.robot.rotation.z = Math.sin(t * 2.8) * 0.08;
     }
 
-    // ── WAVE — big enthusiastic rocking (2.6 s) ─────────────────
+    // ── WAVE — big enthusiastic rocking (3.5 s) ─────────────────
     _wave(t) {
         const env = t < 0.3 ? t / 0.3
-                  : t < 2.0 ? 1.0
-                  : Math.max(0, 1 - (t - 2.0) / 0.6);
-        this.robot.rotation.z = Math.sin(t * 6.0) * 0.45 * env;
-        this.robot.position.y = this.basePos.y + Math.sin(t * 1.5) * 0.18;
-        if (t > 2.6) this.play('idle');
+                  : t < 2.8 ? 1.0
+                  : Math.max(0, 1 - (t - 2.8) / 0.7);
+        this.robot.rotation.z = Math.sin(t * 6.0) * 0.50 * env;
+        this.robot.position.y = this.basePos.y + Math.sin(t * 1.5) * 0.25;
+        if (t > 3.5) this.play('idle');
     }
 
     // ── JUMP — proper jump arc (1.0 s) ──────────────────────────
@@ -119,14 +122,14 @@ class MarkAnimator {
         if (t > 3.5) this.play('idle');
     }
 
-    // ── WINK — head tilt + cheeky bounce (1.0 s) ────────────────
+    // ── WINK — head tilt + cheeky bounce (1.8 s) ────────────────
     _wink(t) {
-        const dur = 1.0;
-        const tilt = t < 0.25 ? (t / 0.25) * 0.25
-                   : t < 0.65 ? 0.25
-                   : Math.max(0, 0.25 * (1 - (t - 0.65) / 0.35));
+        const dur = 1.8;
+        const tilt = t < 0.3 ? (t / 0.3) * 0.30
+                   : t < 1.2 ? 0.30
+                   : Math.max(0, 0.30 * (1 - (t - 1.2) / 0.6));
         this.robot.rotation.z = tilt;
-        this.robot.position.y = this.basePos.y + Math.sin(t * 4.0) * 0.12;
+        this.robot.position.y = this.basePos.y + Math.sin(t * 4.0) * 0.18;
         if (t > dur) this.play('idle');
     }
 
@@ -140,10 +143,10 @@ class MarkAnimator {
 
     // ── THINK — look up, gentle sway (while processing response) ─
     _think(t) {
-        const lookUp = Math.min(t / 0.4, 1) * -0.14;  // tilt head up (thinking)
+        const lookUp = Math.min(t / 0.4, 1) * -0.20;  // tilt head up (thinking)
         this.robot.rotation.x = lookUp;
-        this.robot.rotation.z = Math.sin(t * 2.0) * 0.08;  // gentle sway
-        this.robot.position.y = this.basePos.y + Math.sin(t * 0.8) * 0.08;
+        this.robot.rotation.z = Math.sin(t * 2.0) * 0.12;  // visible sway
+        this.robot.position.y = this.basePos.y + Math.sin(t * 0.8) * 0.15;
     }
 
     _addBlushLight() {
@@ -184,16 +187,17 @@ class MarkSituationDetector {
     }
 
     _isGreeting(t) {
-        return /\b(hello|hi |welcome|ayie|hey there|hey hey|good morning|good evening|greetings|how are you)\b/.test(t);
+        return /\b(hello|hi\b|welcome|hey there|hey hey|good morning|good evening|good afternoon|greetings|how are you|nice to meet|howdy|what's up|whats up)\b/i.test(t);
     }
     _isExcited(t) {
-        return /\b(amazing|fantastic|great deal|special offer|love it|perfect|best value|incredible|wow|congratulations|just for you|only a few left|awesome|wonderful)\b/.test(t);
+        return /\b(amazing|fantastic|great deal|love it|perfect|incredible|wow|congratulations|awesome|wonderful|brilliant|excellent|outstanding|epic|sweet|oh my|yay|woohoo|let's go)\b/i.test(t)
+            || /[!]{2,}/.test(t); // multiple exclamation marks = excited
     }
     _isCompliment(t) {
-        return /\b(you('re| are) (cute|sweet|great|awesome|amazing|smart|funny|handsome|adorable|the best)|love you|good job|well done|nice work)\b/.test(t);
+        return /\b(you('re| are) (cute|sweet|great|awesome|amazing|smart|funny|adorable|the best|cool|helpful)|love you|good job|well done|nice work|so cute|so smart|so cool|thank you|thanks mark|you rock|great job)\b/i.test(t);
     }
     _isCharming(t) {
-        return /\b(secret|just between us|exclusive|only for you|insider|little secret|between you and me|special deal|tell you what)\b/.test(t);
+        return /\b(secret|just between us|exclusive|only for you|insider|between you and me|special deal|tell you what|guess what|let me tell you|here's the thing|fun fact|did you know|bonus|surprise)\b/i.test(t);
     }
 }
 

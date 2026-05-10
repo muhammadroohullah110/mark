@@ -8,6 +8,10 @@
     position: fixed;
     z-index: 99999;
     font-family: 'Outfit', -apple-system, sans-serif;
+    /* Accent color defaults — overridden by JS from admin settings */
+    --mark-accent: #667eea;
+    --mark-accent-rgb: 102, 126, 234;
+    --mark-accent-light: #8fa0ef;
 }
 
 #mark-ai-chatbot-root * {
@@ -37,12 +41,12 @@
     left: 5%; top: 70vh;
     border-radius: 50%; overflow: hidden; cursor: grab;
     z-index: 9999;
-    border: 3px solid rgba(102,126,234,0.95);
+    border: 3px solid rgba(var(--mark-accent-rgb),0.95);
     background: #080814;
     box-shadow:
-        0 0 0 6px rgba(102,126,234,0.12),
-        0 0 25px rgba(102,126,234,0.7),
-        0 0 50px rgba(118,75,162,0.45);
+        0 0 0 6px rgba(var(--mark-accent-rgb),0.12),
+        0 0 25px rgba(var(--mark-accent-rgb),0.7),
+        0 0 50px rgba(var(--mark-accent-rgb),0.35);
     transition:
         left 3.2s cubic-bezier(0.45,0,0.25,1),
         top 3.2s cubic-bezier(0.45,0,0.25,1),
@@ -67,11 +71,11 @@
     left: 50% !important; top: 50% !important;
     transform: translate(-50%, -55%) !important;
     cursor: default !important;
-    border-color: rgba(168,85,247,0.95);
+    border-color: rgba(var(--mark-accent-rgb),0.95);
     box-shadow:
-        0 0 0 8px rgba(168,85,247,0.18),
-        0 0 50px rgba(168,85,247,0.7),
-        0 0 100px rgba(102,126,234,0.5);
+        0 0 0 8px rgba(var(--mark-accent-rgb),0.18),
+        0 0 50px rgba(var(--mark-accent-rgb),0.7),
+        0 0 100px rgba(var(--mark-accent-rgb),0.4);
     transition: all 0.7s cubic-bezier(0.4,0,0.2,1);
 }
 
@@ -88,16 +92,16 @@
 #mark-hint {
     position: absolute; bottom: calc(100% + 10px); left: 50%;
     transform: translateX(-50%);
-    background: rgba(102,126,234,0.95); color: #fff;
+    background: rgba(var(--mark-accent-rgb),0.95); color: #fff;
     font-size: 11px; font-weight: 700; padding: 5px 14px;
     border-radius: 20px; white-space: nowrap; pointer-events: none;
-    box-shadow: 0 4px 14px rgba(102,126,234,0.5);
+    box-shadow: 0 4px 14px rgba(var(--mark-accent-rgb),0.5);
     animation: markHintBounce 1.8s ease-in-out infinite;
 }
 #mark-hint::after {
     content:''; position:absolute; top:100%; left:50%;
     transform:translateX(-50%); border:6px solid transparent;
-    border-top-color:rgba(102,126,234,0.95);
+    border-top-color:rgba(var(--mark-accent-rgb),0.95);
 }
 @keyframes markHintBounce {
     0%,100% { transform:translateX(-50%) translateY(0); }
@@ -137,8 +141,8 @@
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     padding: 14px 24px; border-radius: 20px;
-    border: 1px solid rgba(168,85,247,0.4);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 20px rgba(168,85,247,0.15);
+    border: 1px solid rgba(var(--mark-accent-rgb),0.4);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 20px rgba(var(--mark-accent-rgb),0.15);
     z-index: 10005; line-height: 1.45;
     transition: opacity 0.4s ease;
 }
@@ -151,11 +155,11 @@
     position: fixed; top: 50%; left: 50%;
     transform: translate(-50%, -260px);
     z-index: 10001; font-size: 18px; font-weight: 600;
-    color: rgba(168,85,247,0.95);
+    color: rgba(var(--mark-accent-rgb),0.95);
     background: rgba(20,20,35,0.85);
     backdrop-filter: blur(14px);
     padding: 10px 22px; border-radius: 20px;
-    border: 1px solid rgba(168,85,247,0.3);
+    border: 1px solid rgba(var(--mark-accent-rgb),0.3);
     display: none; text-align: center;
 }
 #mark-thinking-indicator.mark-show { display: block; }
@@ -188,11 +192,11 @@
     position: fixed; top: 50%; left: 50%;
     transform: translate(-50%, 145px);
     width: 78px; height: 78px; border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--mark-accent) 0%, var(--mark-accent-light) 100%);
     border: none; color: white; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     z-index: 10001;
-    box-shadow: 0 10px 40px rgba(102,126,234,0.6);
+    box-shadow: 0 10px 40px rgba(var(--mark-accent-rgb),0.6);
     user-select: none; -webkit-user-select: none; touch-action: none;
     transition: all 0.25s ease;
     font-family: inherit;
@@ -230,7 +234,7 @@
 }
 #mark-text-input {
     flex: 1; padding: 10px 16px; border-radius: 25px;
-    border: 1px solid rgba(168,85,247,0.3);
+    border: 1px solid rgba(var(--mark-accent-rgb),0.3);
     background: rgba(20,20,35,0.8);
     backdrop-filter: blur(10px);
     color: #fff; font-size: 14px;
@@ -238,11 +242,11 @@
     outline: none; transition: border-color 0.3s ease;
 }
 #mark-text-input::placeholder { color: rgba(255,255,255,0.35); }
-#mark-text-input:focus { border-color: rgba(168,85,247,0.7); }
+#mark-text-input:focus { border-color: rgba(var(--mark-accent-rgb),0.7); }
 
 #mark-send-btn {
     width: 42px; height: 42px; border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--mark-accent) 0%, var(--mark-accent-light) 100%);
     border: none; color: white; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; transition: transform 0.2s ease;
@@ -260,12 +264,12 @@
     width: 140px; height: 140px;
     border-radius: 50%;
     background: rgba(8,8,20,0.95);
-    border: 3px solid rgba(102,126,234,0.6);
+    border: 3px solid rgba(var(--mark-accent-rgb),0.6);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     z-index: 99999;
     transition: opacity 0.5s ease;
-    box-shadow: 0 0 25px rgba(102,126,234,0.5);
+    box-shadow: 0 0 25px rgba(var(--mark-accent-rgb),0.5);
 }
 .mark-loading-overlay.mark-hidden { opacity: 0; pointer-events: none; }
 .mark-loading-text {
@@ -274,8 +278,8 @@
 }
 .mark-loading-spinner {
     width: 28px; height: 28px;
-    border: 3px solid rgba(102,126,234,0.3);
-    border-top-color: #667eea;
+    border: 3px solid rgba(var(--mark-accent-rgb),0.3);
+    border-top-color: var(--mark-accent);
     border-radius: 50%;
     animation: markSpin 0.9s linear infinite;
 }
@@ -285,4 +289,34 @@
 @keyframes markBounce {
     0%, 100% { transform: translateY(0); opacity: 0.4; }
     50% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ── THINKING INDICATOR — animated dots with personality ── */
+#mark-thinking-indicator {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+#mark-thinking-indicator.mark-show {
+    animation: markThinkPulse 2s ease-in-out infinite;
+}
+@keyframes markThinkPulse {
+    0%, 100% { opacity: 0.85; transform: translate(-50%, -260px) scale(1); }
+    50% { opacity: 1; transform: translate(-50%, -260px) scale(1.03); }
+}
+@media(max-width:768px) {
+    @keyframes markThinkPulse {
+        0%, 100% { opacity: 0.85; transform: translate(-50%, -210px) scale(1); }
+        50% { opacity: 1; transform: translate(-50%, -210px) scale(1.03); }
+    }
+}
+
+/* ── ERROR STATE — gentle shake ── */
+.mark-error-shake {
+    animation: markShake 0.5s ease-in-out;
+}
+@keyframes markShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
 }

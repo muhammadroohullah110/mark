@@ -17,6 +17,29 @@
     const POSITION   = CFG.position || 'bottom-right';
     const AUTO_GREET = CFG.autoGreet !== false;
     const LANG       = CFG.language || 'en';
+    const ACCENT     = CFG.accentColor || '#667eea';
+    const GREET_SOUND = CFG.greetingSoundText || 'Ayie!';
+
+    /** Convert hex color to "r,g,b" string for rgba() usage */
+    function hexToRgb(hex) {
+        const h = hex.replace('#', '');
+        const r = parseInt(h.substring(0, 2), 16) || 102;
+        const g = parseInt(h.substring(2, 4), 16) || 126;
+        const b = parseInt(h.substring(4, 6), 16) || 234;
+        return r + ',' + g + ',' + b;
+    }
+
+    /** Lighten a hex color by a percentage (0-100) */
+    function lightenHex(hex, pct) {
+        const h = hex.replace('#', '');
+        let r = parseInt(h.substring(0, 2), 16);
+        let g = parseInt(h.substring(2, 4), 16);
+        let b = parseInt(h.substring(4, 6), 16);
+        r = Math.min(255, r + Math.round((255 - r) * pct / 100));
+        g = Math.min(255, g + Math.round((255 - g) * pct / 100));
+        b = Math.min(255, b + Math.round((255 - b) * pct / 100));
+        return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    }
 
     // Backend (Python on Render) — primary for all AI features
     const BACKEND = (typeof MARK_BACKEND !== 'undefined') ? MARK_BACKEND : 'https://mark-ix64.onrender.com';
@@ -80,9 +103,46 @@
     const SESSION_ID = 'mark_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
     // ============================================================
+    // ERROR HANDLING — personality-driven, modern UX
+    // ============================================================
+    const MARK_MSGS = {
+        thinking: [
+            'Hmm, let me think...',
+            'One sec, cooking up something good...',
+            'Brb, consulting my robot brain...',
+            'Processing at light speed...',
+            'Hold tight, thinking hard...',
+        ],
+        engineFail: "Oops! My 3D engine didn't load. Try refreshing the page! 🔄",
+        modelFail: "I couldn't put myself together! A quick page refresh should fix me. 🔧",
+        voiceUnavail: "My voice is taking a nap 😴 Type to me instead!",
+        voiceServerFail: "Couldn't reach my voice server. Let's chat by text! ⌨️",
+        connectionFail: [
+            'Lost my connection! Give it another try? 🔁',
+            'Whoops, the signal dropped. Try again?',
+            'My wires got tangled! One more try? 🔌',
+        ],
+        micDenied: "I need mic access to hear you. Check your browser permissions! 🎤",
+    };
+
+    function pickRandom(arr) {
+        if (typeof arr === 'string') return arr;
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    let thinkingMsgTimer = null;
+
+    // ============================================================
     // BUILD DOM
     // ============================================================
     function buildDOM() {
+        // Apply accent color as CSS custom properties
+        const accentRgb = hexToRgb(ACCENT);
+        const accentLight = lightenHex(ACCENT, 30);
+        root.style.setProperty('--mark-accent', ACCENT);
+        root.style.setProperty('--mark-accent-rgb', accentRgb);
+        root.style.setProperty('--mark-accent-light', accentLight);
+
         root.innerHTML = `
         <div class="mark-loading-overlay" id="markLoadingOverlay">
             <div class="mark-loading-text">Loading Mark...</div>
@@ -203,7 +263,7 @@
     // ============================================================
     function initThree() {
         if (typeof THREE === 'undefined') {
-            loadingOverlay.querySelector('.mark-loading-text').textContent = 'Error: 3D engine not loaded.';
+            loadingOverlay.querySelector('.mark-loading-text').textContent = MARK_MSGS.engineFail;
             return;
         }
 
@@ -265,7 +325,7 @@
             startWalking();
             animate();
         }, undefined, () => {
-            loadingOverlay.querySelector('.mark-loading-text').textContent = 'Error loading Mark. Refresh.';
+            loadingOverlay.querySelector('.mark-loading-text').textContent = MARK_MSGS.modelFail;
         });
     }
 
@@ -427,14 +487,20 @@
     function showThinking() {
         if (liveCaption) liveCaption.style.opacity = '0';
         if (thinkingEl) {
-            thinkingEl.textContent = 'Mark is thinking';
+            thinkingEl.textContent = pickRandom(MARK_MSGS.thinking);
             thinkingEl.classList.add('mark-show');
             thinkingEl.style.visibility = 'visible';
             thinkingEl.style.display = 'block';
+            // Rotate thinking messages every 3 seconds
+            clearInterval(thinkingMsgTimer);
+            thinkingMsgTimer = setInterval(() => {
+                if (thinkingEl) thinkingEl.textContent = pickRandom(MARK_MSGS.thinking);
+            }, 3000);
         }
         window.markAnimator.play('think');
     }
     function hideThinking() {
+        clearInterval(thinkingMsgTimer);
         if (thinkingEl) {
             thinkingEl.classList.remove('mark-show');
             thinkingEl.style.display = 'none';
@@ -623,7 +689,7 @@
     function playCuteAyie(callback) {
         if (!synth) { if (callback) setTimeout(callback, 300); return; }
         synth.cancel();
-        const u = new SpeechSynthesisUtterance('Ayie!');
+        const u = new SpeechSynthesisUtterance(GREET_SOUND);
         u.pitch = 2.0; u.rate = 0.85; u.volume = 1.0;
         const go = () => {
             const voices = synth.getVoices();
@@ -707,7 +773,7 @@
             micBtn.classList.add('mark-listening');
             micHint.textContent = 'Release to send';
         } catch {
-            micHint.textContent = 'Mic access denied';
+            micHint.textContent = MARK_MSGS.micDenied;
         }
     }
 
@@ -751,7 +817,7 @@
     async function transcribeAndProcess(blob, mime) {
         if (!backendAlive) {
             hideThinking();
-            showCaption('Voice not available right now. Please type instead.');
+            showCaption(MARK_MSGS.voiceUnavail);
             micHint.textContent = 'Hold to talk';
             resetIdleTimer();
             return;
@@ -779,7 +845,7 @@
             await processTextInput(text);
         } catch(e) {
             hideThinking();
-            showCaption('Could not connect to voice server.');
+            showCaption(MARK_MSGS.voiceServerFail);
             micHint.textContent = 'Hold to talk';
             resetIdleTimer();
         }
@@ -869,7 +935,7 @@
         } catch(e) { /* both failed */ }
 
         hideThinking();
-        showCaption('Connection error. Please try again.');
+        showCaption(pickRandom(MARK_MSGS.connectionFail));
         resetIdleTimer();
     };
 

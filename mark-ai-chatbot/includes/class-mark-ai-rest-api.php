@@ -204,7 +204,7 @@ class Mark_AI_Rest_API {
             'groq_api_key', 'default_voice',
             'tts_rate', 'tts_pitch', 'llm_model', 'max_tokens', 'temperature',
             'widget_enabled', 'widget_position', 'auto_greet', 'primary_language',
-            'backend_url', 'widget_accent_color',
+            'backend_url', 'widget_accent_color', 'greeting_sound_text',
         ];
 
         foreach ($allowed as $key) {
