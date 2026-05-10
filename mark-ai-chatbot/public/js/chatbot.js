@@ -465,6 +465,12 @@
 
         console.log('[Mark] Entering talking mode — backendAlive:', backendAlive, 'ttsAvailable:', ttsAvailable);
 
+        // ══ CRITICAL: Unlock audio on user gesture (MUST be synchronous!) ══
+        // Browsers block speechSynthesis.speak() & Audio.play() unless called
+        // within the direct user-click event chain. This silent unlock primes
+        // both APIs so later async calls work.
+        unlockAudio();
+
         // If backend isn't awake yet, kick off a fresh wake-up attempt
         if (!backendAlive) { backendRetries = 0; checkBackend(); }
 
@@ -635,9 +641,73 @@
     }
 
     // ============================================================
-    // VOICE — Edge TTS (backend) + Browser TTS (fallback)
+    // VOICE — Bulletproof TTS + Audio unlock system
+    //
+    // ARCHITECTURE:
+    //   1. User clicks Mark → unlockAudio() primes browser APIs
+    //   2. TTS chain: Backend Edge TTS → Browser speechSynthesis → silent fallback
+    //   3. Every async call has a safety timeout — nothing silently dies
+    //
+    // WHY: Browsers block speechSynthesis.speak() and Audio.play()
+    // unless called in a direct user-gesture chain. Async operations
+    // (fetch, setTimeout) break this chain. The unlock system solves it.
     // ============================================================
     const synth = window.speechSynthesis;
+    let audioUnlocked = false;
+    let voicesReady = false;
+    let cachedVoices = [];
+
+    /**
+     * CRITICAL: Must be called synchronously inside a user click/tap handler.
+     * Primes both speechSynthesis and AudioContext so later async calls work.
+     */
+    function unlockAudio() {
+        if (audioUnlocked) return;
+        audioUnlocked = true;
+        console.log('[Mark] Unlocking audio APIs...');
+
+        // 1. Unlock speechSynthesis — speak empty utterance in gesture chain
+        if (synth) {
+            synth.cancel();
+            const silent = new SpeechSynthesisUtterance('');
+            silent.volume = 0;
+            synth.speak(silent);
+            console.log('[Mark] speechSynthesis unlocked');
+        }
+
+        // 2. Unlock AudioContext — required for Audio.play() on some browsers
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const buf = ctx.createBuffer(1, 1, 22050);
+            const src = ctx.createBufferSource();
+            src.buffer = buf;
+            src.connect(ctx.destination);
+            src.start(0);
+            ctx.resume().catch(() => {});
+            console.log('[Mark] AudioContext unlocked');
+        } catch(_) {}
+
+        // 3. Pre-load voices
+        loadVoices();
+    }
+
+    /** Pre-load and cache voices (some browsers lazy-load) */
+    function loadVoices() {
+        if (synth) {
+            cachedVoices = synth.getVoices();
+            if (cachedVoices.length > 0) {
+                voicesReady = true;
+                console.log('[Mark] Voices loaded:', cachedVoices.length);
+            } else {
+                synth.onvoiceschanged = () => {
+                    cachedVoices = synth.getVoices();
+                    voicesReady = cachedVoices.length > 0;
+                    synth.onvoiceschanged = null;
+                    console.log('[Mark] Voices loaded (async):', cachedVoices.length);
+                };
+            }
+        }
+    }
 
     function stopSpeaking() {
         clearInterval(typewriterTimer);
@@ -652,17 +722,22 @@
     function speak(text) {
         stopSpeaking();
 
-        const anim = window.markSituationDetector.detect(text, 'mark');
-        if (anim) window.markAnimator.play(anim);
+        try {
+            const anim = window.markSituationDetector.detect(text, 'mark');
+            if (anim) window.markAnimator.play(anim);
+        } catch(e) {
+            console.log('[Mark] Animation detect error:', e.message);
+        }
 
         const cleanText = sanitizeForTTS(text);
         if (!cleanText) { resetIdleTimer(); return; }
         lastMarkText = cleanText;
         cancelIdleTimer();
 
+        // TTS priority chain: Backend → Browser → Caption-only
         if (ttsAvailable && backendAlive) {
             playBackendTTS(cleanText).catch((e) => {
-                console.log('[Mark] Backend TTS failed, using browser:', e.message);
+                console.log('[Mark] Backend TTS failed, trying browser:', e.message);
                 playBrowserTTS(cleanText);
             });
         } else {
@@ -674,7 +749,8 @@
         const res = await fetch(`${BACKEND}/api/tts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, language: detectedLanguage, store_id: STORE_ID })
+            body: JSON.stringify({ text, language: detectedLanguage, store_id: STORE_ID }),
+            signal: AbortSignal.timeout(12000)
         });
         if (!res.ok) throw new Error('TTS HTTP ' + res.status);
 
@@ -683,72 +759,78 @@
 
         const url = URL.createObjectURL(blob);
         currentAudio = new Audio(url);
-        currentAudio.onended = () => {
-            URL.revokeObjectURL(url); currentAudio = null;
-            window.markAnimator.play('idle'); hideCaption(); resetIdleTimer();
-        };
-        currentAudio.onerror = () => {
-            URL.revokeObjectURL(url); currentAudio = null;
-            playBrowserTTS(text);
-        };
 
-        // Handle autoplay restrictions — if play() is rejected, fall back
+        const cleanup = () => { URL.revokeObjectURL(url); currentAudio = null; };
+        currentAudio.onended = () => { cleanup(); window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
+        currentAudio.onerror = () => { cleanup(); playBrowserTTS(text); };
+
         try {
             await currentAudio.play();
         } catch(e) {
-            console.log('[Mark] Audio autoplay blocked:', e.message);
-            URL.revokeObjectURL(url); currentAudio = null;
+            console.log('[Mark] Audio.play() blocked:', e.message);
+            cleanup();
             playBrowserTTS(text);
         }
     }
 
     function playBrowserTTS(text) {
         if (!synth) {
-            window.markAnimator.play('idle');
-            hideCaption();
-            resetIdleTimer();
+            // No speech synthesis at all — caption-only mode
+            console.log('[Mark] No speechSynthesis — caption-only mode');
+            onSpeechDone();
             return;
         }
 
-        // Chrome bug: cancel any stuck queue before speaking
         synth.cancel();
 
         const u = new SpeechSynthesisUtterance(text);
         u.rate = 0.97; u.pitch = 0.92; u.volume = 1.0;
 
-        const go = () => {
-            const v = pickVoice();
-            if (v) { u.voice = v; u.lang = v.lang; }
-            u.onend = () => { window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
-            u.onerror = (e) => {
-                console.log('[Mark] Browser TTS error:', e.error);
-                window.markAnimator.play('idle'); hideCaption(); resetIdleTimer();
-            };
+        // Pick voice from cache
+        const v = pickVoice();
+        if (v) { u.voice = v; u.lang = v.lang; }
 
-            // Chrome 15-second bug fix: pause/resume keeps synthesis alive
-            synth.speak(u);
-            if (text.length > 80) {
-                const keepAlive = setInterval(() => {
-                    if (!synth.speaking) { clearInterval(keepAlive); return; }
-                    synth.pause(); synth.resume();
-                }, 10000);
-                u.onend = () => { clearInterval(keepAlive); window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
-            }
+        let spoken = false;
+        let keepAliveTimer = null;
+
+        u.onstart = () => { spoken = true; };
+        u.onend = () => { clearInterval(keepAliveTimer); onSpeechDone(); };
+        u.onerror = (e) => {
+            console.log('[Mark] Browser TTS error:', e?.error || 'unknown');
+            clearInterval(keepAliveTimer);
+            onSpeechDone();
         };
 
-        // Force-load voices (some browsers lazy-load them)
-        const voices = synth.getVoices();
-        if (voices.length > 0) {
-            go();
-        } else {
-            synth.onvoiceschanged = () => { go(); synth.onvoiceschanged = null; };
-            // Safety timeout — if voices never load, still try
-            setTimeout(() => { if (!synth.speaking) go(); }, 1000);
+        synth.speak(u);
+
+        // Chrome 15-second bug fix — pause/resume keeps long synthesis alive
+        if (text.length > 80) {
+            keepAliveTimer = setInterval(() => {
+                if (!synth.speaking) { clearInterval(keepAliveTimer); return; }
+                synth.pause(); synth.resume();
+            }, 10000);
         }
+
+        // SAFETY NET: If speech doesn't start within 2 seconds,
+        // it was silently blocked. Don't leave Mark hanging.
+        setTimeout(() => {
+            if (!spoken && !synth.speaking) {
+                console.log('[Mark] Browser TTS silently blocked — continuing without voice');
+                clearInterval(keepAliveTimer);
+                onSpeechDone();
+            }
+        }, 2000);
+    }
+
+    /** Called when speech finishes (or fails). Resets Mark to idle. */
+    function onSpeechDone() {
+        window.markAnimator.play('idle');
+        hideCaption();
+        resetIdleTimer();
     }
 
     function pickVoice() {
-        const voices = synth.getVoices();
+        const voices = cachedVoices.length > 0 ? cachedVoices : (synth ? synth.getVoices() : []);
         return voices.find(v => v.name.includes('Microsoft Mark'))
             || voices.find(v => v.name.includes('Microsoft David'))
             || voices.find(v => v.name.includes('Google UK English Male'))
@@ -756,21 +838,49 @@
             || voices.find(v => v.lang.startsWith('en'));
     }
 
+    /**
+     * Play the cute greeting sound ("Ayie!") then fire the callback.
+     * BULLETPROOF: Even if speech is blocked, the callback ALWAYS fires
+     * via a safety timeout. The conversation flow NEVER dies.
+     */
     function playCuteAyie(callback) {
-        if (!synth) { if (callback) setTimeout(callback, 300); return; }
+        // Safety timeout — callback fires no matter what after 2.5s
+        let callbackFired = false;
+        const fireCallback = () => {
+            if (callbackFired) return;
+            callbackFired = true;
+            if (callback) callback();
+        };
+        const safetyTimer = setTimeout(fireCallback, 2500);
+
+        if (!synth) {
+            clearTimeout(safetyTimer);
+            setTimeout(fireCallback, 300);
+            return;
+        }
+
         synth.cancel();
         const u = new SpeechSynthesisUtterance(GREET_SOUND);
         u.pitch = 2.0; u.rate = 0.85; u.volume = 1.0;
-        const go = () => {
-            const voices = synth.getVoices();
-            const v = voices.find(x => x.name.includes('Samantha'))
-                  || voices.find(x => x.name.includes('Microsoft Zira'))
-                  || voices.find(x => x.lang.startsWith('en'));
-            if (v) { u.voice = v; u.lang = v.lang; }
-            u.onend = () => { if (callback) setTimeout(callback, 280); };
-            synth.speak(u);
-        };
-        synth.getVoices().length > 0 ? go() : (synth.onvoiceschanged = go);
+
+        const v = cachedVoices.find(x => x.name.includes('Samantha'))
+              || cachedVoices.find(x => x.name.includes('Microsoft Zira'))
+              || cachedVoices.find(x => x.lang && x.lang.startsWith('en'));
+        if (v) { u.voice = v; u.lang = v.lang; }
+
+        u.onend = () => { clearTimeout(safetyTimer); setTimeout(fireCallback, 280); };
+        u.onerror = () => { clearTimeout(safetyTimer); fireCallback(); };
+
+        synth.speak(u);
+
+        // If speech didn't even start in 1.5s, it was blocked — fire callback
+        setTimeout(() => {
+            if (!callbackFired && !synth.speaking) {
+                console.log('[Mark] Greeting sound blocked — proceeding anyway');
+                clearTimeout(safetyTimer);
+                fireCallback();
+            }
+        }, 1500);
     }
 
     // ============================================================
@@ -1013,6 +1123,8 @@
             try { browserRecognition.stop(); } catch(_){}
             browserRecognition = null;
         }
+        isRecording = false;
+        micBtn.classList.remove('mark-listening');
     }
 
     // ============================================================
@@ -1169,6 +1281,8 @@
         assignDOMRefs();
         bindEvents();
         initThree();
+        // Pre-load voices early so they're ready when user clicks
+        loadVoices();
     }
 
     if (document.readyState === 'loading') {
