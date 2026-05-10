@@ -19,6 +19,7 @@
     const LANG       = CFG.language || 'en';
     const ACCENT     = CFG.accentColor || '#667eea';
     const GREET_SOUND = CFG.greetingSoundText || 'Ayie!';
+    const IDLE_TIMEOUT_CFG = (parseInt(CFG.idleTimeout) || 60) * 1000; // from admin (seconds → ms)
 
     /** Convert hex color to "r,g,b" string for rgba() usage */
     function hexToRgb(hex) {
@@ -67,8 +68,9 @@
     const ROBOT_URL         = PLUGIN_URL + 'public/model/robot.glb';
     const WIDGET_PX         = DEVICE.mobile ? 90 : DEVICE.tablet ? 100 : 115;
     const TALKING_PX        = DEVICE.mobile ? 240 : DEVICE.tablet ? 280 : 320;
-    const IDLE_TIMEOUT_SHORT = 10000;
-    const IDLE_TIMEOUT_LONG  = 25000;
+    // Idle timeout — uses admin setting, with sensible floor (15s min)
+    const IDLE_TIMEOUT_SHORT = Math.max(IDLE_TIMEOUT_CFG, 15000);
+    const IDLE_TIMEOUT_LONG  = Math.max(IDLE_TIMEOUT_CFG * 2, 30000);
     const WALK_INTERVAL     = DEVICE.mobile ? 7000 : 5500;
     const MEMORY_KEY        = 'mark_memory';
 
@@ -100,7 +102,34 @@
     let ttsAvailable      = false;
     let backendAlive      = false;
     let conversationHistory = [];
+    let lastTalkingTimestamp = 0; // tracks when Mark last had a conversation
     const SESSION_ID = 'mark_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+    // ── Session Persistence — survive close/reopen within same page session ──
+    const SESSION_HISTORY_KEY = 'mark_session_history';
+    const SESSION_TIMESTAMP_KEY = 'mark_session_ts';
+    const SESSION_MEMORY_TTL = 10 * 60 * 1000; // 10 minutes — after this, fresh greeting
+
+    function saveSessionHistory() {
+        try {
+            sessionStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(conversationHistory.slice(-16)));
+            sessionStorage.setItem(SESSION_TIMESTAMP_KEY, String(Date.now()));
+        } catch {}
+    }
+
+    function loadSessionHistory() {
+        try {
+            const ts = parseInt(sessionStorage.getItem(SESSION_TIMESTAMP_KEY) || '0');
+            if (Date.now() - ts > SESSION_MEMORY_TTL) return []; // expired
+            const data = JSON.parse(sessionStorage.getItem(SESSION_HISTORY_KEY) || '[]');
+            return Array.isArray(data) ? data : [];
+        } catch { return []; }
+    }
+
+    function hasRecentConversation() {
+        const ts = parseInt(sessionStorage.getItem(SESSION_TIMESTAMP_KEY) || '0');
+        return (Date.now() - ts) < SESSION_MEMORY_TTL && loadSessionHistory().length > 0;
+    }
 
     // ============================================================
     // ERROR HANDLING — personality-driven, modern UX
@@ -449,6 +478,19 @@
             camera.updateProjectionMatrix();
         }, 720);
 
+        // ── Session memory: restore conversation & skip greeting on quick reopen ──
+        if (hasRecentConversation()) {
+            conversationHistory = loadSessionHistory();
+            exchangeCount = Math.min(conversationHistory.length, 5);
+            const lastMsg = conversationHistory.filter(m => m.role === 'assistant').pop();
+            const wb = lastMsg ? "I'm back! What else can I help with?" : "Hey again! 👋";
+            showCaption(wb, false);
+            speak(wb);
+            console.log('[Mark] Session restored —', conversationHistory.length, 'messages in memory');
+            return;
+        }
+
+        // ── Fresh greeting ──
         const mem = loadMemory();
         if (mem.name) {
             playCuteAyie(() => { sendGreeting('returning', mem.name, 'en'); });
@@ -466,7 +508,10 @@
         markWidget.classList.remove('mark-talking');
         liveCaption.style.opacity = '0';
         hideThinking();
-        conversationHistory = [];
+
+        // PERSIST conversation — don't wipe! Mark remembers within the session
+        saveSessionHistory();
+        lastTalkingTimestamp = Date.now();
 
         setTimeout(() => {
             renderer.setSize(WIDGET_PX, WIDGET_PX);
@@ -664,6 +709,10 @@
             resetIdleTimer();
             return;
         }
+
+        // Chrome bug: cancel any stuck queue before speaking
+        synth.cancel();
+
         const u = new SpeechSynthesisUtterance(text);
         u.rate = 0.97; u.pitch = 0.92; u.volume = 1.0;
 
@@ -671,10 +720,31 @@
             const v = pickVoice();
             if (v) { u.voice = v; u.lang = v.lang; }
             u.onend = () => { window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
-            u.onerror = () => { window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
+            u.onerror = (e) => {
+                console.log('[Mark] Browser TTS error:', e.error);
+                window.markAnimator.play('idle'); hideCaption(); resetIdleTimer();
+            };
+
+            // Chrome 15-second bug fix: pause/resume keeps synthesis alive
             synth.speak(u);
+            if (text.length > 80) {
+                const keepAlive = setInterval(() => {
+                    if (!synth.speaking) { clearInterval(keepAlive); return; }
+                    synth.pause(); synth.resume();
+                }, 10000);
+                u.onend = () => { clearInterval(keepAlive); window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
+            }
         };
-        synth.getVoices().length > 0 ? go() : (synth.onvoiceschanged = go);
+
+        // Force-load voices (some browsers lazy-load them)
+        const voices = synth.getVoices();
+        if (voices.length > 0) {
+            go();
+        } else {
+            synth.onvoiceschanged = () => { go(); synth.onvoiceschanged = null; };
+            // Safety timeout — if voices never load, still try
+            setTimeout(() => { if (!synth.speaking) go(); }, 1000);
+        }
     }
 
     function pickVoice() {
@@ -751,6 +821,13 @@
 
     async function startRecording() {
         if (markState !== 'talking' || isRecording) return;
+
+        // Decide: use browser Speech Recognition (free, instant) when backend is down
+        if (!backendAlive && SpeechRecognition) {
+            startBrowserRecognition();
+            return;
+        }
+
         cancelIdleTimer(); stopSpeaking();
         window.markAnimator.play('listen');
         liveCaption.style.opacity = '0.3';
@@ -779,6 +856,13 @@
 
     function stopRecording() {
         if (!isRecording) return;
+
+        // If using browser Speech Recognition, stop that
+        if (browserRecognition) {
+            stopBrowserRecognition();
+            return;
+        }
+
         isRecording = false;
         micBtn.classList.remove('mark-listening');
         micHint.textContent = 'Processing...';
@@ -813,41 +897,121 @@
 
     // ============================================================
     // TRANSCRIBE + PROCESS (voice → Whisper → chat)
+    // Falls back to Web Speech Recognition API when backend is down
     // ============================================================
     async function transcribeAndProcess(blob, mime) {
-        if (!backendAlive) {
-            hideThinking();
-            showCaption(MARK_MSGS.voiceUnavail);
-            micHint.textContent = 'Hold to talk';
-            resetIdleTimer();
-            return;
+        // Try backend Whisper first
+        if (backendAlive) {
+            try {
+                showThinking();
+                const form = new FormData();
+                form.append('audio', blob, mime.includes('ogg') ? 'audio.ogg' : 'audio.webm');
+                const headers = {};
+                if (STORE_ID) headers['X-Store-ID'] = STORE_ID;
+
+                const res = await fetch(`${BACKEND}/api/transcribe`, {
+                    method: 'POST',
+                    body: form,
+                    headers: headers,
+                    signal: AbortSignal.timeout(15000)
+                });
+                const data = await res.json();
+                const text = data.text ? data.text.trim() : '';
+
+                if (!text) { hideThinking(); micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
+                if (isEcho(text)) { hideThinking(); micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
+
+                hideThinking();
+                await processTextInput(text);
+                return;
+            } catch(e) {
+                console.log('[Mark] Backend transcription failed:', e.message);
+                // Fall through — will show voice unavailable message
+            }
         }
 
-        try {
-            showThinking();
-            const form = new FormData();
-            form.append('audio', blob, mime.includes('ogg') ? 'audio.ogg' : 'audio.webm');
-            const headers = {};
-            if (STORE_ID) headers['X-Store-ID'] = STORE_ID;
+        // Backend down — tell user to type (recording already happened, can't retroactively use SpeechRecognition)
+        hideThinking();
+        showCaption("My voice server is waking up — type your message below! ⌨️");
+        micHint.textContent = 'Hold to talk';
+        resetIdleTimer();
+    }
 
-            const res = await fetch(`${BACKEND}/api/transcribe`, {
-                method: 'POST',
-                body: form,
-                headers: headers
-            });
-            const data = await res.json();
-            const text = data.text ? data.text.trim() : '';
+    // ============================================================
+    // BROWSER SPEECH RECOGNITION — Live fallback for mic when
+    // backend is down. Uses Web Speech API (Chrome, Edge, Safari)
+    // ============================================================
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let browserRecognition = null;
+    let useBrowserSTT = false; // true when backend is down
 
-            if (!text) { hideThinking(); micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
-            if (isEcho(text)) { hideThinking(); micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
+    function startBrowserRecognition() {
+        if (!SpeechRecognition) {
+            micHint.textContent = "Browser doesn't support voice input";
+            return;
+        }
+        cancelIdleTimer(); stopSpeaking();
+        window.markAnimator.play('listen');
+        liveCaption.style.opacity = '0.3';
+        hideThinking();
 
-            hideThinking();
+        browserRecognition = new SpeechRecognition();
+        browserRecognition.continuous = false;
+        browserRecognition.interimResults = true;
+        browserRecognition.lang = 'en-US';
+        browserRecognition.maxAlternatives = 1;
+
+        let finalTranscript = '';
+
+        browserRecognition.onresult = (event) => {
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interim += event.results[i][0].transcript;
+                }
+            }
+            // Show live transcription
+            if (interim) showCaption(interim, false);
+        };
+
+        browserRecognition.onend = async () => {
+            isRecording = false;
+            micBtn.classList.remove('mark-listening');
+            window.markAnimator.play('idle');
+
+            const text = finalTranscript.trim();
+            if (!text) { micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
+            if (isEcho(text)) { micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
+
             await processTextInput(text);
-        } catch(e) {
-            hideThinking();
-            showCaption(MARK_MSGS.voiceServerFail);
             micHint.textContent = 'Hold to talk';
+        };
+
+        browserRecognition.onerror = (e) => {
+            console.log('[Mark] Browser STT error:', e.error);
+            isRecording = false;
+            micBtn.classList.remove('mark-listening');
+            window.markAnimator.play('idle');
+            if (e.error === 'not-allowed') {
+                micHint.textContent = MARK_MSGS.micDenied;
+            } else {
+                micHint.textContent = 'Hold to talk';
+            }
             resetIdleTimer();
+        };
+
+        browserRecognition.start();
+        isRecording = true;
+        micBtn.classList.add('mark-listening');
+        micHint.textContent = 'Listening... release to send';
+    }
+
+    function stopBrowserRecognition() {
+        if (browserRecognition) {
+            try { browserRecognition.stop(); } catch(_){}
+            browserRecognition = null;
         }
     }
 
@@ -893,6 +1057,7 @@
                     conversationHistory.push({ role: 'assistant', content: reply });
                     exchangeCount++;
                     if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
+                    saveSessionHistory();
                     showCaption(reply, true);
                     speak(reply);
                     return;
@@ -928,6 +1093,7 @@
                 conversationHistory.push({ role: 'assistant', content: reply });
                 exchangeCount++;
                 if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
+                saveSessionHistory();
                 showCaption(reply, true);
                 speak(reply);
                 return;

@@ -239,7 +239,7 @@ class Mark_AI_Rest_API {
             'groq_api_key', 'default_voice',
             'tts_rate', 'tts_pitch', 'llm_model', 'max_tokens', 'temperature',
             'widget_enabled', 'widget_position', 'auto_greet', 'primary_language',
-            'backend_url', 'widget_accent_color', 'greeting_sound_text',
+            'backend_url', 'widget_accent_color', 'greeting_sound_text', 'idle_timeout',
         ];
 
         foreach ($allowed as $key) {
@@ -247,7 +247,9 @@ class Mark_AI_Rest_API {
                 $value = $body[$key];
 
                 // Type-specific sanitization
-                if ( in_array( $key, [ 'max_tokens', 'temperature' ], true ) ) {
+                if ( $key === 'idle_timeout' ) {
+                    $value = max( 15, min( 600, intval( $value ) ) );
+                } elseif ( in_array( $key, [ 'max_tokens', 'temperature' ], true ) ) {
                     $value = is_numeric( $value ) ? $value : $current[ $key ] ?? '';
                 } elseif ( $key === 'widget_accent_color' ) {
                     $value = sanitize_hex_color( $value ) ?: '';

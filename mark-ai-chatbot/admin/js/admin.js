@@ -1196,8 +1196,9 @@
                     <div><label style="${T.label}">Auto Greet</label><select id="g-auto-greet" style="${T.select}"><option value="1" ${s.auto_greet!==false&&s.auto_greet!=='0'?'selected':''}>Yes</option><option value="0" ${s.auto_greet===false||s.auto_greet==='0'?'selected':''}>No</option></select></div>
                     <div><label style="${T.label}">Accent Color</label>
                         <div style="display:flex;align-items:center;gap:10px;">
-                            <input type="color" id="g-accent-color" value="${esc(s.widget_accent_color || '#954921')}" style="width:44px;height:44px;border:2px solid #c2c7ca;border-radius:8px;cursor:pointer;padding:2px;background:none;" />
-                            <input type="text" id="g-accent-hex" value="${esc(s.widget_accent_color || '#954921')}" maxlength="7" style="${T.input}width:90px;padding:10px;font-family:monospace;font-size:13px;"
+                            <input type="color" id="g-accent-color" value="${esc(s.widget_accent_color || '#667eea')}" style="width:44px;height:44px;border:2px solid #c2c7ca;border-radius:8px;cursor:pointer;padding:2px;background:none;"
+                                oninput="document.getElementById('g-accent-hex').value=this.value;" />
+                            <input type="text" id="g-accent-hex" value="${esc(s.widget_accent_color || '#667eea')}" maxlength="7" style="${T.input}width:90px;padding:10px;font-family:monospace;font-size:13px;"
                                 oninput="const c=document.getElementById('g-accent-color');if(/^#[0-9a-fA-F]{6}$/.test(this.value))c.value=this.value;" />
                         </div>
                         <p style="font-size:11px;color:#73787a;margin:4px 0 0;">Chat bubble & robot glow color</p>
@@ -1205,6 +1206,10 @@
                     <div><label style="${T.label}">Greeting Sound</label>
                         <input type="text" id="g-greeting-sound" value="${esc(s.greeting_sound_text || 'Ayie!')}" maxlength="30" style="${T.input}" placeholder="Ayie!" />
                         <p style="font-size:11px;color:#73787a;margin:4px 0 0;">What Mark says when clicked</p>
+                    </div>
+                    <div><label style="${T.label}">Auto-Hide Delay</label>
+                        <input type="number" id="g-idle-timeout" value="${s.idle_timeout || 60}" min="15" max="600" style="${T.input}" />
+                        <p style="font-size:11px;color:#73787a;margin:4px 0 0;">Seconds before Mark closes chat (15-600)</p>
                     </div>
                 </div>
             </div>
@@ -1222,7 +1227,7 @@
     }
 
     async function saveGlobalSettings() {
-        const accentColor = ($('#g-accent-hex') || {}).value?.trim() || '#954921';
+        const accentColor = ($('#g-accent-hex') || {}).value?.trim() || '#667eea';
         const data = {
             groq_api_key: $('#g-groq-key').value.trim(),
             default_voice: $('#g-voice-en').value,
@@ -1231,6 +1236,7 @@
             auto_greet: $('#g-auto-greet').value,
             widget_accent_color: /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : '#667eea',
             greeting_sound_text: ($('#g-greeting-sound') || {}).value?.trim() || 'Ayie!',
+            idle_timeout: Math.max(15, Math.min(600, parseInt(($('#g-idle-timeout') || {}).value) || 60)),
         };
         try { await api('POST', 'settings', data); toast('Global settings saved!', 'success'); } catch (e) { toast(e.message, 'error'); }
     }

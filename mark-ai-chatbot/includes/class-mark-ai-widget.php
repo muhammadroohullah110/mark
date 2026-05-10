@@ -113,6 +113,14 @@ class Mark_AI_Widget {
             }
         }
 
+        // Resolve idle timeout: store-level → global → default (60s)
+        $idle_timeout = 60;
+        if ( $active_store && ! empty( $active_store['idle_timeout'] ) ) {
+            $idle_timeout = max( 15, intval( $active_store['idle_timeout'] ) );
+        } elseif ( ! empty( $settings['idle_timeout'] ) ) {
+            $idle_timeout = max( 15, intval( $settings['idle_timeout'] ) );
+        }
+
         // Pass config to mark-brain (loaded before chatbot, so both can read it)
         wp_localize_script('mark-ai-brain', 'markAIConfig', [
             'restUrl'     => rest_url('mark-ai/v1/'),
@@ -125,6 +133,7 @@ class Mark_AI_Widget {
             'backendUrl'  => !empty($settings['backend_url']) ? $settings['backend_url'] : 'https://mark-ix64.onrender.com',
             'accentColor'      => sanitize_hex_color( $settings['widget_accent_color'] ?? '' ) ?: '#667eea',
             'greetingSoundText' => sanitize_text_field( $settings['greeting_sound_text'] ?? 'Ayie!' ),
+            'idleTimeout'      => $idle_timeout,
         ]);
     }
 
