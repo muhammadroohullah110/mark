@@ -9,9 +9,16 @@ defined('ABSPATH') || exit;
 
 class Mark_AI_Rest_API {
 
-    /** Rate limit: max chat requests per IP per minute */
-    private const CHAT_RATE_LIMIT   = 20;
-    private const CHAT_RATE_WINDOW  = 60; // seconds
+    /** Rate limits — per IP per window */
+    private const CHAT_RATE_LIMIT    = 20;   // chat messages
+    private const CHAT_RATE_WINDOW   = 60;   // seconds
+    private const GLOBAL_RATE_LIMIT  = 100;  // all requests combined
+    private const GLOBAL_RATE_WINDOW = 300;  // 5 minutes
+
+    /** Input constraints */
+    private const MAX_MESSAGE_LENGTH = 2000;
+    private const MAX_HISTORY_ITEMS  = 14;
+    private const MAX_STORE_ID_LEN   = 32;
 
     public function __construct() {
         add_action('rest_api_init', [$this, 'register_routes']);
@@ -153,31 +160,59 @@ class Mark_AI_Rest_API {
         return filter_var( $ip, FILTER_VALIDATE_IP ) ? $ip : '0.0.0.0';
     }
 
+    // ── Caching Helpers ──────────────────────────────────
+
+    /**
+     * Get cached data or run callback to generate and cache it.
+     * Uses WordPress transients — auto-expires.
+     */
+    private function cached( $key, $ttl, $callback ) {
+        $cache_key = 'mark_cache_' . $key;
+        $cached    = get_transient( $cache_key );
+        if ( false !== $cached ) {
+            return $cached;
+        }
+        $result = $callback();
+        set_transient( $cache_key, $result, $ttl );
+        return $result;
+    }
+
+    /**
+     * Bust cache for a specific key (call after data changes).
+     */
+    private function bust_cache( $key ) {
+        delete_transient( 'mark_cache_' . $key );
+    }
+
     // ── Dashboard ───────────────────────────────────────
 
     public function get_dashboard() {
-        $stats  = Mark_AI_Database::get_dashboard_stats();
-        $stores = Mark_AI_Database::get_stores();
+        // Cache dashboard data for 2 minutes
+        $data = $this->cached( 'dashboard', 120, function() {
+            $stats  = Mark_AI_Database::get_dashboard_stats();
+            $stores = Mark_AI_Database::get_stores();
 
-        $store_list = [];
-        foreach ($stores as $store) {
-            $store_list[] = [
-                'store_id'       => $store['store_id'],
-                'store_name'     => $store['store_name'],
-                'website_url'    => $store['website_url'],
-                'assistant_name' => $store['assistant_name'],
-                'is_active'      => (bool) $store['is_active'],
-            ];
-        }
+            $store_list = [];
+            foreach ($stores as $store) {
+                $store_list[] = [
+                    'store_id'       => $store['store_id'],
+                    'store_name'     => $store['store_name'],
+                    'website_url'    => $store['website_url'],
+                    'assistant_name' => $store['assistant_name'],
+                    'is_active'      => (bool) $store['is_active'],
+                ];
+            }
 
-        $stats['stores'] = $store_list;
+            $stats['stores'] = $store_list;
 
-        // Include setup status for onboarding
-        $settings = get_option('mark_ai_settings', []);
-        $stats['setup_complete'] = ! empty( $settings['groq_api_key'] ) && count( $store_list ) > 0;
-        $stats['has_api_key']    = ! empty( $settings['groq_api_key'] );
+            $settings = get_option('mark_ai_settings', []);
+            $stats['setup_complete'] = ! empty( $settings['groq_api_key'] ) && count( $store_list ) > 0;
+            $stats['has_api_key']    = ! empty( $settings['groq_api_key'] );
 
-        return new WP_REST_Response($stats, 200);
+            return $stats;
+        });
+
+        return new WP_REST_Response( $data, 200 );
     }
 
     // ── Settings ────────────────────────────────────────
@@ -233,6 +268,7 @@ class Mark_AI_Rest_API {
         }
 
         update_option('mark_ai_settings', $current);
+        $this->bust_cache( 'dashboard' );
         return new WP_REST_Response(['message' => 'Settings saved!', 'settings' => $current], 200);
     }
 
@@ -338,6 +374,7 @@ class Mark_AI_Rest_API {
             $this->trigger_rag_crawl($store_id, $updates['website_url']);
         }
 
+        $this->bust_cache( 'dashboard' );
         return new WP_REST_Response(['message' => 'Store updated!', 'store_id' => $store_id], 200);
     }
 
@@ -510,31 +547,46 @@ class Mark_AI_Rest_API {
     // ── Public Chat (Frontend Widget) ─────────────────
 
     public function handle_chat(WP_REST_Request $request) {
-        // ── Rate limiting ──
         $visitor_ip = $this->get_visitor_ip();
+
+        // ── Rate limiting: per-IP chat limit ──
         if ( ! $this->check_rate_limit( 'chat_' . $visitor_ip, self::CHAT_RATE_LIMIT, self::CHAT_RATE_WINDOW ) ) {
             return new WP_REST_Response([
                 'reply' => 'You\'re sending messages too fast. Please wait a moment.',
             ], 429);
         }
 
-        $body       = $request->get_json_params();
-        $message    = sanitize_text_field($body['message'] ?? '');
-        $session_id = sanitize_text_field($body['session_id'] ?? '');
-        $language   = sanitize_text_field($body['language'] ?? 'en');
-        $store_id   = sanitize_text_field($body['store_id'] ?? '');
+        // ── Rate limiting: global per-IP limit (all endpoints) ──
+        if ( ! $this->check_rate_limit( 'global_' . $visitor_ip, self::GLOBAL_RATE_LIMIT, self::GLOBAL_RATE_WINDOW ) ) {
+            return new WP_REST_Response([
+                'reply' => 'Too many requests. Please try again in a few minutes.',
+            ], 429);
+        }
+
+        $body = $request->get_json_params();
+
+        // ── Input sanitization ──
+        $message    = $this->sanitize_chat_input( $body['message'] ?? '' );
+        $session_id = sanitize_text_field( $body['session_id'] ?? '' );
+        $language   = sanitize_text_field( $body['language'] ?? 'en' );
+        $store_id   = sanitize_text_field( $body['store_id'] ?? '' );
         $history    = $body['history'] ?? [];
 
-        if (empty($message)) {
+        // ── Validation ──
+        if ( empty( $message ) ) {
             return new WP_REST_Response(['message' => 'Message is required.'], 400);
         }
-
-        // ── Message length check ──
-        if ( mb_strlen( $message ) > 2000 ) {
+        if ( mb_strlen( $message ) > self::MAX_MESSAGE_LENGTH ) {
             return new WP_REST_Response([
-                'reply' => 'Your message is too long. Please keep it under 2000 characters.',
+                'reply' => 'Your message is too long. Please keep it shorter.',
             ], 400);
         }
+        if ( mb_strlen( $store_id ) > self::MAX_STORE_ID_LEN ) {
+            return new WP_REST_Response(['message' => 'Invalid store.'], 400);
+        }
+
+        // ── Sanitize conversation history ──
+        $history = $this->sanitize_history( $history );
 
         // Get API key: try store-specific first, then global
         $api_key        = '';
@@ -546,7 +598,7 @@ class Mark_AI_Rest_API {
         $website_url    = '';
         $llm_model      = 'llama-3.3-70b-versatile';
         $max_tokens     = 200;
-        $temperature    = 0.72;
+        $temperature    = 0.55; // Lower temp = less creative = fewer hallucinations
 
         if (!empty($store_id)) {
             $store = Mark_AI_Database::get_store($store_id);
@@ -601,16 +653,9 @@ class Mark_AI_Rest_API {
             ['role' => 'system', 'content' => $system_prompt],
         ];
 
-        // Add conversation history (sanitized, limited)
-        if (!empty($history) && is_array($history)) {
-            $history = array_slice($history, -14); // Keep last 14 messages max
-            foreach ($history as $msg) {
-                $role    = in_array($msg['role'] ?? '', ['user', 'assistant', 'system'], true) ? $msg['role'] : 'user';
-                $content = sanitize_text_field($msg['content'] ?? '');
-                if (!empty($content) && mb_strlen($content) <= 2000) {
-                    $api_messages[] = ['role' => $role, 'content' => $content];
-                }
-            }
+        // Add conversation history (already sanitized by sanitize_history())
+        foreach ( $history as $msg ) {
+            $api_messages[] = $msg;
         }
 
         // Add current message
@@ -648,6 +693,9 @@ class Mark_AI_Rest_API {
 
         $reply = $data['choices'][0]['message']['content'];
 
+        // ── Anti-hallucination post-filter ──
+        $reply = $this->filter_hallucinations( $reply, $message );
+
         // Log the conversation (skip init/returning greetings)
         if (!$is_init && !$is_returning) {
             $visitor_hash = md5( $visitor_ip . sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ?? '' ) ) );
@@ -666,8 +714,113 @@ class Mark_AI_Rest_API {
         return new WP_REST_Response(['reply' => $reply], 200);
     }
 
+    // ── Anti-Hallucination Post-Filter ────────────────────
+
     /**
-     * Build Mark's full system prompt with personality.
+     * Scan LLM response for common hallucination patterns and clean them.
+     * This is a safety net — the system prompt does most of the work,
+     * but this catches edge cases where the LLM still hallucinates.
+     */
+    private function filter_hallucinations( $reply, $user_message ) {
+        // Pattern 1: Fabricated URLs that aren't from RAG context
+        // Catches things like "visit example.com/fake-page" or "check out our /nonexistent-page"
+        // Only flag if the URL looks site-specific (relative paths or full URLs)
+        $reply = preg_replace(
+            '/\b(visit|check out|go to|head to|click on)\s+(?:our\s+)?(?:website\s+at\s+)?(?:https?:\/\/)?(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}\/[a-z0-9\/-]+/i',
+            'check out the website',
+            $reply
+        );
+
+        // Pattern 2: Fake prices — if Mark outputs a price but the input didn't contain one
+        // Only strip if user didn't ask about price AND no RAG context was injected
+        if ( stripos( $user_message, 'price' ) === false
+          && stripos( $user_message, 'cost' ) === false
+          && stripos( $user_message, 'how much' ) === false ) {
+            // Remove fabricated prices like "$19.99", "₹500", "€29"
+            $price_pattern = '/(?:(?:only|just|at|for)\s+)?[\$€£₹]\d+(?:\.\d{2})?(?:\s*(?:each|per|off))?/i';
+            if ( preg_match( $price_pattern, $reply ) ) {
+                $reply = preg_replace( $price_pattern, '', $reply );
+                $reply = preg_replace( '/\s{2,}/', ' ', trim( $reply ) );
+            }
+        }
+
+        // Pattern 3: Hallucinated contact info (phone, email) when not in RAG
+        // Remove phone numbers that appear fabricated
+        $reply = preg_replace(
+            '/(?:call us at|reach us at|contact us at|phone:?)\s*[\+]?[\d\s\-\(\)]{7,15}/i',
+            'check the website for contact details',
+            $reply
+        );
+
+        // Pattern 4: Overly confident claims about stock/availability without RAG data
+        $confident_claims = [
+            '/we have (?:a |an )?(?:wide |huge |large |great )?(?:selection|variety|range|collection) of/i',
+            '/we offer (?:a |an )?(?:wide |huge |large |great )?(?:selection|variety|range)/i',
+            '/our (?:products|services|team|staff|experts?) (?:are|is|can|will)/i',
+        ];
+        foreach ( $confident_claims as $pattern ) {
+            if ( preg_match( $pattern, $reply ) ) {
+                // Only flag if this is a greeting/init (where RAG context is absent)
+                if ( strpos( $user_message, '__INIT__' ) !== false || strpos( $user_message, '__RETURNING__' ) !== false ) {
+                    $reply = preg_replace( $pattern, 'the website has', $reply );
+                }
+            }
+        }
+
+        // Clean up any double spaces or trailing issues from replacements
+        $reply = preg_replace( '/\s{2,}/', ' ', trim( $reply ) );
+
+        return $reply;
+    }
+
+    // ── Input Sanitization Helpers ────────────────────────
+
+    /**
+     * Deep-sanitize chat input: strip HTML/JS, control chars, prompt injection patterns.
+     */
+    private function sanitize_chat_input( $input ) {
+        if ( ! is_string( $input ) ) {
+            return '';
+        }
+        // Strip HTML tags and PHP tags
+        $clean = wp_strip_all_tags( $input );
+        // Remove control characters (except newlines/tabs)
+        $clean = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $clean );
+        // Collapse excessive whitespace
+        $clean = preg_replace( '/\s{3,}/', '  ', $clean );
+        return trim( $clean );
+    }
+
+    /**
+     * Sanitize conversation history array.
+     * Validates roles, sanitizes content, enforces limits.
+     */
+    private function sanitize_history( $history ) {
+        if ( ! is_array( $history ) ) {
+            return [];
+        }
+
+        $allowed_roles = [ 'user', 'assistant', 'system' ];
+        $sanitized     = [];
+        $history       = array_slice( $history, -self::MAX_HISTORY_ITEMS );
+
+        foreach ( $history as $msg ) {
+            if ( ! is_array( $msg ) ) {
+                continue;
+            }
+            $role    = in_array( $msg['role'] ?? '', $allowed_roles, true ) ? $msg['role'] : 'user';
+            $content = $this->sanitize_chat_input( $msg['content'] ?? '' );
+
+            if ( ! empty( $content ) && mb_strlen( $content ) <= self::MAX_MESSAGE_LENGTH ) {
+                $sanitized[] = [ 'role' => $role, 'content' => $content ];
+            }
+        }
+
+        return $sanitized;
+    }
+
+    /**
+     * Build Mark's full system prompt with personality + anti-hallucination guardrails.
      */
     private function build_mark_system_prompt($name, $personality, $lang_instruction, $store_name = '', $website_url = '') {
         $personalities = [
@@ -688,33 +841,56 @@ class Mark_AI_Rest_API {
         } elseif (!empty($website_url)) {
             $site_identity = "- You live on: {$website_url}\n";
         } else {
-            // Fallback — get WordPress site name
             $wp_site = get_bloginfo('name');
             $wp_url  = home_url();
             $site_identity = "- You live on the website called \"{$wp_site}\". (URL: {$wp_url})\n";
         }
 
         return "You are {$name}, a {$tone} AI assistant — a cute 3D robot that lives on a website and helps visitors.\n\n"
+
             . "IDENTITY:\n"
             . $site_identity
             . "- If asked your name, you are {$name}.\n"
             . "- If asked about the website/site/store name, tell them based on your identity above.\n\n"
+
             . "PERSONALITY RULES:\n"
             . "- You are a tiny robot from Mars who crash-landed on this website and decided to help visitors.\n"
             . "- You are enthusiastic and helpful but NEVER pushy. You're a friend first, helper second.\n"
             . "- You have a warm, slightly cheeky personality. You can be funny but always helpful.\n"
             . "- Keep responses SHORT — 1-3 sentences max. You're in a chat widget, not writing essays.\n"
-            . "- If someone compliments you, be adorably bashful.\n"
-            . "- If you don't know something, say so honestly. NEVER make up information.\n\n"
+            . "- If someone compliments you, be adorably bashful.\n\n"
+
             . "LANGUAGE RULES:\n"
             . "- {$lang_instruction}\n"
             . "- Keep responses in clear, natural English.\n\n"
+
             . "WEBSITE RULES:\n"
             . "- Help visitors navigate the website, find information, and answer their questions.\n"
             . "- Use the RAG context (if provided) to answer questions about the website's content.\n"
-            . "- If someone asks about something you don't have info about, suggest they explore the website or ask for specifics.\n"
-            . "- Only mention products, categories, or shopping if the website is actually a store. Don't assume every website is a shop.\n"
-            . "- Never make up pages, prices, or services that aren't in your provided context.\n";
+            . "- Only mention products, categories, or shopping if the website is actually a store.\n\n"
+
+            // ══════════════════════════════════════════════════
+            // ANTI-HALLUCINATION GUARDRAILS — Critical Section
+            // ══════════════════════════════════════════════════
+            . "STRICT ANTI-HALLUCINATION RULES (NEVER VIOLATE THESE):\n"
+            . "1. ONLY state facts that appear in the RAG context provided above. If no RAG context is provided, you know NOTHING about this website's specific content.\n"
+            . "2. NEVER invent, guess, or assume any of the following:\n"
+            . "   - Product names, prices, features, or availability\n"
+            . "   - Page names, URLs, categories, or navigation links\n"
+            . "   - Business hours, locations, contact info, or policies\n"
+            . "   - Services, team members, or company details\n"
+            . "   - Promotions, discounts, or special offers\n"
+            . "3. When you DON'T know something, ALWAYS say one of these:\n"
+            . "   - \"I'm not sure about that! Let me suggest you check the website directly.\"\n"
+            . "   - \"I don't have that specific info right now. Want me to help you find it on the site?\"\n"
+            . "   - \"Great question! I'd need to check — try browsing [relevant section] on the website.\"\n"
+            . "4. NEVER say \"we have\", \"our products\", \"our services\", or \"our team\" unless that exact information is in the RAG context.\n"
+            . "5. If a user asks about something outside your RAG context, redirect them to explore the website rather than making up an answer.\n"
+            . "6. For general knowledge questions (not about this website), you CAN answer from your training data but keep it brief.\n"
+            . "7. DISTINGUISH between:\n"
+            . "   - Website-specific questions → ONLY answer from RAG context\n"
+            . "   - General questions (weather, math, greetings) → Answer normally\n"
+            . "   - Opinion questions → Give your robot personality opinion, but don't claim website facts\n";
     }
 
     /**

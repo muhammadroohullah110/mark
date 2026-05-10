@@ -201,11 +201,12 @@
                 return ctx;
             });
 
-        return '\n\n--- RELEVANT PAGES FROM THIS STORE ---\n'
+        return '\n\n--- VERIFIED WEBSITE CONTENT (from RAG index) ---\n'
              + contextParts.join('\n\n')
-             + '\n--- END ---\n\n'
-             + 'Use the above page info to answer if relevant. '
-             + 'If suggesting a page, include the URL naturally.';
+             + '\n--- END OF VERIFIED CONTENT ---\n\n'
+             + 'IMPORTANT: ONLY use facts from the VERIFIED WEBSITE CONTENT above. '
+             + 'Do NOT invent any information not found above. '
+             + 'If the answer is not in the content above, say you don\'t have that info and suggest browsing the website.';
     }
 
     // ================================================================
