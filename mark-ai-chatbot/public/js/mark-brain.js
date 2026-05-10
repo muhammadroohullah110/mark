@@ -201,12 +201,12 @@
                 return ctx;
             });
 
-        return '\n\n--- VERIFIED WEBSITE CONTENT (from RAG index) ---\n'
+        return '\n\n--- VERIFIED WEBSITE CONTENT (Zone 1 knowledge — you can state these facts confidently) ---\n'
              + contextParts.join('\n\n')
              + '\n--- END OF VERIFIED CONTENT ---\n\n'
-             + 'IMPORTANT: ONLY use facts from the VERIFIED WEBSITE CONTENT above. '
-             + 'Do NOT invent any information not found above. '
-             + 'If the answer is not in the content above, say you don\'t have that info and suggest browsing the website.';
+             + 'The above is Zone 1 knowledge. State these facts confidently as your own knowledge about this website. '
+             + 'Do NOT invent anything beyond what is written above. '
+             + 'If the visitor asks about something NOT covered above, redirect them warmly to explore the website.';
     }
 
     // ================================================================
