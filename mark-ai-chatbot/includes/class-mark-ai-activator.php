@@ -64,6 +64,14 @@ class Mark_AI_Activator {
             rate_rag int(11) DEFAULT 40,
             rate_tts int(11) DEFAULT 20,
             custom_system_prompt longtext DEFAULT '',
+            sales_behavior varchar(20) DEFAULT 'helpful',
+            sales_no_discounts tinyint(1) DEFAULT 1,
+            sales_no_price_promises tinyint(1) DEFAULT 1,
+            sales_no_guarantees tinyint(1) DEFAULT 1,
+            sales_objection_style varchar(20) DEFAULT 'graceful',
+            sales_lead_capture varchar(20) DEFAULT 'off',
+            sales_cta_url varchar(500) DEFAULT '',
+            sales_cta_text varchar(200) DEFAULT '',
             is_active tinyint(1) NOT NULL DEFAULT 1,
             owner_id bigint(20) UNSIGNED NOT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
@@ -92,7 +100,7 @@ class Mark_AI_Activator {
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta($sql);
 
-        update_option('mark_ai_db_version', '1.0.0');
+        update_option('mark_ai_db_version', '1.1.0');
     }
 
     /**

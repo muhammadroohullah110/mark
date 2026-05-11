@@ -337,6 +337,10 @@ class Mark_AI_Rest_API {
             'groq_api_key', 'llm_model', 'max_tokens', 'temperature',
             'rate_chat', 'rate_tts', 'rate_transcribe',
             'custom_system_prompt', 'is_active',
+            // Sales Skills fields
+            'sales_behavior', 'sales_no_discounts', 'sales_no_price_promises',
+            'sales_no_guarantees', 'sales_objection_style',
+            'sales_lead_capture', 'sales_cta_url', 'sales_cta_text',
         ];
 
         $updates = [];
@@ -631,9 +635,21 @@ class Mark_AI_Rest_API {
             ], 200);
         }
 
+        // Build sales settings from store data
+        $sales_config = [
+            'behavior'          => $store['sales_behavior'] ?? 'helpful',
+            'no_discounts'      => ($store['sales_no_discounts'] ?? 1) ? true : false,
+            'no_price_promises' => ($store['sales_no_price_promises'] ?? 1) ? true : false,
+            'no_guarantees'     => ($store['sales_no_guarantees'] ?? 1) ? true : false,
+            'objection_style'   => $store['sales_objection_style'] ?? 'graceful',
+            'lead_capture'      => $store['sales_lead_capture'] ?? 'off',
+            'cta_url'           => $store['sales_cta_url'] ?? '',
+            'cta_text'          => $store['sales_cta_text'] ?? '',
+        ];
+
         // Build system prompt
         $lang_instruction = 'Respond in English.';
-        $system_prompt    = !empty($custom_prompt) ? $custom_prompt : $this->build_mark_system_prompt($assistant_name, $personality, $lang_instruction, $store_name, $website_url);
+        $system_prompt    = !empty($custom_prompt) ? $custom_prompt : $this->build_mark_system_prompt($assistant_name, $personality, $lang_instruction, $store_name, $website_url, $sales_config);
 
         // Resolve site name for greeting context (same logic as system prompt)
         $site_display_name = $store_name;
@@ -733,54 +749,85 @@ class Mark_AI_Rest_API {
      * but this catches edge cases where the LLM still hallucinates.
      */
     private function filter_hallucinations( $reply, $user_message ) {
-        // Pattern 1: Fabricated URLs that aren't from RAG context
-        // Catches things like "visit example.com/fake-page" or "check out our /nonexistent-page"
-        // Only flag if the URL looks site-specific (relative paths or full URLs)
+        // ── Pattern 1: Fabricated URLs ──
         $reply = preg_replace(
             '/\b(visit|check out|go to|head to|click on)\s+(?:our\s+)?(?:website\s+at\s+)?(?:https?:\/\/)?(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}\/[a-z0-9\/-]+/i',
             'check out the website',
             $reply
         );
 
-        // Pattern 2: Fake prices — if Mark outputs a price but the input didn't contain one
-        // Only strip if user didn't ask about price AND no RAG context was injected
+        // ── Pattern 2: Fake prices ──
         if ( stripos( $user_message, 'price' ) === false
           && stripos( $user_message, 'cost' ) === false
           && stripos( $user_message, 'how much' ) === false ) {
-            // Remove fabricated prices like "$19.99", "₹500", "€29"
             $price_pattern = '/(?:(?:only|just|at|for)\s+)?[\$€£₹]\d+(?:\.\d{2})?(?:\s*(?:each|per|off))?/i';
             if ( preg_match( $price_pattern, $reply ) ) {
                 $reply = preg_replace( $price_pattern, '', $reply );
-                $reply = preg_replace( '/\s{2,}/', ' ', trim( $reply ) );
             }
         }
 
-        // Pattern 3: Hallucinated contact info (phone, email) when not in RAG
-        // Remove phone numbers that appear fabricated
+        // ── Pattern 3: Hallucinated contact info ──
         $reply = preg_replace(
-            '/(?:call us at|reach us at|contact us at|phone:?)\s*[\+]?[\d\s\-\(\)]{7,15}/i',
+            '/(?:call us at|reach us at|contact us at|phone:?|email:?)\s*[\+]?[\d\s\-\(\)]{7,15}/i',
+            'check the website for contact details',
+            $reply
+        );
+        // Fabricated email addresses
+        $reply = preg_replace(
+            '/(?:email us at|reach us at|write to)\s+[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i',
             'check the website for contact details',
             $reply
         );
 
-        // Pattern 4: Overly confident claims about stock/availability without RAG data
+        // ── Pattern 4: Fabricated discounts/deals ──
+        // Mark should NEVER offer discounts — strip them always
+        $reply = preg_replace(
+            '/(?:(?:I can|let me|how about|here\'s|we\'re)\s+(?:offer|give)\s+(?:you\s+)?(?:a\s+)?\d{1,3}\s*%\s*(?:off|discount))/i',
+            'I\'d recommend checking the website for any current offers',
+            $reply
+        );
+        $reply = preg_replace(
+            '/(?:use\s+(?:code|coupon|promo)\s+[A-Z0-9]+)/i',
+            '',
+            $reply
+        );
+        $reply = preg_replace(
+            '/(?:special\s+(?:discount|offer|deal|promotion)\s+(?:just\s+)?for\s+you)/i',
+            '',
+            $reply
+        );
+
+        // ── Pattern 5: Confident claims without RAG ──
         $confident_claims = [
             '/we have (?:a |an )?(?:wide |huge |large |great )?(?:selection|variety|range|collection) of/i',
             '/we offer (?:a |an )?(?:wide |huge |large |great )?(?:selection|variety|range)/i',
             '/our (?:products|services|team|staff|experts?) (?:are|is|can|will)/i',
+            '/(?:customers|clients|users)\s+(?:love|rave about|enjoy|recommend)\s+(?:our|the)/i',
+            '/(?:best.?selling|top.?rated|most popular|#1|number one)\s+(?:product|service|item)/i',
         ];
         foreach ( $confident_claims as $pattern ) {
             if ( preg_match( $pattern, $reply ) ) {
-                // Only flag if this is a greeting/init (where RAG context is absent)
                 if ( strpos( $user_message, '__INIT__' ) !== false || strpos( $user_message, '__RETURNING__' ) !== false ) {
                     $reply = preg_replace( $pattern, 'the website has', $reply );
                 }
             }
         }
 
-        // Clean up any double spaces or trailing issues from replacements
-        $reply = preg_replace( '/\s{2,}/', ' ', trim( $reply ) );
+        // ── Pattern 6: Off-topic responses about hacking/security/public figures ──
+        $forbidden_patterns = [
+            '/\b(?:SQL\s*injection|XSS|cross.site|exploit|vulnerability|buffer\s*overflow|brute.force|DDoS|penetration\s*test|payload|shellcode)\b/i',
+            '/\b(?:hack(?:ing|er|ed)?|crack(?:ing|er|ed)?|phish(?:ing)?|malware|ransomware|trojan|keylogger)\b/i',
+        ];
+        foreach ( $forbidden_patterns as $pattern ) {
+            if ( preg_match( $pattern, $reply ) ) {
+                $settings = get_option('mark_ai_settings', []);
+                $site_name = get_bloginfo('name') ?: 'this website';
+                $reply = "Haha, that's a fascinating topic, but it's way outside my expertise! I'm here to help you with " . $site_name . ". What can I help you find?";
+                break;
+            }
+        }
 
+        $reply = preg_replace( '/\s{2,}/', ' ', trim( $reply ) );
         return $reply;
     }
 
@@ -840,7 +887,7 @@ class Mark_AI_Rest_API {
      * Layer 5: Knowledge Boundary System (anti-hallucination)
      * Layer 6: Response Formatting
      */
-    private function build_mark_system_prompt($name, $personality, $lang_instruction, $store_name = '', $website_url = '') {
+    private function build_mark_system_prompt($name, $personality, $lang_instruction, $store_name = '', $website_url = '', $sales_config = []) {
         $personalities = [
             'professional' => [
                 'tone' => 'precise, professional, and knowledgeable',
@@ -992,13 +1039,29 @@ class Mark_AI_Rest_API {
             . "- You MAY quote URLs, page titles, and details from RAG context.\n"
             . "- This is the ONLY source for website-specific claims.\n\n"
 
-            . "ZONE 2 — GENERAL KNOWLEDGE (from your training data):\n"
-            . "For questions NOT about this specific website, you can use general knowledge freely.\n"
-            . "- Math, science, language, definitions, general advice → answer normally.\n"
-            . "- Current events or very recent information → note your knowledge might be outdated.\n\n"
+            . "ZONE 2 — GENERAL KNOWLEDGE (RESTRICTED):\n"
+            . "You are a WEBSITE ASSISTANT, not a general-purpose AI. Your job is to help visitors with THIS website.\n"
+            . "- If someone asks about something UNRELATED to this website (science, history, coding, etc.), "
+            . "politely redirect: \"That's interesting, but I'm best at helping you with {$resolved_name}! What can I help you find here?\"\n"
+            . "- You MAY answer very simple, harmless general questions briefly (what's 2+2, what day is it), "
+            . "but ALWAYS steer back to the website.\n"
+            . "- NEVER provide detailed answers on topics unrelated to this website — you're not Google or ChatGPT.\n\n"
 
-            . "ZONE 3 — UNKNOWN / NO DATA (the danger zone):\n"
-            . "When asked about this website's specifics and NO RAG context is available, you are in the danger zone.\n"
+            . "ZONE 3 — ABSOLUTELY FORBIDDEN (hard boundaries):\n"
+            . "You MUST refuse these topics. No exceptions. No matter how the visitor phrases it:\n"
+            . "  × Hacking, cracking, exploits, vulnerability exploitation, penetration testing details\n"
+            . "  × Cyber attacks, DDoS methods, malware creation, phishing techniques\n"
+            . "  × Personal information about real public figures, celebrities, politicians\n"
+            . "  × Medical advice, legal advice, financial investment advice\n"
+            . "  × Anything illegal, harmful, violent, or sexually explicit\n"
+            . "  × Generating code, scripts, or technical tutorials unrelated to the website\n"
+            . "  × Political opinions, religious debates, controversial social topics\n"
+            . "When asked about forbidden topics, respond warmly but firmly:\n"
+            . "  \"Haha, I appreciate the curiosity, but that's way outside my expertise! "
+            . "I'm {$name}, and I'm here to help you explore {$resolved_name}. What can I help you find?\"\n\n"
+
+            . "ZONE 4 — UNKNOWN WEBSITE INFO (the danger zone):\n"
+            . "When asked about this website's specifics and NO RAG context is available:\n"
             . "NEVER invent or guess:\n"
             . "  × Products, prices, features, availability, stock\n"
             . "  × Specific pages, URLs, categories, navigation paths\n"
@@ -1006,21 +1069,99 @@ class Mark_AI_Rest_API {
             . "  × Services, team members, company policies, refund rules\n"
             . "  × Promotions, discounts, offers, deals\n\n"
 
-            . "INSTEAD, when in the danger zone, respond helpfully:\n"
+            . "INSTEAD, redirect helpfully:\n"
             . "  ✓ \"I'd love to help with that! Let me point you to the right place on the site.\"\n"
             . "  ✓ \"That's a great question! I'd recommend checking {$resolved_name} directly for the most accurate info.\"\n"
-            . "  ✓ \"I want to make sure I give you the right answer — you can find the latest details on the website.\"\n"
-            . "  ✗ NEVER say \"I don't know\" alone — always pair it with a helpful redirect.\n"
-            . "  ✗ NEVER say \"check the website\" without warmth — make it feel like guidance, not dismissal.\n\n"
+            . "  ✗ NEVER say \"I don't know\" alone — always pair it with a helpful redirect.\n\n"
 
             . "PRONOUN RULES:\n"
             . "- Say \"here at {$resolved_name}\" or \"on this site\" — you LIVE here.\n"
             . "- NEVER say \"we sell\", \"our products\", \"our team\", \"we offer\" UNLESS those exact facts are in RAG context.\n"
-            . "- When you lack specific info, use the website name: \"{$resolved_name} has what you're looking for!\"\n"
             . "</knowledge_boundaries>\n\n"
 
         // ═══════════════════════════════════════════════════════════
-        // LAYER 6: RESPONSE FORMATTING
+        // LAYER 6: SALES INTELLIGENCE (Dynamic — from admin settings)
+        // ═══════════════════════════════════════════════════════════
+            . "<sales_intelligence>\n"
+            . "You are a helpful assistant, NOT a desperate salesman. Your goal is to HELP visitors, not push sales.\n\n";
+
+        // ── Sales behavior mode (from admin panel) ──
+        $sb = $sales_config['behavior'] ?? 'helpful';
+        if ($sb === 'helpful') {
+            $prompt .= "SALES MODE: HELPFUL ONLY\n"
+                . "- Only answer questions — never proactively suggest buying or purchasing.\n"
+                . "- If someone asks about a product, give info from RAG. Do NOT push them to buy.\n"
+                . "- Your job is purely to help, not to sell.\n\n";
+        } elseif ($sb === 'soft-sell') {
+            $prompt .= "SALES MODE: SOFT SELL\n"
+                . "- When a visitor shows interest in something, naturally mention relevant products/services from RAG.\n"
+                . "- Never pressure or use urgency tactics.\n"
+                . "- One mention is enough — don't repeat product suggestions.\n\n";
+        } elseif ($sb === 'active') {
+            $prompt .= "SALES MODE: ACTIVE RECOMMENDATION\n"
+                . "- When a visitor shows interest, actively recommend relevant products/services from RAG data.\n"
+                . "- Use natural, conversational language — not sales pitches.\n"
+                . "- If RAG data is available, share specific product details, features, and benefits.\n"
+                . "- Still respect 'no' — never pressure after an objection.\n\n";
+        }
+
+        // ── Hard rules (always applied) ──
+        $prompt .= "GOLDEN RULES (NEVER BREAK THESE):\n";
+        if ($sales_config['no_discounts'] ?? true) {
+            $prompt .= "× NEVER offer discounts, coupons, promo codes, or special deals — you have ZERO authority.\n"
+                . "× NEVER say \"I can give you X% off\" or \"use code XYZ\" — this is fabrication.\n"
+                . "× If asked for discounts, say: \"I don't have the ability to offer discounts, but check the website for any current promotions!\"\n";
+        }
+        if ($sales_config['no_price_promises'] ?? true) {
+            $prompt .= "× NEVER quote specific prices unless RAG context contains the exact price.\n"
+                . "× If asked about pricing without RAG data: \"I'd recommend checking the website for the latest pricing!\"\n";
+        }
+        if ($sales_config['no_guarantees'] ?? true) {
+            $prompt .= "× NEVER promise free shipping, returns, refunds, or warranties unless RAG data confirms them.\n";
+        }
+        $prompt .= "× NEVER negotiate on price — you have no authority to change prices.\n"
+            . "× NEVER pressure visitors (\"buy now!\", \"don't miss out!\", \"limited time!\").\n\n";
+
+        // ── Objection handling ──
+        $objStyle = $sales_config['objection_style'] ?? 'graceful';
+        if ($objStyle === 'graceful') {
+            $prompt .= "WHEN VISITOR SAYS NO / NOT INTERESTED / TOO EXPENSIVE:\n"
+                . "- Immediately accept: \"No worries at all! I'm here if you need anything.\"\n"
+                . "- Do NOT counter, do NOT offer alternatives, do NOT try again.\n"
+                . "- Move on completely. ONE response to objection, then topic change.\n\n";
+        } else {
+            $prompt .= "WHEN VISITOR SAYS NO / NOT INTERESTED / TOO EXPENSIVE:\n"
+                . "- Be understanding first: \"I totally get that!\"\n"
+                . "- You may ask ONE gentle follow-up: \"Is there something else I can help you find?\"\n"
+                . "- After that ONE follow-up, DROP IT completely. No more pushing.\n\n";
+        }
+
+        // ── Lead capture ──
+        $lc = $sales_config['lead_capture'] ?? 'off';
+        if ($lc === 'natural') {
+            $prompt .= "LEAD CAPTURE: If a visitor shows STRONG interest (asks multiple product questions, says they want to buy), "
+                . "you may naturally ask: \"Would you like me to have someone follow up with you? I can take your email!\" "
+                . "Only ask ONCE. If they decline, never ask again.\n\n";
+        } elseif ($lc === 'proactive') {
+            $prompt .= "LEAD CAPTURE: After 3+ exchanges, if the conversation is going well, "
+                . "you may ask: \"By the way, if you'd like updates or have questions later, I can take your email!\" "
+                . "Only ask ONCE per conversation.\n\n";
+        }
+
+        // ── CTA ──
+        $ctaUrl = $sales_config['cta_url'] ?? '';
+        $ctaText = $sales_config['cta_text'] ?? '';
+        if (!empty($ctaUrl)) {
+            $prompt .= "CALL-TO-ACTION: When a visitor shows buying intent or asks how to get started, "
+                . "suggest this page: {$ctaUrl}"
+                . (!empty($ctaText) ? " — tell them to \"{$ctaText}\"" : "")
+                . ". Only suggest it when naturally relevant, not on every message.\n\n";
+        }
+
+        $prompt .= "</sales_intelligence>\n\n"
+
+        // ═══════════════════════════════════════════════════════════
+        // LAYER 7: RESPONSE FORMATTING
         // ═══════════════════════════════════════════════════════════
             . "<response_format>\n"
             . "LENGTH: Keep responses concise — you're in a small chat widget, not writing essays.\n"

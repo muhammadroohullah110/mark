@@ -803,8 +803,8 @@
 
         <!-- Tab Navigation -->
         <div style="border-bottom:1px solid rgba(194,199,202,0.3);margin-bottom:40px;display:flex;gap:0;overflow-x:auto;" id="store-tabs">
-            ${['settings','voice','ai','conversations','embed'].map(tab => {
-                const labels = { settings:'Settings', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
+            ${['settings','sales','voice','ai','conversations','embed'].map(tab => {
+                const labels = { settings:'Settings', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
                 const isActive = tab === activeTab;
                 return `<button data-tab="${tab}" style="${isActive ? T.tabBtnActive : T.tabBtn}"
                     onclick="markAdmin.switchTab('${tab}')"
@@ -859,6 +859,7 @@
         const s = currentStore;
         switch (tab) {
             case 'settings':      container.innerHTML = renderSettingsTab(s); break;
+            case 'sales':         container.innerHTML = renderSalesTab(s); break;
             case 'voice':         container.innerHTML = renderVoiceTab(s); break;
             case 'ai':            container.innerHTML = renderAITab(s); break;
             case 'conversations': loadConversationsTab(s.store_id); break;
@@ -901,6 +902,109 @@
             await api('PUT', 'stores/' + currentStore.store_id, data);
             currentStore = { ...currentStore, ...data };
             toast('Settings saved!', 'success');
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    /* ================================================================
+       TAB: SALES SKILLS
+       ================================================================ */
+    function renderSalesTab(s) {
+        const ss = s.sales_settings || {};
+        return `
+        <div style="${T.glassLight}padding:40px;">
+            <h3 style="${T.headline}font-size:24px;margin:0 0 8px;">Sales Intelligence</h3>
+            <p style="color:#42484a;font-size:14px;margin:0 0 32px;">Control how Mark handles sales conversations. Smart, not pushy.</p>
+
+            <form style="display:flex;flex-direction:column;gap:32px;" onsubmit="event.preventDefault();markAdmin.saveSalesSettings();">
+
+                <!-- Sales Behavior Mode -->
+                <div>
+                    <label style="${T.label}">Sales Behavior Mode</label>
+                    <select id="ss-behavior" style="${T.select}">
+                        <option value="helpful" ${(ss.behavior||'helpful')==='helpful'?'selected':''}>Helpful (Assist only — never push sales)</option>
+                        <option value="soft-sell" ${ss.behavior==='soft-sell'?'selected':''}>Soft Sell (Gently suggest products when relevant)</option>
+                        <option value="active" ${ss.behavior==='active'?'selected':''}>Active (Proactively recommend products from RAG)</option>
+                    </select>
+                    <span style="font-size:12px;color:#73787a;margin-top:4px;display:block;">
+                        <strong>Helpful:</strong> Only answers questions, never suggests buying.
+                        <strong>Soft Sell:</strong> Mentions relevant products naturally.
+                        <strong>Active:</strong> Actively recommends products when user shows interest.
+                    </span>
+                </div>
+
+                <!-- Discount Policy -->
+                <div style="padding:20px;border:1px solid rgba(186,26,26,0.2);border-radius:12px;background:rgba(255,218,214,0.06);">
+                    <label style="${T.label}color:#ba1a1a;">Discount & Pricing Policy</label>
+                    <div style="display:flex;flex-direction:column;gap:12px;margin-top:8px;">
+                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#42484a;cursor:pointer;">
+                            <input type="checkbox" id="ss-no-discounts" ${(ss.no_discounts !== false)?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
+                            <strong>Block Mark from offering discounts</strong> (Recommended)
+                        </label>
+                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#42484a;cursor:pointer;">
+                            <input type="checkbox" id="ss-no-price-promises" ${(ss.no_price_promises !== false)?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
+                            <strong>Block Mark from promising specific prices</strong> without RAG data
+                        </label>
+                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#42484a;cursor:pointer;">
+                            <input type="checkbox" id="ss-no-guarantees" ${(ss.no_guarantees !== false)?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
+                            <strong>Block Mark from making guarantees</strong> (free shipping, returns, etc.)
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Objection Handling -->
+                <div>
+                    <label style="${T.label}">Objection Handling Style</label>
+                    <select id="ss-objection-style" style="${T.select}">
+                        <option value="graceful" ${(ss.objection_style||'graceful')==='graceful'?'selected':''}>Graceful Exit (Accept & move on — "No worries!")</option>
+                        <option value="one-try" ${ss.objection_style==='one-try'?'selected':''}>One Follow-up (Ask one question, then accept)</option>
+                    </select>
+                </div>
+
+                <!-- Lead Capture -->
+                <div>
+                    <label style="${T.label}">Lead Capture</label>
+                    <select id="ss-lead-capture" style="${T.select}">
+                        <option value="off" ${(ss.lead_capture||'off')==='off'?'selected':''}>Off (Don't ask for contact info)</option>
+                        <option value="natural" ${ss.lead_capture==='natural'?'selected':''}>Natural (Ask for email only if user shows strong interest)</option>
+                        <option value="proactive" ${ss.lead_capture==='proactive'?'selected':''}>Proactive (Ask for email after 3+ exchanges)</option>
+                    </select>
+                </div>
+
+                <!-- CTA URL -->
+                <div>
+                    <label style="${T.label}">Call-to-Action URL (Optional)</label>
+                    <input id="ss-cta-url" type="url" value="${esc(ss.cta_url||'')}" style="${T.input}" placeholder="e.g., /contact or /get-started" />
+                    <span style="font-size:12px;color:#73787a;margin-top:4px;display:block;">If set, Mark will suggest this page when visitors show strong buying interest.</span>
+                </div>
+
+                <!-- CTA Text -->
+                <div>
+                    <label style="${T.label}">CTA Button Text (Optional)</label>
+                    <input id="ss-cta-text" type="text" value="${esc(ss.cta_text||'')}" style="${T.input}" placeholder="e.g., Get Started, Book a Call, Contact Us" />
+                </div>
+
+                <div style="padding-top:24px;border-top:1px solid rgba(194,199,202,0.3);display:flex;justify-content:flex-end;">
+                    <button type="submit" style="${T.btnPrimary}">Save Sales Settings</button>
+                </div>
+            </form>
+        </div>`;
+    }
+
+    async function saveSalesSettings() {
+        const data = {
+            sales_behavior: $('#ss-behavior').value,
+            sales_no_discounts: $('#ss-no-discounts').checked,
+            sales_no_price_promises: $('#ss-no-price-promises').checked,
+            sales_no_guarantees: $('#ss-no-guarantees').checked,
+            sales_objection_style: $('#ss-objection-style').value,
+            sales_lead_capture: $('#ss-lead-capture').value,
+            sales_cta_url: $('#ss-cta-url').value,
+            sales_cta_text: $('#ss-cta-text').value,
+        };
+        try {
+            await api('PUT', 'stores/' + currentStore.store_id, data);
+            currentStore = { ...currentStore, ...data };
+            toast('Sales settings saved!', 'success');
         } catch (e) { toast(e.message, 'error'); }
     }
 
@@ -1418,7 +1522,7 @@
        ================================================================ */
     window.markAdmin = {
         navigate, openStore, switchTab,
-        saveStoreSettings, saveVoice, testVoice, saveAI,
+        saveStoreSettings, saveSalesSettings, saveVoice, testVoice, saveAI,
         confirmDelete, deleteStore,
         copyCode, copyText, closeModal,
         saveGlobalSettings, testConnection,

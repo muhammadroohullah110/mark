@@ -223,22 +223,6 @@
         }, 2200);
     }
 
-    /**
-     * Offer navigation as a suggestion (for browse intent).
-     * Returns a formatted message string the LLM can include.
-     */
-    function buildNavigationSuggestion(results) {
-        if (!results || results.length === 0) return '';
-
-        const top = results[0];
-        if (results.length === 1) {
-            return `\n\nI found a relevant page: "${top.title}" — ${top.url}`;
-        }
-
-        const suggestions = results.slice(0, 3).map(r => `"${r.title}" — ${r.url}`);
-        return '\n\nHere are some pages that might help:\n' + suggestions.join('\n');
-    }
-
     // ================================================================
     // MAIN ENTRY — Called from chatbot.js
     // ================================================================

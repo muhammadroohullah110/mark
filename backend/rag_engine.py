@@ -234,16 +234,42 @@ class MarkRAG:
 
             product_data = ' '.join(product_titles + prices + short_desc + cats)
 
-        # Main content (paragraphs — limited to avoid noise)
+        # Main content — extract ALL meaningful text, not just paragraphs
         main_content = ''
         content_el = (
             soup.find('main')
-            or soup.find(class_=re.compile(r'entry-content|page-content|site-content', re.I))
+            or soup.find(class_=re.compile(r'entry-content|page-content|site-content|main-content|content-area', re.I))
             or soup.find('article')
+            or soup.find(id=re.compile(r'content|main|primary', re.I))
         )
         if content_el:
-            paragraphs = content_el.find_all('p')
-            main_content = ' '.join(p.get_text(separator=' ').strip() for p in paragraphs[:15])
+            # Remove script, style, nav, footer, header, sidebar elements from content
+            for tag in content_el.find_all(['script', 'style', 'nav', 'footer', 'header', 'aside', 'noscript']):
+                tag.decompose()
+            # Get ALL text elements (p, li, span, div with text, td, th, dd, dt, blockquote)
+            text_elements = content_el.find_all(['p', 'li', 'span', 'div', 'td', 'th', 'dd', 'dt', 'blockquote', 'figcaption', 'label', 'a'])
+            seen_texts = set()
+            text_parts = []
+            for el in text_elements:
+                # Skip elements that are parents of other text elements (avoid duplication)
+                if el.find(['p', 'li', 'div']) and el.name in ('div', 'td'):
+                    continue
+                text = el.get_text(separator=' ').strip()
+                # Skip very short or duplicate text
+                if text and len(text) > 3 and text not in seen_texts:
+                    seen_texts.add(text)
+                    text_parts.append(text)
+                if len(text_parts) >= 50:  # cap at 50 elements to avoid noise
+                    break
+            main_content = ' '.join(text_parts)
+        else:
+            # Fallback: get text from body, excluding common non-content areas
+            body = soup.find('body')
+            if body:
+                for tag in body.find_all(['script', 'style', 'nav', 'footer', 'header', 'aside', 'noscript']):
+                    tag.decompose()
+                paragraphs = body.find_all(['p', 'li', 'h1', 'h2', 'h3', 'h4'])
+                main_content = ' '.join(p.get_text(separator=' ').strip() for p in paragraphs[:30])
 
         # Navigation links (for page discovery context)
         nav_el = soup.find('nav') or soup.find(class_=re.compile(r'menu|navigation', re.I))

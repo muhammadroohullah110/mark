@@ -995,51 +995,6 @@
             || voices.find(v => v.lang.startsWith('en'));
     }
 
-    /**
-     * Play the cute greeting sound ("Ayie!") then fire the callback.
-     * BULLETPROOF: Even if speech is blocked, the callback ALWAYS fires
-     * via a safety timeout. The conversation flow NEVER dies.
-     */
-    function playCuteAyie(callback) {
-        // Safety timeout — callback fires no matter what after 2.5s
-        let callbackFired = false;
-        const fireCallback = () => {
-            if (callbackFired) return;
-            callbackFired = true;
-            if (callback) callback();
-        };
-        const safetyTimer = setTimeout(fireCallback, 2500);
-
-        if (!synth) {
-            clearTimeout(safetyTimer);
-            setTimeout(fireCallback, 300);
-            return;
-        }
-
-        synth.cancel();
-        const u = new SpeechSynthesisUtterance(GREET_SOUND);
-        u.pitch = 2.0; u.rate = 0.85; u.volume = 1.0;
-
-        const v = cachedVoices.find(x => x.name.includes('Samantha'))
-              || cachedVoices.find(x => x.name.includes('Microsoft Zira'))
-              || cachedVoices.find(x => x.lang && x.lang.startsWith('en'));
-        if (v) { u.voice = v; u.lang = v.lang; }
-
-        u.onend = () => { clearTimeout(safetyTimer); setTimeout(fireCallback, 280); };
-        u.onerror = () => { clearTimeout(safetyTimer); fireCallback(); };
-
-        synth.speak(u);
-
-        // If speech didn't even start in 1.5s, it was blocked — fire callback
-        setTimeout(() => {
-            if (!callbackFired && !synth.speaking) {
-                console.log('[Mark] Greeting sound blocked — proceeding anyway');
-                clearTimeout(safetyTimer);
-                fireCallback();
-            }
-        }, 1500);
-    }
-
     // ============================================================
     // CAPTIONS — guaranteed visibility with typewriter effect
     // ============================================================
@@ -1076,9 +1031,10 @@
 
     function hideCaption() {
         clearTimeout(hideCaptionTimer);
+        // Keep caption visible for 10 seconds, then fade (not disappear)
         hideCaptionTimer = setTimeout(() => {
-            if (liveCaption) liveCaption.style.opacity = '0.3';
-        }, 5000);
+            if (liveCaption) liveCaption.style.opacity = '0.6';
+        }, 10000);
     }
 
     // ============================================================
