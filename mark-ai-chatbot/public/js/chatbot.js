@@ -243,6 +243,7 @@
             ttsAvailable = data.tts_available !== false;
             backendRetries = 0;
             console.log('[Mark] Backend alive — TTS:', ttsAvailable);
+            checkVoiceStatus();
         } catch(e) {
             console.log('[Mark] Backend check failed:', e.message, '(retry', backendRetries+1, '/', MAX_RETRIES, ')');
             backendAlive = false;
@@ -463,13 +464,12 @@
         clearTimeout(walkTimer);
         markHint.style.display = 'none';
 
-        console.log('[Mark] Entering talking mode — backendAlive:', backendAlive, 'ttsAvailable:', ttsAvailable);
+        console.log('[Mark] Entering talking mode — backendAlive:', backendAlive,
+                     'ttsAvailable:', ttsAvailable, 'audioUnlocked:', audioUnlocked);
 
-        // ══ CRITICAL: Unlock audio on user gesture (MUST be synchronous!) ══
-        // Browsers block speechSynthesis.speak() & Audio.play() unless called
-        // within the direct user-click event chain. This silent unlock primes
-        // both APIs so later async calls work.
-        unlockAudio();
+        // ══ SAFETY NET: If global unlock hasn't fired yet (user's first
+        // interaction IS clicking Mark), do it now in the gesture chain ══
+        if (!audioUnlocked) unlockAudio();
 
         // If backend isn't awake yet, kick off a fresh wake-up attempt
         if (!backendAlive) { backendRetries = 0; checkBackend(); }
@@ -496,12 +496,15 @@
             return;
         }
 
-        // ── Fresh greeting ──
+        // ── Fresh greeting — DIRECT (no playCuteAyie intermediary) ──
+        // Old chain: click → playCuteAyie() → callback → sendGreeting() → speak()
+        // That was 4 async hops. Now: click → sendGreeting() → speak()
+        // Fewer hops = fewer silent failures.
         const mem = loadMemory();
         if (mem.name) {
-            playCuteAyie(() => { sendGreeting('returning', mem.name, 'en'); });
+            sendGreeting('returning', mem.name, 'en');
         } else {
-            playCuteAyie(() => { sendGreeting('init'); });
+            sendGreeting('init');
         }
     }
 
@@ -641,54 +644,97 @@
     }
 
     // ============================================================
-    // VOICE — Bulletproof TTS + Audio unlock system
+    // VOICE — Definitive TTS system (V4)
     //
-    // ARCHITECTURE:
-    //   1. User clicks Mark → unlockAudio() primes browser APIs
-    //   2. TTS chain: Backend Edge TTS → Browser speechSynthesis → silent fallback
-    //   3. Every async call has a safety timeout — nothing silently dies
+    // ROOT CAUSE of all previous failures:
+    //   Browsers require speechSynthesis.speak() and Audio.play()
+    //   to originate from a DIRECT user gesture. Async chains
+    //   (fetch, setTimeout, Promises) BREAK the gesture chain.
     //
-    // WHY: Browsers block speechSynthesis.speak() and Audio.play()
-    // unless called in a direct user-gesture chain. Async operations
-    // (fetch, setTimeout) break this chain. The unlock system solves it.
+    // SOLUTION: Global audio unlock pattern (same as browser games)
+    //   1. On ANY first click/tap ANYWHERE on page → unlock audio
+    //   2. By the time user clicks Mark, audio is already primed
+    //   3. TTS chain: Backend Edge TTS → Browser speechSynthesis → caption-only
+    //   4. Every step has a safety timeout — nothing silently dies
+    //   5. Visual voice status shows user what's happening
     // ============================================================
     const synth = window.speechSynthesis;
     let audioUnlocked = false;
     let voicesReady = false;
     let cachedVoices = [];
+    let audioCtx = null;
+    let voiceStatus = 'unknown'; // 'ready' | 'limited' | 'off' | 'unknown'
 
     /**
-     * CRITICAL: Must be called synchronously inside a user click/tap handler.
-     * Primes both speechSynthesis and AudioContext so later async calls work.
+     * GLOBAL AUDIO UNLOCK — runs on first click/tap ANYWHERE on page.
+     * This is the standard browser-game / audio-app pattern.
+     * Must be called synchronously inside a user gesture handler.
      */
     function unlockAudio() {
         if (audioUnlocked) return;
         audioUnlocked = true;
-        console.log('[Mark] Unlocking audio APIs...');
+        console.log('[Mark] 🔓 Unlocking audio APIs (global click detected)...');
 
-        // 1. Unlock speechSynthesis — speak empty utterance in gesture chain
+        // 1. Unlock speechSynthesis — speak a real (but silent) word
+        //    Empty string '' does NOT count as speech on some browsers!
         if (synth) {
             synth.cancel();
-            const silent = new SpeechSynthesisUtterance('');
-            silent.volume = 0;
+            const silent = new SpeechSynthesisUtterance('.');
+            silent.volume = 0.01; // near-silent but not zero (zero = skip on some engines)
+            silent.rate = 10;     // fastest possible = barely audible dot
+            silent.onend = () => console.log('[Mark] ✅ speechSynthesis confirmed unlocked');
+            silent.onerror = () => console.log('[Mark] ⚠️ speechSynthesis unlock failed');
             synth.speak(silent);
-            console.log('[Mark] speechSynthesis unlocked');
         }
 
-        // 2. Unlock AudioContext — required for Audio.play() on some browsers
+        // 2. Unlock AudioContext — required for Audio.play() on iOS/Safari/Chrome
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const buf = ctx.createBuffer(1, 1, 22050);
-            const src = ctx.createBufferSource();
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const buf = audioCtx.createBuffer(1, 1, 22050);
+            const src = audioCtx.createBufferSource();
             src.buffer = buf;
-            src.connect(ctx.destination);
+            src.connect(audioCtx.destination);
             src.start(0);
-            ctx.resume().catch(() => {});
-            console.log('[Mark] AudioContext unlocked');
+            audioCtx.resume().then(() => {
+                console.log('[Mark] ✅ AudioContext unlocked (state:', audioCtx.state, ')');
+            }).catch(() => {});
+        } catch(e) {
+            console.log('[Mark] ⚠️ AudioContext unlock error:', e.message);
+        }
+
+        // 3. Unlock HTML5 Audio element — play a silent data URI
+        try {
+            const silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+            silentAudio.volume = 0.01;
+            silentAudio.play().then(() => {
+                console.log('[Mark] ✅ HTML5 Audio unlocked');
+            }).catch(() => {});
         } catch(_) {}
 
-        // 3. Pre-load voices
+        // 4. Pre-load voices
         loadVoices();
+
+        // 5. Update voice status after a moment (let unlock settle)
+        setTimeout(checkVoiceStatus, 500);
+    }
+
+    /**
+     * GLOBAL CLICK LISTENER — installed on document.body at boot.
+     * First click/tap anywhere on the page primes audio.
+     * Removes itself after first fire (one-shot).
+     */
+    function installGlobalAudioUnlock() {
+        const handler = () => {
+            unlockAudio();
+            document.removeEventListener('click', handler, true);
+            document.removeEventListener('touchstart', handler, true);
+            document.removeEventListener('pointerdown', handler, true);
+        };
+        // Use capture phase to fire before any other handler
+        document.addEventListener('click', handler, { capture: true, once: false, passive: true });
+        document.addEventListener('touchstart', handler, { capture: true, once: false, passive: true });
+        document.addEventListener('pointerdown', handler, { capture: true, once: false, passive: true });
+        console.log('[Mark] 🎧 Global audio unlock listener installed (waiting for first click anywhere)');
     }
 
     /** Pre-load and cache voices (some browsers lazy-load) */
@@ -705,7 +751,58 @@
                     synth.onvoiceschanged = null;
                     console.log('[Mark] Voices loaded (async):', cachedVoices.length);
                 };
+                // Force a voice request after a delay (Firefox needs this)
+                setTimeout(() => {
+                    if (!voicesReady && synth) {
+                        cachedVoices = synth.getVoices();
+                        voicesReady = cachedVoices.length > 0;
+                        if (voicesReady) console.log('[Mark] Voices loaded (retry):', cachedVoices.length);
+                    }
+                }, 1000);
             }
+        }
+    }
+
+    /** Check what voice capabilities are available and update status */
+    function checkVoiceStatus() {
+        const hasSynth = !!synth;
+        const hasVoices = voicesReady || (synth && synth.getVoices().length > 0);
+        const hasAudioCtx = audioCtx && audioCtx.state === 'running';
+
+        if (ttsAvailable && backendAlive && hasAudioCtx) {
+            voiceStatus = 'ready';
+        } else if (hasSynth && hasVoices) {
+            voiceStatus = 'limited';
+        } else {
+            voiceStatus = 'off';
+        }
+        console.log('[Mark] Voice status:', voiceStatus,
+                     '| synth:', hasSynth, '| voices:', hasVoices,
+                     '| audioCtx:', hasAudioCtx,
+                     '| backend:', backendAlive, '| tts:', ttsAvailable);
+        updateVoiceIndicator();
+    }
+
+    /** Show tiny voice status dot on Mark widget */
+    function updateVoiceIndicator() {
+        let dot = document.getElementById('mark-voice-dot');
+        if (!dot && markWidget) {
+            dot = document.createElement('div');
+            dot.id = 'mark-voice-dot';
+            dot.style.cssText = 'position:absolute;top:4px;right:4px;width:10px;height:10px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.8);z-index:10;cursor:pointer;transition:background 0.3s;';
+            dot.title = 'Voice status';
+            markWidget.appendChild(dot);
+        }
+        if (dot) {
+            const colors = { ready: '#22c55e', limited: '#eab308', off: '#ef4444', unknown: '#9ca3af' };
+            dot.style.background = colors[voiceStatus] || colors.unknown;
+            const titles = {
+                ready: '🟢 Voice ready (HD audio)',
+                limited: '🟡 Voice limited (browser only)',
+                off: '🔴 Voice off (text only)',
+                unknown: '⚙️ Checking voice...'
+            };
+            dot.title = titles[voiceStatus] || titles.unknown;
         }
     }
 
@@ -734,13 +831,18 @@
         lastMarkText = cleanText;
         cancelIdleTimer();
 
-        // TTS priority chain: Backend → Browser → Caption-only
+        console.log('[Mark] 🔊 speak() — audioUnlocked:', audioUnlocked,
+                     '| backend:', backendAlive, '| tts:', ttsAvailable,
+                     '| text:', cleanText.substring(0, 50));
+
+        // TTS priority chain: Backend Edge TTS → Browser speechSynthesis → Caption-only
         if (ttsAvailable && backendAlive) {
             playBackendTTS(cleanText).catch((e) => {
-                console.log('[Mark] Backend TTS failed, trying browser:', e.message);
+                console.log('[Mark] ⚠️ Backend TTS failed, trying browser:', e.message);
                 playBrowserTTS(cleanText);
             });
         } else {
+            console.log('[Mark] Using browser TTS (backend:', backendAlive, ', tts:', ttsAvailable, ')');
             playBrowserTTS(cleanText);
         }
     }
@@ -761,13 +863,20 @@
         currentAudio = new Audio(url);
 
         const cleanup = () => { URL.revokeObjectURL(url); currentAudio = null; };
-        currentAudio.onended = () => { cleanup(); window.markAnimator.play('idle'); hideCaption(); resetIdleTimer(); };
-        currentAudio.onerror = () => { cleanup(); playBrowserTTS(text); };
+        currentAudio.onended = () => {
+            console.log('[Mark] ✅ Backend TTS playback completed');
+            cleanup(); window.markAnimator.play('idle'); hideCaption(); resetIdleTimer();
+        };
+        currentAudio.onerror = (e) => {
+            console.log('[Mark] ⚠️ Audio element error:', e?.type || 'unknown');
+            cleanup(); playBrowserTTS(text);
+        };
 
         try {
             await currentAudio.play();
+            console.log('[Mark] ▶️ Backend TTS playing...');
         } catch(e) {
-            console.log('[Mark] Audio.play() blocked:', e.message);
+            console.log('[Mark] ❌ Audio.play() blocked:', e.message, '— falling back to browser TTS');
             cleanup();
             playBrowserTTS(text);
         }
@@ -775,10 +884,16 @@
 
     function playBrowserTTS(text) {
         if (!synth) {
-            // No speech synthesis at all — caption-only mode
-            console.log('[Mark] No speechSynthesis — caption-only mode');
+            console.log('[Mark] ❌ No speechSynthesis API — caption-only mode');
+            voiceStatus = 'off'; updateVoiceIndicator();
             onSpeechDone();
             return;
+        }
+
+        // Reload voices if not ready (handles late-loading edge cases)
+        if (!voicesReady) {
+            cachedVoices = synth.getVoices();
+            voicesReady = cachedVoices.length > 0;
         }
 
         synth.cancel();
@@ -786,22 +901,34 @@
         const u = new SpeechSynthesisUtterance(text);
         u.rate = 0.97; u.pitch = 0.92; u.volume = 1.0;
 
-        // Pick voice from cache
         const v = pickVoice();
-        if (v) { u.voice = v; u.lang = v.lang; }
+        if (v) {
+            u.voice = v; u.lang = v.lang;
+            console.log('[Mark] 🎙️ Browser TTS using voice:', v.name);
+        } else {
+            console.log('[Mark] ⚠️ No voice found, using default (voices available:', cachedVoices.length, ')');
+        }
 
         let spoken = false;
         let keepAliveTimer = null;
 
-        u.onstart = () => { spoken = true; };
-        u.onend = () => { clearInterval(keepAliveTimer); onSpeechDone(); };
+        u.onstart = () => {
+            spoken = true;
+            console.log('[Mark] ▶️ Browser TTS started speaking');
+        };
+        u.onend = () => {
+            console.log('[Mark] ✅ Browser TTS finished');
+            clearInterval(keepAliveTimer);
+            onSpeechDone();
+        };
         u.onerror = (e) => {
-            console.log('[Mark] Browser TTS error:', e?.error || 'unknown');
+            console.log('[Mark] ❌ Browser TTS error:', e?.error || 'unknown');
             clearInterval(keepAliveTimer);
             onSpeechDone();
         };
 
         synth.speak(u);
+        console.log('[Mark] 🔊 synth.speak() called, pending:', synth.pending, 'speaking:', synth.speaking);
 
         // Chrome 15-second bug fix — pause/resume keeps long synthesis alive
         if (text.length > 80) {
@@ -811,15 +938,43 @@
             }, 10000);
         }
 
-        // SAFETY NET: If speech doesn't start within 2 seconds,
-        // it was silently blocked. Don't leave Mark hanging.
+        // SAFETY NET: If speech doesn't start within 3 seconds,
+        // it was silently blocked. Show caption and continue.
         setTimeout(() => {
             if (!spoken && !synth.speaking) {
-                console.log('[Mark] Browser TTS silently blocked — continuing without voice');
+                console.log('[Mark] ❌ Browser TTS silently blocked after 3s — caption-only mode');
                 clearInterval(keepAliveTimer);
+                voiceStatus = 'off'; updateVoiceIndicator();
+                // Show "tap to enable voice" hint
+                showVoiceHint();
                 onSpeechDone();
             }
-        }, 2000);
+        }, 3000);
+    }
+
+    /** Show a one-time hint when voice is blocked */
+    function showVoiceHint() {
+        if (document.getElementById('mark-voice-hint')) return; // already shown
+        const hint = document.createElement('div');
+        hint.id = 'mark-voice-hint';
+        hint.innerHTML = '🔇 Voice blocked by browser. <button id="mark-enable-voice" style="background:' + ACCENT + ';color:#fff;border:none;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:12px;margin-left:6px;">Enable Voice</button>';
+        hint.style.cssText = 'position:fixed;bottom:80px;right:20px;background:#1e293b;color:#e2e8f0;padding:10px 16px;border-radius:12px;font-size:13px;z-index:100001;box-shadow:0 4px 20px rgba(0,0,0,0.3);animation:markFadeIn 0.3s ease;display:flex;align-items:center;gap:4px;';
+        document.body.appendChild(hint);
+
+        const btn = document.getElementById('mark-enable-voice');
+        btn.addEventListener('click', () => {
+            // Force re-unlock in fresh gesture chain
+            audioUnlocked = false;
+            unlockAudio();
+            hint.remove();
+            // Re-speak last text
+            if (lastMarkText) {
+                setTimeout(() => playBrowserTTS(lastMarkText), 300);
+            }
+        });
+
+        // Auto-dismiss after 8 seconds
+        setTimeout(() => { if (hint.parentNode) hint.remove(); }, 8000);
     }
 
     /** Called when speech finishes (or fails). Resets Mark to idle. */
@@ -827,6 +982,8 @@
         window.markAnimator.play('idle');
         hideCaption();
         resetIdleTimer();
+        // Update voice status after each speech attempt
+        checkVoiceStatus();
     }
 
     function pickVoice() {
@@ -1281,8 +1438,15 @@
         assignDOMRefs();
         bindEvents();
         initThree();
-        // Pre-load voices early so they're ready when user clicks
+
+        // ── Voice system boot ──
+        // 1. Pre-load voices (some browsers lazy-load them)
         loadVoices();
+        // 2. Install GLOBAL audio unlock — any click/tap ANYWHERE on page
+        //    primes the audio APIs. By the time user clicks Mark, audio works.
+        installGlobalAudioUnlock();
+
+        console.log('[Mark] 🚀 Voice system initialized — waiting for first page interaction to unlock audio');
     }
 
     if (document.readyState === 'loading') {
