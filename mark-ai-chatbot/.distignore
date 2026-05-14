@@ -1,0 +1,18 @@
+# Files excluded from WordPress plugin ZIP builds
+# These assets are loaded from CDN at runtime
+
+# 3D model files (loaded from CDN — ~9.65MB total)
+public/model/robot.glb
+public/model/texture.png
+public/model/blue.png
+
+# Development files
+.git
+.github
+.gitignore
+.distignore
+node_modules
+tests
+*.log
+*.md
+!readme.txt

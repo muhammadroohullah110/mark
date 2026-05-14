@@ -3,6 +3,11 @@
  * Mark AI — Frontend 3D Robot Widget
  * Injects the walking 3D robot chatbot on the store's frontend pages.
  * Loads Three.js, GLTFLoader, mark-animator, mark-brain, and chatbot scripts.
+ *
+ * Performance optimizations:
+ * - All scripts loaded with defer (non-render-blocking)
+ * - Google Fonts: preconnect + font-display:swap
+ * - 3D model loaded from CDN (keeps plugin under 10MB)
  */
 
 defined('ABSPATH') || exit;
@@ -19,6 +24,44 @@ class Mark_AI_Widget {
 
         add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
         add_action('wp_footer', [$this, 'inject_widget']);
+
+        // Add defer to all Mark AI scripts (non-render-blocking)
+        add_filter('script_loader_tag', [$this, 'add_defer_attribute'], 10, 3);
+
+        // Preconnect to CDN origins for faster loading
+        add_action('wp_head', [$this, 'add_preconnect'], 1);
+    }
+
+    /**
+     * Add defer attribute to Mark AI scripts for non-blocking load.
+     */
+    public function add_defer_attribute($tag, $handle, $src) {
+        $defer_handles = [
+            'three-js',
+            'three-gltf-loader',
+            'mark-ai-animator',
+            'mark-ai-brain',
+            'mark-ai-chatbot',
+        ];
+
+        if (in_array($handle, $defer_handles, true)) {
+            // Don't double-add defer
+            if (strpos($tag, 'defer') === false) {
+                $tag = str_replace(' src=', ' defer src=', $tag);
+            }
+        }
+
+        return $tag;
+    }
+
+    /**
+     * Add preconnect hints for CDN origins (fonts, Three.js CDN).
+     */
+    public function add_preconnect() {
+        echo '<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>' . "\n";
     }
 
     /**
@@ -27,7 +70,7 @@ class Mark_AI_Widget {
     public function enqueue_assets() {
         $settings = get_option('mark_ai_settings', []);
 
-        // Google Fonts (Outfit for the robot UI)
+        // Google Fonts (Outfit for the robot UI) — display=swap already set
         wp_enqueue_style(
             'mark-ai-outfit-font',
             'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap',
@@ -95,7 +138,6 @@ class Mark_AI_Widget {
 
         foreach ($stores as $store) {
             if (!empty($store['is_active'])) {
-                // Match by URL or just use the first active one
                 if (empty($store['website_url']) || strpos($site_url, $store['website_url']) !== false || strpos($store['website_url'], $site_url) !== false) {
                     $active_store = $store;
                     break;
@@ -121,11 +163,17 @@ class Mark_AI_Widget {
             $idle_timeout = max( 15, intval( $settings['idle_timeout'] ) );
         }
 
+        // 3D model CDN URL — defaults to GitHub-hosted assets (keeps plugin < 10MB)
+        $model_cdn = !empty($settings['model_cdn_url'])
+            ? trailingslashit($settings['model_cdn_url'])
+            : 'https://cdn.jsdelivr.net/gh/muhammadroohullah110/mark@main/mark-ai-chatbot/public/model/';
+
         // Pass config to mark-brain (loaded before chatbot, so both can read it)
         wp_localize_script('mark-ai-brain', 'markAIConfig', [
             'restUrl'     => rest_url('mark-ai/v1/'),
             'nonce'       => wp_create_nonce('wp_rest'),
             'pluginUrl'   => MARK_AI_URL,
+            'modelCdnUrl' => $model_cdn,
             'language'    => $settings['primary_language'] ?? 'en',
             'autoGreet'   => !empty($settings['auto_greet']),
             'position'    => $settings['widget_position'] ?? 'bottom-right',

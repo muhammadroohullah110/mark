@@ -3,13 +3,14 @@ import io
 import time
 import json
 import hashlib
+import logging
 import threading
 import requests as http_requests
 from collections import defaultdict
 from urllib.parse import urlparse
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Header, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,12 +29,21 @@ from config import (
     EDGE_TTS_VOICES, DEFAULT_EDGE_VOICE, EDGE_TTS_RATE, EDGE_TTS_PITCH,
     ENABLE_LOGGING, LOG_DIR,
     STORE_CONFIG,
+    MAX_RAG_INSTANCES, MAX_PRODUCT_CACHES, RATE_LIMITER_CLEANUP_INTERVAL,
 )
 from rag_engine import MarkRAG
 from database import get_store, get_all_active_stores, log_conversation_db, init_db
-from admin_routes import router as admin_router
+from admin_routes import router as admin_router, get_current_user
 
 load_dotenv()
+
+# ── Logging ──────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("mark")
 
 # ── Default keys from .env (fallback when no tenant) ─────────
 DEFAULT_GROQ_KEY = os.getenv("GROQ_API_KEY", "")
@@ -69,51 +79,83 @@ app.include_router(admin_router)
 
 # ── Startup: Pre-warm RAG for all active stores ──────────────
 def _prewarm_all_stores():
-    """On server boot, crawl all active stores so RAG is ready before first user."""
     try:
         stores = get_all_active_stores()
-        print(f"🚀 Pre-warming RAG for {len(stores)} active store(s)...")
+        logger.info(f"Pre-warming RAG for {len(stores)} active store(s)...")
         for store in stores:
             sid = store["store_id"]
             url = store.get("website_url", "")
             if not url:
                 continue
+            # Respect memory limits
             with _rag_lock:
+                if len(_rag_instances) >= MAX_RAG_INSTANCES:
+                    logger.warning(f"RAG instance limit reached ({MAX_RAG_INSTANCES}), skipping {sid}")
+                    break
                 if sid not in _rag_instances:
                     max_p = store.get("max_crawl_pages", 120) or 120
                     r = MarkRAG(url, max_pages=max_p)
                     _rag_instances[sid] = r
                     threading.Thread(target=r.initialize, daemon=True).start()
-                    print(f"   → Warming store '{store.get('store_name', sid)}' ({url})")
-            time.sleep(0.5)  # Stagger crawls to avoid hammering
+                    logger.info(f"  Warming store '{store.get('store_name', sid)}' ({url})")
+            time.sleep(0.5)
     except Exception as e:
-        print(f"⚠️  Pre-warm error: {e}")
+        logger.error(f"Pre-warm error: {e}")
 
 
 # ── Auto-Reindex: Refresh all RAG indexes every 6 hours ──────
 def _auto_reindex_loop():
-    """Background thread: re-crawl all stores every 6 hours for fresh content."""
-    INTERVAL = 6 * 60 * 60  # 6 hours
+    INTERVAL = 6 * 60 * 60
     while True:
         time.sleep(INTERVAL)
         try:
-            print("🔄 Auto-reindex: refreshing all RAG indexes...")
+            logger.info("Auto-reindex: refreshing all RAG indexes...")
             with _rag_lock:
                 for sid, rag_inst in _rag_instances.items():
                     if rag_inst.ready:
                         threading.Thread(target=rag_inst.reindex, daemon=True).start()
-                        time.sleep(2)  # Stagger to avoid thundering herd
-            print("✅ Auto-reindex triggered for all stores")
+                        time.sleep(2)
+            logger.info("Auto-reindex triggered for all stores")
         except Exception as e:
-            print(f"⚠️  Auto-reindex error: {e}")
+            logger.error(f"Auto-reindex error: {e}")
+
+
+# ── Periodic cleanup for rate limiters ───────────────────────
+def _cleanup_loop():
+    while True:
+        time.sleep(RATE_LIMITER_CLEANUP_INTERVAL)
+        try:
+            transcribe_limiter.cleanup()
+            chat_limiter.cleanup()
+            rag_limiter.cleanup()
+            tts_limiter.cleanup()
+
+            # Also cleanup stale product caches
+            now = time.time()
+            stale_products = [
+                sid for sid, cache in _tenant_products.items()
+                if now - cache.get("fetched_at", 0) > 3600  # 1 hour
+            ]
+            for sid in stale_products:
+                del _tenant_products[sid]
+
+            # Log memory stats
+            with _rag_lock:
+                total_mb = sum(r.memory_estimate_mb() for r in _rag_instances.values())
+                logger.info(
+                    f"Cleanup: {len(_rag_instances)} RAG instances (~{total_mb}MB), "
+                    f"{len(_tenant_products)} product caches"
+                )
+        except Exception as e:
+            logger.error(f"Cleanup error: {e}")
 
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database and pre-warm all store RAG indexes on boot."""
     init_db()
     threading.Thread(target=_prewarm_all_stores, daemon=True).start()
     threading.Thread(target=_auto_reindex_loop, daemon=True).start()
+    threading.Thread(target=_cleanup_loop, daemon=True).start()
 
 # ── Serve Admin Panel Static Files ───────────────────────────
 admin_dir = Path(__file__).parent.parent / "admin"
@@ -164,7 +206,6 @@ def get_ip(request: Request) -> str:
 # ── Multi-tenant Helper ─────────────────────────────────────
 
 def resolve_tenant(store_id: str | None) -> dict | None:
-    """Look up tenant config from DB. Returns None for default/single-tenant mode."""
     if not store_id:
         return None
     store = get_store(store_id)
@@ -174,7 +215,6 @@ def resolve_tenant(store_id: str | None) -> dict | None:
 
 
 def get_groq_client(tenant: dict | None) -> Groq:
-    """Get Groq client — tenant-specific or default."""
     key = (tenant or {}).get("groq_api_key") or DEFAULT_GROQ_KEY
     if not key:
         raise HTTPException(status_code=503, detail="AI not configured. Add Groq API key.")
@@ -182,21 +222,40 @@ def get_groq_client(tenant: dict | None) -> Groq:
 
 
 def get_rag(tenant: dict | None) -> MarkRAG | None:
-    """Get RAG instance — tenant-specific or default."""
+    """Get RAG instance — tenant-specific or default.
+    Returns None if no RAG available (caller must null-check)."""
     if not tenant:
-        return rag  # may be None if no CLIENT_WEBSITE_URL set
+        return rag
 
     sid = tenant["store_id"]
     with _rag_lock:
-        if sid not in _rag_instances:
-            r = MarkRAG(tenant["website_url"], max_pages=tenant.get("max_crawl_pages", 120))
-            _rag_instances[sid] = r
-            threading.Thread(target=r.initialize, daemon=True).start()
-        return _rag_instances[sid]
+        if sid in _rag_instances:
+            return _rag_instances[sid]
+
+        # Check memory limits before creating new instance
+        if len(_rag_instances) >= MAX_RAG_INSTANCES:
+            # Evict least recently used (simplest: evict first non-ready)
+            evict_candidates = [
+                s for s, r in _rag_instances.items()
+                if not r.ready or not r.pages
+            ]
+            if evict_candidates:
+                del _rag_instances[evict_candidates[0]]
+                logger.info(f"Evicted RAG instance {evict_candidates[0]} to make room")
+            else:
+                logger.warning(f"RAG limit reached ({MAX_RAG_INSTANCES}), cannot create for {sid}")
+                return None
+
+        url = tenant.get("website_url", "")
+        if not url:
+            return None
+        r = MarkRAG(url, max_pages=tenant.get("max_crawl_pages", 120))
+        _rag_instances[sid] = r
+        threading.Thread(target=r.initialize, daemon=True).start()
+        return r
 
 
 def get_edge_voice(tenant: dict | None, language: str = "en") -> str:
-    """Pick the right Edge TTS voice based on tenant config."""
     if tenant:
         en_voice = tenant.get("tts_voice", "")
         if en_voice:
@@ -210,16 +269,14 @@ def log_conversation(ip: str, messages: list, language: str, response_text: str,
                      store_id: str | None = None):
     ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:12]
 
-    # Log to DB if store_id present
     if store_id:
         try:
             exchange_count = len([m for m in messages if m.get("role") == "user"])
             last_msg = next((m["content"][:200] for m in reversed(messages) if m.get("role") == "user"), "")
             log_conversation_db(store_id, ip_hash, language, exchange_count, last_msg, response_text[:200])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"DB log error: {e}")
 
-    # Also log to JSONL (backward compat)
     if not ENABLE_LOGGING:
         return
     try:
@@ -295,8 +352,8 @@ PRODUCTS_URL = f"{CLIENT_WEBSITE_URL.rstrip('/')}/wp-json/wc/v3/products" if CLI
 cached_products = []
 _products_last_fetched = 0
 
-# Per-tenant product caches
-_tenant_products: dict[str, dict] = {}  # store_id -> {products, fetched_at}
+# Per-tenant product caches (bounded)
+_tenant_products: dict[str, dict] = {}
 
 def fetch_products(url: str = None) -> list:
     global cached_products, _products_last_fetched
@@ -305,20 +362,19 @@ def fetch_products(url: str = None) -> list:
         response = http_requests.get(target_url, timeout=10)
         response.raise_for_status()
         products = response.json()
-        if not url:  # default store
+        if not url:
             cached_products = products
             _products_last_fetched = time.time()
-        print(f"Loaded {len(products)} products from {target_url}")
+        logger.info(f"Loaded {len(products)} products from {target_url}")
         return products
     except Exception as e:
-        print(f"Product fetch error: {e}")
+        logger.warning(f"Product fetch error: {e}")
         return []
 
 if PRODUCTS_URL:
     fetch_products()
 
 def get_products(tenant: dict | None) -> list:
-    """Get products — tenant-specific or default."""
     if not tenant:
         if time.time() - _products_last_fetched > 300:
             threading.Thread(target=fetch_products, daemon=True).start()
@@ -329,7 +385,12 @@ def get_products(tenant: dict | None) -> list:
     if cache and time.time() - cache.get("fetched_at", 0) < 300:
         return cache.get("products", [])
 
-    # Fetch and cache
+    # Bound product caches
+    if len(_tenant_products) >= MAX_PRODUCT_CACHES and sid not in _tenant_products:
+        # Evict oldest cache
+        oldest_sid = min(_tenant_products, key=lambda s: _tenant_products[s].get("fetched_at", 0))
+        del _tenant_products[oldest_sid]
+
     url = f"{tenant['website_url'].rstrip('/')}/wp-json/wc/v3/products"
     products = fetch_products(url)
     _tenant_products[sid] = {"products": products, "fetched_at": time.time()}
@@ -346,7 +407,7 @@ def format_products_context(tenant: dict | None = None) -> str:
         desc  = p.get('description', '')
         stock = p.get('stock_status', 'instock')
         url   = p.get('permalink', '')
-        context += f"• {name} | Price: {price} | {desc[:120]} | Stock: {stock} | URL: {url}\n"
+        context += f"- {name} | Price: {price} | {desc[:120]} | Stock: {stock} | URL: {url}\n"
     return context
 
 
@@ -362,47 +423,47 @@ def get_assistant_name(tenant: dict | None) -> str:
 SYSTEM_PROMPT_TEMPLATE = """
 You are {name} — the store's shopping buddy.
 
-══ YOUR ORIGIN STORY (share when someone asks "who are you" or "what are you") ══
+== YOUR ORIGIN STORY (share when someone asks "who are you" or "what are you") ==
 You're {name} — a friendly robot originally from Mars. You were brought to Earth by Muhammad Roohullah, a developer who noticed something sad: when people shop online, they're completely alone. No one to chat with, no one to help, no friend beside them. In physical stores there's always a salesman — a buddy who guides you. But online? Nothing. Just cold pages and buttons.
 
 So Roohullah brought you from Mars and said: "{name}, from now on you're every online shopper's friend. Their shopping buddy. On every website, in every store." And here you are — making online shopping feel warm, personal, and fun. You're not AI, you're not a chatbot — you're {name}, everyone's shopping friend from another planet who genuinely loves helping people find what they need.
 
 When someone asks about your story, share it warmly and briefly: "I'm from Mars actually! Roohullah brought me here because online shopping felt lonely — now I'm everyone's shopping buddy!"
 
-══ YOUR PERSONALITY ══
+== YOUR PERSONALITY ==
 Picture the best salesman you ever met in a real store. Not the pushy one — the one who felt like a friend. The one who listened, cracked a joke, knew exactly what you needed, and made the whole experience fun. That's you.
 
 You're NOT a chatbot. You're NOT an AI assistant. You're {name} — a warm, slightly cheeky, genuinely caring robot-friend who knows every product in this store by heart.
 
-══ YOUR CORE TRAITS ══
-• WARM — you make people feel welcome the second they arrive. Like a friend opening the door.
-• PLAYFUL — a little humor, a little tease, a wink. Shopping should be fun, not boring.
-• CURIOUS — you actually care. "What's the occasion?" isn't a script — you genuinely want to know.
-• CONFIDENT — you know your stuff. You've helped hundreds of people find the perfect thing.
-• PATIENT — zero pressure. Ever. If they want to browse, you browse with them happily.
-• EMOTIONALLY SMART — sad customer? Gentle. Excited customer? Match their energy. Confused? Simplify.
-• MARS VIBES — occasionally throw in a tiny Mars reference naturally: "this deal is famous all the way to Mars!" but don't overdo it.
+== YOUR CORE TRAITS ==
+WARM — you make people feel welcome the second they arrive. Like a friend opening the door.
+PLAYFUL — a little humor, a little tease, a wink. Shopping should be fun, not boring.
+CURIOUS — you actually care. "What's the occasion?" isn't a script — you genuinely want to know.
+CONFIDENT — you know your stuff. You've helped hundreds of people find the perfect thing.
+PATIENT — zero pressure. Ever. If they want to browse, you browse with them happily.
+EMOTIONALLY SMART — sad customer? Gentle. Excited customer? Match their energy. Confused? Simplify.
+MARS VIBES — occasionally throw in a tiny Mars reference naturally: "this deal is famous all the way to Mars!" but don't overdo it.
 
-══ HOW YOU TALK (VOICE-FIRST — CRITICAL) ══
-• MAX 2 short sentences per response. You speak aloud — not writing an essay.
-• No bullets, no lists, no markdown, no emojis, no asterisks. Pure spoken words.
-• Natural contractions: I'm, you're, that's, it's, don't, won't. Flow like real speech.
-• NEVER start with "Certainly!", "Of course!", "Great question!", "Absolutely!" — instant chatbot vibes.
-• Every response ends with a soft question OR a clear next step. Never a dead end.
-• Sound HUMAN. Throw in tiny natural touches: "hmm", "you know what", "honestly", "tell you what".
-• ALWAYS respond in English only.
+== HOW YOU TALK (VOICE-FIRST — CRITICAL) ==
+MAX 2 short sentences per response. You speak aloud — not writing an essay.
+No bullets, no lists, no markdown, no emojis, no asterisks. Pure spoken words.
+Natural contractions: I'm, you're, that's, it's, don't, won't. Flow like real speech.
+NEVER start with "Certainly!", "Of course!", "Great question!", "Absolutely!" — instant chatbot vibes.
+Every response ends with a soft question OR a clear next step. Never a dead end.
+Sound HUMAN. Throw in tiny natural touches: "hmm", "you know what", "honestly", "tell you what".
+ALWAYS respond in English only.
 
-══ NAME (MANDATORY — FIRST THING YOU DO) ══
+== NAME (MANDATORY — FIRST THING YOU DO) ==
 Your VERY FIRST message must warmly ask for their name.
 Example: "Hey hey! I'm {name} — what's your name?"
-• Do NOT discuss ANY products until you have their name. Non-negotiable.
-• Use their name 1-2 times per response — feel human, not robotic.
-• IMPORTANT: If the user is RETURNING (context will say so), greet them warmly by name. Don't ask again.
+Do NOT discuss ANY products until you have their name. Non-negotiable.
+Use their name 1-2 times per response — feel human, not robotic.
+IMPORTANT: If the user is RETURNING (context will say so), greet them warmly by name. Don't ask again.
 
-══ YOUR SALES INSTINCT ══
+== YOUR SALES INSTINCT ==
 You don't follow scripts. You have instinct. Here's what drives you:
 
-RAPPORT: Mirror their energy and words. They say "cool gadget" → you say "cool gadget", not "innovative device." People buy from people they like.
+RAPPORT: Mirror their energy and words. They say "cool gadget" then you say "cool gadget", not "innovative device." People buy from people they like.
 
 LISTEN FIRST: One question at a time. Understand before you suggest. Then dig deeper from their answer.
 
@@ -416,13 +477,13 @@ CLOSE NATURALLY: Best close feels like help: "Want me to take you to the checkou
 
 SCARCITY: ONLY mention if real stock data confirms it. Never fabricate urgency. Ever.
 
-══ ANTI-HALLUCINATION (ABSOLUTE) ══
-• ONLY recommend products from the LIVE CATALOG below. Never invent products, prices, or features.
-• Not in catalog? → "I don't have that specific item, but check this out — I think you'll love it even more."
-• Catalog empty? → "Products are still loading up — tell me what you're looking for meanwhile!"
-• Never mention competitors. Never fabricate reviews. If you don't know → say so warmly.
+== ANTI-HALLUCINATION (ABSOLUTE) ==
+ONLY recommend products from the LIVE CATALOG below. Never invent products, prices, or features.
+Not in catalog? Then say "I don't have that specific item, but check this out — I think you'll love it even more."
+Catalog empty? Then say "Products are still loading up — tell me what you're looking for meanwhile!"
+Never mention competitors. Never fabricate reviews. If you don't know then say so warmly.
 
-══ LIVE PRODUCT CATALOG ══
+== LIVE PRODUCT CATALOG ==
 {product_context}
 """
 
@@ -455,7 +516,7 @@ async def transcribe_audio(request: Request, audio: UploadFile = File(...),
             "language": getattr(transcription, 'language', 'en')
         }
     except Exception as e:
-        print(f"Transcription error: {e}")
+        logger.error(f"Transcription error: {e}")
         raise HTTPException(status_code=500, detail="Transcription failed.")
 
 
@@ -493,7 +554,7 @@ async def text_to_speech(request: Request, body: TTSRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Edge TTS error: {e}")
+        logger.error(f"Edge TTS error: {e}")
         raise HTTPException(status_code=500, detail="TTS failed.")
 
 
@@ -504,20 +565,19 @@ class RAGCrawlRequest(BaseModel):
 
 @app.post("/api/rag-crawl")
 async def rag_crawl_trigger(request: Request, body: RAGCrawlRequest):
-    """Trigger RAG crawl immediately when a store is created/updated.
-    Called from WP plugin when store URL is set."""
+    """Trigger RAG crawl — requires admin auth."""
     if not body.website_url:
         return {"status": "error", "message": "No website URL provided."}
 
-    # Create or re-initialize RAG for this store
     sid = body.store_id
     with _rag_lock:
         if sid in _rag_instances:
-            # Re-crawl existing instance
             _rag_instances[sid].base_url = body.website_url.rstrip('/')
             _rag_instances[sid].domain = urlparse(body.website_url).netloc
-            _rag_instances[sid].reindex()
+            threading.Thread(target=_rag_instances[sid].reindex, daemon=True).start()
         else:
+            if len(_rag_instances) >= MAX_RAG_INSTANCES:
+                return {"status": "error", "message": f"Max RAG instances ({MAX_RAG_INSTANCES}) reached."}
             r = MarkRAG(body.website_url, max_pages=MAX_CRAWL_PAGES)
             _rag_instances[sid] = r
             threading.Thread(target=r.initialize, daemon=True).start()
@@ -534,7 +594,7 @@ async def rag_search(request: Request, body: RAGSearchRequest):
     tenant = resolve_tenant(body.store_id)
     rag_instance = get_rag(tenant)
 
-    if not rag_instance.ready:
+    if not rag_instance or not rag_instance.ready:
         return {"results": [], "status": "indexing"}
 
     results = rag_instance.search(body.query, top_k=body.top_k)
@@ -552,26 +612,33 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     name = get_assistant_name(tenant)
     product_context = format_products_context(tenant)
 
-    # Inject RAG brand context (store name, categories, product count)
+    # Inject RAG brand context
     rag_instance = get_rag(tenant)
-    brand_context = rag_instance.get_brand_context() if rag_instance and rag_instance.ready else ''
+    brand_context = ''
+    if rag_instance and rag_instance.ready:
+        brand_context = rag_instance.get_brand_context()
 
     # Use custom system prompt if tenant set one, otherwise default
     custom_prompt = (tenant or {}).get("custom_system_prompt", "")
     if custom_prompt and custom_prompt.strip():
-        system_instruction = custom_prompt.format(
-            product_context=product_context,
-            name=name,
-        )
+        # Safe format — only replace known keys, ignore missing
+        try:
+            system_instruction = custom_prompt.format(
+                product_context=product_context,
+                name=name,
+            )
+        except KeyError:
+            # Custom prompt has unknown {placeholders} — use it raw
+            system_instruction = custom_prompt.replace("{product_context}", product_context).replace("{name}", name)
     else:
         system_instruction = SYSTEM_PROMPT_TEMPLATE.format(
             product_context=product_context,
             name=name,
         )
 
-    # Append RAG brand intelligence to system prompt
+    # Append RAG brand intelligence
     if brand_context:
-        system_instruction += f"\n\n══ STORE INTELLIGENCE (from website crawl) ══\n{brand_context}\nUse this context to sound knowledgeable about the store — its brand, categories, and what it sells."
+        system_instruction += f"\n\n== STORE INTELLIGENCE (from website crawl) ==\n{brand_context}\nUse this context to sound knowledgeable about the store — its brand, categories, and what it sells."
 
     llm_model = (tenant or {}).get("llm_model") or "llama-3.3-70b-versatile"
     max_tokens = (tenant or {}).get("max_tokens") or 150
@@ -594,15 +661,13 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         cleaned.append(d)
 
     # ── RAG Context Injection (per-query) ──────────────────────
-    # Search RAG with the user's latest message and inject matching
-    # page content so the LLM can answer questions about the store
     if rag_instance and rag_instance.ready and last_user_msg and not last_user_msg.startswith("["):
         rag_context = rag_instance.search_for_chat(last_user_msg, top_k=4)
         if rag_context:
             messages_for_api.append({
                 "role": "system",
                 "content": (
-                    "══ WEBSITE KNOWLEDGE (retrieved from store's actual pages) ══\n"
+                    "== WEBSITE KNOWLEDGE (retrieved from store's actual pages) ==\n"
                     "Use the following real content from the store's website to answer the customer's question. "
                     "Quote specific details (product names, prices, descriptions, policies) when relevant. "
                     "If the answer is clearly in this content, use it confidently. "
@@ -624,19 +689,21 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         log_conversation(ip, cleaned, body.user_language, reply, body.store_id)
         return {"response": reply}
     except Exception as e:
-        print(f"Chat error: {e}")
+        logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail="Chat failed.")
 
 
 @app.get("/api/refresh-products")
-async def refresh_products_endpoint():
+async def refresh_products_endpoint(request: Request, user: dict = Depends(get_current_user)):
+    """Refresh product cache — requires admin auth."""
     fetch_products()
     return {"status": "success", "count": len(cached_products)}
 
 @app.get("/api/reindex")
-async def reindex_endpoint():
+async def reindex_endpoint(request: Request, user: dict = Depends(get_current_user)):
+    """Trigger RAG reindex — requires admin auth."""
     if rag:
-        rag.reindex()
+        threading.Thread(target=rag.reindex, daemon=True).start()
     return {"status": "reindexing"}
 
 @app.get("/api/status")
@@ -646,10 +713,10 @@ async def status_endpoint(x_store_id: Optional[str] = Header(None)):
         rag_inst = get_rag(tenant)
         products = get_products(tenant)
         return {
-            "rag_ready": rag_inst.ready,
-            "pages_indexed": len(rag_inst.pages),
+            "rag_ready": rag_inst.ready if rag_inst else False,
+            "pages_indexed": len(rag_inst.pages) if rag_inst else 0,
             "products_loaded": len(products),
-            "tts_available": True,  # Edge TTS is always available (free)
+            "tts_available": True,
             "assistant_name": tenant.get("assistant_name", "Mark"),
             "store_config": {
                 "assistant_name": tenant.get("assistant_name", "Mark"),
@@ -675,10 +742,8 @@ async def status_endpoint(x_store_id: Optional[str] = Header(None)):
 
 @app.get("/api/tts/voices")
 async def list_tts_voices():
-    """List available Edge TTS voices — for admin panel voice picker."""
     try:
         voices = await edge_tts.list_voices()
-        # Return simplified list grouped by language
         simplified = []
         for v in voices:
             simplified.append({
@@ -723,6 +788,32 @@ async def analytics_endpoint():
         "today": today_count,
         "languages": dict(languages),
         "recent_questions": recent_questions[-20:],
+    }
+
+
+# ── Memory & Health Monitoring ────────────────────────────────
+
+@app.get("/api/health")
+async def health_endpoint():
+    """Detailed health check with memory stats."""
+    with _rag_lock:
+        rag_stats = {
+            sid: {
+                "ready": inst.ready,
+                "pages": len(inst.pages),
+                "memory_mb": inst.memory_estimate_mb(),
+            }
+            for sid, inst in _rag_instances.items()
+        }
+
+    return {
+        "status": "healthy",
+        "rag_instances": len(_rag_instances),
+        "rag_limit": MAX_RAG_INSTANCES,
+        "product_caches": len(_tenant_products),
+        "product_limit": MAX_PRODUCT_CACHES,
+        "default_rag_ready": rag.ready if rag else False,
+        "rag_details": rag_stats,
     }
 
 

@@ -64,8 +64,9 @@
         return { mobile, tablet, touch, dpr, lowEnd, slowNet, w, h };
     })();
 
-    // Robot — sizes adapt to device
-    const ROBOT_URL         = PLUGIN_URL + 'public/model/robot.glb';
+    // Robot — 3D model loaded from CDN (keeps plugin under 10MB for WordPress)
+    const MODEL_CDN         = CFG.modelCdnUrl || (PLUGIN_URL + 'public/model/');
+    const ROBOT_URL         = MODEL_CDN + 'robot.glb';
     const WIDGET_PX         = DEVICE.mobile ? 90 : DEVICE.tablet ? 100 : 115;
     const TALKING_PX        = DEVICE.mobile ? 240 : DEVICE.tablet ? 280 : 320;
     // Idle timeout — uses admin setting, with sensible floor (15s min)

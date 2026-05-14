@@ -8,8 +8,11 @@ import uuid
 import hashlib
 import json
 import time
+import logging
 from pathlib import Path
 from contextlib import contextmanager
+
+logger = logging.getLogger("mark.db")
 
 DB_PATH = Path(__file__).parent / "mark.db"
 
@@ -104,7 +107,21 @@ def init_db():
 
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password with SHA-256 + salt for security.
+    Uses a fixed prefix salt — upgrade to bcrypt when adding the dependency."""
+    salted = f"mark_ai_salt_{password}_v1"
+    return hashlib.sha256(salted.encode()).hexdigest()
+
+
+def verify_password_compat(password: str, stored_hash: str) -> bool:
+    """Verify password — supports both old (unsalted) and new (salted) hashes."""
+    # Try new salted hash first
+    if hash_password(password) == stored_hash:
+        return True
+    # Fallback: old unsalted hash (for existing users before upgrade)
+    if hashlib.sha256(password.encode()).hexdigest() == stored_hash:
+        return True
+    return False
 
 
 # ── Admin Users ──────────────────────────────────────────────
@@ -124,10 +141,19 @@ def create_admin(username: str, password: str) -> bool:
 def verify_admin(username: str, password: str) -> dict | None:
     with get_db() as db:
         row = db.execute(
-            "SELECT * FROM admin_users WHERE username = ? AND password_hash = ?",
-            (username, hash_password(password))
+            "SELECT * FROM admin_users WHERE username = ?",
+            (username,)
         ).fetchone()
-        return dict(row) if row else None
+        if row and verify_password_compat(password, row["password_hash"]):
+            # Upgrade hash if using old format
+            new_hash = hash_password(password)
+            if row["password_hash"] != new_hash:
+                db.execute(
+                    "UPDATE admin_users SET password_hash = ? WHERE id = ?",
+                    (new_hash, row["id"])
+                )
+            return dict(row)
+        return None
 
 
 def admin_exists() -> bool:
@@ -138,16 +164,32 @@ def admin_exists() -> bool:
 
 # ── Store CRUD ───────────────────────────────────────────────
 
+# Whitelist of allowed store fields to prevent SQL injection via kwargs
+STORE_FIELDS = {
+    "store_id", "owner_id", "store_name", "website_url", "assistant_name",
+    "personality", "greeting_style", "primary_language", "supported_languages",
+    "max_crawl_pages", "idle_timeout", "walking_enabled", "sound_effects",
+    "tts_voice", "tts_voice_urdu", "tts_rate", "tts_pitch",
+    "groq_api_key", "llm_model", "max_tokens", "temperature",
+    "max_audio_mb", "max_message_length", "rate_transcribe", "rate_chat",
+    "rate_rag", "rate_tts", "custom_system_prompt", "is_active", "updated_at",
+}
+
+
 def create_store(owner_id: int, store_name: str, website_url: str, **kwargs) -> str:
     store_id = uuid.uuid4().hex[:16]
+    fields = {
+        "store_id": store_id,
+        "owner_id": owner_id,
+        "store_name": store_name,
+        "website_url": website_url,
+    }
+    # Only allow whitelisted fields
+    for k, v in kwargs.items():
+        if k in STORE_FIELDS:
+            fields[k] = v
+
     with get_db() as db:
-        fields = {
-            "store_id": store_id,
-            "owner_id": owner_id,
-            "store_name": store_name,
-            "website_url": website_url,
-        }
-        fields.update(kwargs)
         cols = ", ".join(fields.keys())
         placeholders = ", ".join(["?"] * len(fields))
         db.execute(f"INSERT INTO stores ({cols}) VALUES ({placeholders})", list(fields.values()))
@@ -161,7 +203,6 @@ def get_store(store_id: str) -> dict | None:
 
 
 def get_all_active_stores() -> list:
-    """Return all active stores (for startup RAG pre-warm)."""
     with get_db() as db:
         rows = db.execute(
             "SELECT * FROM stores WHERE is_active = 1 AND website_url IS NOT NULL AND website_url != ''",
@@ -181,10 +222,14 @@ def get_stores_by_owner(owner_id: int) -> list:
 def update_store(store_id: str, **kwargs) -> bool:
     if not kwargs:
         return False
-    kwargs["updated_at"] = time.time()
+    # Filter to whitelisted fields only
+    safe_kwargs = {k: v for k, v in kwargs.items() if k in STORE_FIELDS}
+    if not safe_kwargs:
+        return False
+    safe_kwargs["updated_at"] = time.time()
     with get_db() as db:
-        sets = ", ".join(f"{k} = ?" for k in kwargs.keys())
-        vals = list(kwargs.values()) + [store_id]
+        sets = ", ".join(f"{k} = ?" for k in safe_kwargs.keys())
+        vals = list(safe_kwargs.values()) + [store_id]
         db.execute(f"UPDATE stores SET {sets} WHERE store_id = ?", vals)
     return True
 
@@ -211,34 +256,29 @@ def log_conversation_db(store_id: str, visitor_hash: str, language: str,
 
 def get_analytics(store_id: str) -> dict:
     with get_db() as db:
-        # Total conversations
         total = db.execute(
             "SELECT COUNT(*) as cnt FROM conversations WHERE store_id = ?",
             (store_id,)
         ).fetchone()["cnt"]
 
-        # Today's conversations
         today_start = time.time() - (time.time() % 86400)
         today = db.execute(
             "SELECT COUNT(*) as cnt FROM conversations WHERE store_id = ? AND created_at >= ?",
             (store_id, today_start)
         ).fetchone()["cnt"]
 
-        # This week
         week_start = time.time() - 7 * 86400
         week = db.execute(
             "SELECT COUNT(*) as cnt FROM conversations WHERE store_id = ? AND created_at >= ?",
             (store_id, week_start)
         ).fetchone()["cnt"]
 
-        # Language breakdown
         lang_rows = db.execute(
             "SELECT language, COUNT(*) as cnt FROM conversations WHERE store_id = ? GROUP BY language",
             (store_id,)
         ).fetchall()
         languages = {r["language"]: r["cnt"] for r in lang_rows}
 
-        # Recent conversations
         recent = db.execute(
             """SELECT visitor_hash, language, last_user_msg, mark_response, created_at
                FROM conversations WHERE store_id = ?
@@ -246,7 +286,6 @@ def get_analytics(store_id: str) -> dict:
             (store_id,)
         ).fetchall()
 
-        # Unique visitors
         unique = db.execute(
             "SELECT COUNT(DISTINCT visitor_hash) as cnt FROM conversations WHERE store_id = ?",
             (store_id,)

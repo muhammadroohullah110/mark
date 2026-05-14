@@ -481,8 +481,7 @@
             <!-- Welcome Header with Robot -->
             <div style="margin-bottom:48px;">
                 <div id="mark-welcome-visual" style="width:180px;height:180px;border-radius:50%;overflow:hidden;margin:0 auto 24px;box-shadow:0 8px 40px rgba(149,73,33,0.35);border:4px solid rgba(252,155,108,0.3);position:relative;">
-                    <img src="${markAI.pluginUrl}assets/mark-welcome.gif" alt="Mark Robot" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-                    <div style="display:none;width:100%;height:100%;background:linear-gradient(135deg,#fc9b6c,#954921);align-items:center;justify-content:center;">
+                    <div style="display:flex;width:100%;height:100%;background:linear-gradient(135deg,#fc9b6c,#954921);align-items:center;justify-content:center;">
                         <div style="animation:markRobotBob 1.5s ease-in-out infinite;">
                             <svg width="90" height="90" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <line x1="10" y1="0.5" x2="10" y2="3" stroke="white" stroke-width="1" stroke-linecap="round"/>
