@@ -20,10 +20,18 @@ class Mark_AI_Activator {
     }
 
     /**
+     * Lightweight upgrade — only creates/updates DB tables.
+     * Called on plugins_loaded when version changes. No flush_rewrite_rules.
+     */
+    public static function upgrade_tables() {
+        self::create_tables();
+    }
+
+    /**
      * Runs on plugin deactivation.
      */
     public static function deactivate() {
-        flush_rewrite_rules();
+        // No-op — plugin registers no custom post types or rewrite rules
     }
 
     /**
@@ -51,7 +59,7 @@ class Mark_AI_Activator {
             walking_enabled tinyint(1) NOT NULL DEFAULT 1,
             sound_effects tinyint(1) NOT NULL DEFAULT 1,
             tts_voice varchar(100) DEFAULT 'en-US-GuyNeural',
-            tts_rate varchar(20) DEFAULT '+0%%',
+            tts_rate varchar(20) DEFAULT '+0%',
             tts_pitch varchar(20) DEFAULT '+0Hz',
             groq_api_key varchar(255) DEFAULT '',
             llm_model varchar(100) DEFAULT 'llama-3.3-70b-versatile',

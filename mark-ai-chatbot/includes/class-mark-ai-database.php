@@ -69,7 +69,7 @@ class Mark_AI_Database {
     }
 
     /**
-     * Get all stores for the current user.
+     * Get all stores for the current user (admin context).
      */
     public static function get_stores($owner_id = null) {
         global $wpdb;
@@ -77,6 +77,19 @@ class Mark_AI_Database {
         $uid = $owner_id ?: get_current_user_id();
         return $wpdb->get_results(
             $wpdb->prepare("SELECT * FROM $table WHERE owner_id = %d ORDER BY created_at DESC", $uid),
+            ARRAY_A
+        );
+    }
+
+    /**
+     * Get all active stores (frontend context — no owner filter).
+     * Used by the widget to find the store matching the current site.
+     */
+    public static function get_active_stores() {
+        global $wpdb;
+        $table = self::stores_table();
+        return $wpdb->get_results(
+            "SELECT * FROM $table WHERE is_active = 1 ORDER BY created_at ASC",
             ARRAY_A
         );
     }
@@ -101,18 +114,6 @@ class Mark_AI_Database {
         $wpdb->delete(self::convos_table(), ['store_id' => $store_id]);
         $wpdb->delete(self::stores_table(), ['store_id' => $store_id]);
         return true;
-    }
-
-    /**
-     * Count all stores for a user.
-     */
-    public static function count_stores($owner_id = null) {
-        global $wpdb;
-        $table = self::stores_table();
-        $uid = $owner_id ?: get_current_user_id();
-        return (int) $wpdb->get_var(
-            $wpdb->prepare("SELECT COUNT(*) FROM $table WHERE owner_id = %d", $uid)
-        );
     }
 
     // ── Conversations ───────────────────────────────────────

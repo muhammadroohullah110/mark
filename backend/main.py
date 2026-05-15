@@ -48,8 +48,6 @@ logger = logging.getLogger("mark")
 # ── Default keys from .env (fallback when no tenant) ─────────
 DEFAULT_GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 
-client = Groq(api_key=DEFAULT_GROQ_KEY)
-
 # ── Multi-tenant RAG instances ───────────────────────────────
 _rag_instances: dict[str, MarkRAG] = {}
 _rag_lock = threading.Lock()
@@ -564,7 +562,8 @@ class RAGCrawlRequest(BaseModel):
 
 
 @app.post("/api/rag-crawl")
-async def rag_crawl_trigger(request: Request, body: RAGCrawlRequest):
+async def rag_crawl_trigger(request: Request, body: RAGCrawlRequest,
+                            user: dict = Depends(get_current_user)):
     """Trigger RAG crawl — requires admin auth."""
     if not body.website_url:
         return {"status": "error", "message": "No website URL provided."}

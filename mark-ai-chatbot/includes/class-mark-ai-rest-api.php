@@ -148,13 +148,12 @@ class Mark_AI_Rest_API {
 
     /**
      * Get visitor IP safely.
+     * Uses REMOTE_ADDR (not spoofable) as primary source.
+     * X-Forwarded-For is client-controlled and NOT trusted for rate limiting.
      */
     private function get_visitor_ip() {
         $ip = '';
-        if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-            $ips = explode( ',', sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
-            $ip  = trim( $ips[0] );
-        } elseif ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
+        if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
             $ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
         }
         return filter_var( $ip, FILTER_VALIDATE_IP ) ? $ip : '0.0.0.0';
@@ -219,12 +218,12 @@ class Mark_AI_Rest_API {
 
     public function get_settings() {
         $settings = get_option('mark_ai_settings', []);
-        // Never expose full API key — mask it
+        // Never expose full API key in response — mask it
         if (!empty($settings['groq_api_key'])) {
             $key = $settings['groq_api_key'];
             $settings['groq_api_key_masked'] = substr($key, 0, 8) . '...' . substr($key, -4);
+            $settings['groq_api_key'] = ''; // Never send full key over HTTP
             $settings['has_groq_key'] = true;
-            // Send full key only for admin form pre-fill (they already have it)
         } else {
             $settings['has_groq_key'] = false;
         }
@@ -858,7 +857,8 @@ class Mark_AI_Rest_API {
             return [];
         }
 
-        $allowed_roles = [ 'user', 'assistant', 'system' ];
+        // Never allow 'system' role from public input — prevents prompt injection
+        $allowed_roles = [ 'user', 'assistant' ];
         $sanitized     = [];
         $history       = array_slice( $history, -self::MAX_HISTORY_ITEMS );
 

@@ -95,15 +95,12 @@
     let markState         = 'loading';
     let walkTimer         = null;
     let idleTimer         = null;
-    let detectedLanguage  = 'en';
-    let languageLocked    = true; // English only for V1
     let lastMarkText      = '';
     let exchangeCount     = 0;
     let currentAudio      = null;
     let ttsAvailable      = false;
     let backendAlive      = false;
     let conversationHistory = [];
-    let lastTalkingTimestamp = 0; // tracks when Mark last had a conversation
     const SESSION_ID = 'mark_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
     // ── Session Persistence — survive close/reopen within same page session ──
@@ -1114,8 +1111,14 @@
         const userAnim = window.markSituationDetector.detect(text, 'user');
         if (userAnim && userAnim !== 'speak') window.markAnimator.play(userAnim);
 
-        setTimeout(showThinking, 400);
-        await processUserMessage(text);
+        showThinking();
+        try {
+            await processUserMessage(text);
+        } catch (e) {
+            console.error('[Mark] processUserMessage error:', e);
+            hideThinking();
+            showCaption("Something went wrong, could you try again?", true);
+        }
         micHint.textContent = 'Hold to talk';
     }
 

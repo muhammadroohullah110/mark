@@ -131,8 +131,8 @@ class Mark_AI_Widget {
             true
         );
 
-        // Get the first active store for this site
-        $stores = Mark_AI_Database::get_stores();
+        // Get all active stores (not owner-filtered — this runs on the frontend for visitors)
+        $stores = Mark_AI_Database::get_active_stores();
         $active_store = null;
         $site_url = home_url();
 
@@ -163,10 +163,12 @@ class Mark_AI_Widget {
             $idle_timeout = max( 15, intval( $settings['idle_timeout'] ) );
         }
 
-        // 3D model CDN URL — defaults to GitHub-hosted assets (keeps plugin < 10MB)
+        // 3D model URL — use CDN if configured, otherwise serve from plugin
+        // To use CDN: set 'model_cdn_url' in settings to your CDN base path
+        // For WordPress.org: upload models to GitHub Releases and set CDN URL
         $model_cdn = !empty($settings['model_cdn_url'])
             ? trailingslashit($settings['model_cdn_url'])
-            : 'https://cdn.jsdelivr.net/gh/muhammadroohullah110/mark@main/mark-ai-chatbot/public/model/';
+            : MARK_AI_URL . 'public/model/';
 
         // Pass config to mark-brain (loaded before chatbot, so both can read it)
         wp_localize_script('mark-ai-brain', 'markAIConfig', [

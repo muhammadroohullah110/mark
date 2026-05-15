@@ -214,10 +214,25 @@
     // ================================================================
 
     function redirectToPage(url, title) {
+        // Security: only allow same-origin URLs or relative paths
+        try {
+            const parsed = new URL(url, window.location.origin);
+            if (parsed.origin !== window.location.origin) {
+                console.warn('[Mark Brain] Blocked external redirect:', url);
+                return;
+            }
+            if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+                console.warn('[Mark Brain] Blocked non-HTTP redirect:', url);
+                return;
+            }
+        } catch (e) {
+            console.warn('[Mark Brain] Invalid URL:', url);
+            return;
+        }
+
         const feedback = `Taking you to ${title}!`;
         if (typeof window.speak === 'function') window.speak(feedback);
 
-        // Slight delay so user hears the feedback
         setTimeout(() => {
             window.location.href = url;
         }, 2200);

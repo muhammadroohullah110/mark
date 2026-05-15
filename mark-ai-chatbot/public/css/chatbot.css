@@ -285,12 +285,6 @@
 }
 @keyframes markSpin { to { transform: rotate(360deg); } }
 
-/* ── BOUNCE ANIMATION (for typing dots) ── */
-@keyframes markBounce {
-    0%, 100% { transform: translateY(0); opacity: 0.4; }
-    50% { transform: translateY(-4px); opacity: 1; }
-}
-
 /* ── THINKING INDICATOR — animated dots with personality ── */
 #mark-thinking-indicator {
     transition: opacity 0.3s ease, transform 0.3s ease;
@@ -309,14 +303,3 @@
     }
 }
 
-/* ── ERROR STATE — gentle shake ── */
-.mark-error-shake {
-    animation: markShake 0.5s ease-in-out;
-}
-@keyframes markShake {
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-5px); }
-    40% { transform: translateX(5px); }
-    60% { transform: translateX(-3px); }
-    80% { transform: translateX(3px); }
-}

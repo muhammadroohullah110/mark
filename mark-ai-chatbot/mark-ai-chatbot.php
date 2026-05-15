@@ -52,10 +52,10 @@ function mark_ai_init() {
         new Mark_AI_Admin();
     }
 
-    // ── DB upgrade check — runs dbDelta if version changed ──
+    // ── DB upgrade check — only runs dbDelta (NOT full activate) ──
     $current_db_version = get_option('mark_ai_db_version', '1.0.0');
-    if (version_compare($current_db_version, '1.1.0', '<')) {
-        Mark_AI_Activator::activate();
+    if (version_compare($current_db_version, MARK_AI_VERSION, '<')) {
+        Mark_AI_Activator::upgrade_tables();
     }
 
     // REST API endpoints (always loaded)
