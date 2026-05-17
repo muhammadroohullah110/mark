@@ -744,8 +744,12 @@
 
             if (!store) {
                 content.innerHTML = `<div style="text-align:center;padding:60px;">
+                    <span class="material-symbols-outlined" style="font-size:48px;color:#4f6169;opacity:0.5;margin-bottom:12px;">storefront</span>
                     <h3 style="${T.headline}font-size:20px;">No store found</h3>
-                    <p style="color:#42484a;">Deactivate and reactivate the plugin to auto-create your store.</p>
+                    <p style="color:#42484a;margin:0 0 20px;">Your store was deleted or hasn't been created yet.</p>
+                    <button style="${T.btnPrimary}" onclick="markAdmin.navigate('dashboard')">
+                        <span class="material-symbols-outlined" style="font-size:18px;">add</span> Set Up a New Store
+                    </button>
                 </div>`;
                 return;
             }
@@ -891,11 +895,24 @@
     }
 
     async function saveStoreSettings() {
+        const storeName = $('#s-store-name').value.trim();
+        const websiteUrl = $('#s-website-url').value.trim();
+        const idleTimeout = parseInt($('#s-idle-timeout').value);
+        const maxCrawl = parseInt($('#s-max-crawl').value);
+
+        // Validation
+        if (!storeName) { toast('Store name is required.', 'error'); return; }
+        if (websiteUrl && !websiteUrl.startsWith('http://') && !websiteUrl.startsWith('https://')) {
+            toast('Website URL must start with http:// or https://', 'error'); return;
+        }
+        if (isNaN(idleTimeout) || idleTimeout < 15) { toast('Idle timeout must be at least 15 seconds.', 'error'); return; }
+        if (isNaN(maxCrawl) || maxCrawl < 10 || maxCrawl > 500) { toast('Max crawl pages must be between 10 and 500.', 'error'); return; }
+
         const data = {
-            store_name: $('#s-store-name').value, website_url: $('#s-website-url').value,
+            store_name: storeName, website_url: websiteUrl,
             assistant_name: $('#s-assistant-name').value, personality: $('#s-personality').value,
             primary_language: $('#s-primary-lang').value, is_active: $('#s-is-active').value === '1',
-            max_crawl_pages: parseInt($('#s-max-crawl').value) || 120, idle_timeout: parseInt($('#s-idle-timeout').value) || 300,
+            max_crawl_pages: maxCrawl, idle_timeout: idleTimeout,
         };
         try {
             await api('PUT', 'stores/' + currentStore.store_id, data);
@@ -967,6 +984,10 @@
                         <option value="natural" ${ss.lead_capture==='natural'?'selected':''}>Natural (Ask for email only if user shows strong interest)</option>
                         <option value="proactive" ${ss.lead_capture==='proactive'?'selected':''}>Proactive (Ask for email after 3+ exchanges)</option>
                     </select>
+                    <div style="margin-top:8px;padding:12px 16px;background:rgba(79,97,105,0.06);border:1px solid rgba(79,97,105,0.15);border-radius:8px;display:flex;align-items:flex-start;gap:8px;">
+                        <span class="material-symbols-outlined" style="font-size:16px;color:#4f6169;flex-shrink:0;margin-top:1px;">info</span>
+                        <span style="font-size:12px;color:#42484a;line-height:1.5;">Captured leads appear in your <strong>Conversations</strong> tab. Look for messages where visitors shared their email address. All chat messages are logged automatically.</span>
+                    </div>
                 </div>
 
                 <!-- CTA URL -->
@@ -990,6 +1011,13 @@
     }
 
     async function saveSalesSettings() {
+        const ctaUrl = $('#ss-cta-url').value.trim();
+        // Validate CTA URL if provided
+        if (ctaUrl && !ctaUrl.startsWith('/') && !ctaUrl.startsWith('http://') && !ctaUrl.startsWith('https://')) {
+            toast('CTA URL must start with / or http:// or https://', 'error');
+            return;
+        }
+
         const data = {
             sales_behavior: $('#ss-behavior').value,
             sales_no_discounts: $('#ss-no-discounts').checked,
@@ -997,12 +1025,23 @@
             sales_no_guarantees: $('#ss-no-guarantees').checked,
             sales_objection_style: $('#ss-objection-style').value,
             sales_lead_capture: $('#ss-lead-capture').value,
-            sales_cta_url: $('#ss-cta-url').value,
+            sales_cta_url: ctaUrl,
             sales_cta_text: $('#ss-cta-text').value,
         };
         try {
             await api('PUT', 'stores/' + currentStore.store_id, data);
             currentStore = { ...currentStore, ...data };
+            // Rebuild the nested sales_settings object so renderSalesTab reads fresh data
+            currentStore.sales_settings = {
+                behavior: data.sales_behavior,
+                no_discounts: data.sales_no_discounts,
+                no_price_promises: data.sales_no_price_promises,
+                no_guarantees: data.sales_no_guarantees,
+                objection_style: data.sales_objection_style,
+                lead_capture: data.sales_lead_capture,
+                cta_url: data.sales_cta_url,
+                cta_text: data.sales_cta_text,
+            };
             toast('Sales settings saved!', 'success');
         } catch (e) { toast(e.message, 'error'); }
     }
@@ -1118,9 +1157,20 @@
     }
 
     async function saveAI() {
+        const maxTokens = parseInt($('#s-max-tokens').value);
+        const temperature = parseFloat($('#s-temperature').value);
+
+        // Validation
+        if (isNaN(maxTokens) || maxTokens < 50 || maxTokens > 1000) {
+            toast('Max tokens must be between 50 and 1000.', 'error'); return;
+        }
+        if (isNaN(temperature) || temperature < 0 || temperature > 2) {
+            toast('Temperature must be between 0.0 and 2.0.', 'error'); return;
+        }
+
         const data = {
             groq_api_key: $('#s-groq-key').value, llm_model: $('#s-llm-model').value,
-            max_tokens: parseInt($('#s-max-tokens').value) || 150, temperature: parseFloat($('#s-temperature').value) || 0.72,
+            max_tokens: maxTokens, temperature: temperature,
             custom_system_prompt: $('#s-custom-prompt').value,
         };
         try { await api('PUT', 'stores/' + currentStore.store_id, data); currentStore = { ...currentStore, ...data }; toast('AI configuration saved!', 'success'); }
@@ -1228,8 +1278,22 @@
     }
 
     async function deleteStore() {
-        try { await api('DELETE', 'stores/' + currentStore.store_id); toast('"' + currentStore.store_name + '" deleted.','success'); currentStore = null; closeModal(); navigate('dashboard'); }
-        catch (e) { toast(e.message, 'error'); }
+        try {
+            await api('DELETE', 'stores/' + currentStore.store_id);
+            toast('"' + currentStore.store_name + '" deleted.', 'success');
+            currentStore = null;
+            closeModal();
+            // Reload dashboard data to check if any stores remain
+            const data = await api('GET', 'dashboard');
+            stores = data.stores || [];
+            if (stores.length === 0) {
+                // No stores left — show onboarding so the user can create a new one
+                const content = $('#mark-page-content');
+                if (content) content.innerHTML = renderOnboarding();
+            } else {
+                navigate('dashboard');
+            }
+        } catch (e) { toast(e.message, 'error'); }
     }
 
     /* ================================================================
@@ -1381,139 +1445,45 @@
     function closeModal(event) { if (event && event.target !== event.currentTarget) return; const c = $('#mark-modal-container'); if (c) c.innerHTML = ''; }
 
     /* ================================================================
-       GUIDED TOUR — First-time user walkthrough
+       WELCOME DIALOG — Quick tips for first-time users
        ================================================================ */
-    const TOUR_STEPS = [
-        {
-            title: "Welcome to Mark AI! 🤖",
-            body: "Let's take a quick tour of your AI robot assistant. This will only take a minute!",
-            icon: "rocket_launch",
-            position: 'center'
-        },
-        {
-            target: '.mark-nav-item[onclick*="dashboard"],.mark-nav-item:first-child',
-            title: "Dashboard",
-            body: "Your command center. See conversation trends, peak chat hours, and a quick preview of your robot.",
-            icon: "dashboard",
-            position: 'right'
-        },
-        {
-            target: '.mark-nav-item[onclick*="store"],.mark-nav-item:nth-child(2)',
-            title: "My Store",
-            body: "Configure your robot's name, personality, voice, and see your embed code here.",
-            icon: "storefront",
-            position: 'right'
-        },
-        {
-            target: '.mark-nav-item[onclick*="conversation"],.mark-nav-item:nth-child(3)',
-            title: "Conversations",
-            body: "Read all chat logs between Mark and your visitors. Great for understanding what customers ask!",
-            icon: "chat",
-            position: 'right'
-        },
-        {
-            target: '.mark-nav-item[onclick*="settings"],.mark-nav-item:nth-child(4)',
-            title: "Settings",
-            body: "Global settings: API key, widget color, position, greeting sound, and connection test.",
-            icon: "settings",
-            position: 'right'
-        },
-        {
-            title: "You're all set! 🎉",
-            body: "Mark is now live on your website. Go visit your site to see your cute robot assistant in action!",
-            icon: "celebration",
-            position: 'center'
-        },
-    ];
-
-    let tourStep = 0;
-    let tourOverlay = null;
-
     function startTour() {
-        tourStep = 0;
-        // Create tour overlay
-        tourOverlay = document.createElement('div');
-        tourOverlay.id = 'mark-tour-overlay';
-        tourOverlay.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,0.65);transition:opacity 0.3s;';
-        document.body.appendChild(tourOverlay);
-        showTourStep(0);
-    }
-
-    function showTourStep(idx) {
-        tourStep = idx;
-        if (idx >= TOUR_STEPS.length) { endTour(); return; }
-
-        const step = TOUR_STEPS[idx];
-        const isCenter = step.position === 'center' || !step.target;
-        const progress = TOUR_STEPS.map((_, i) =>
-            `<span style="width:8px;height:8px;border-radius:50%;background:${i === idx ? '#954921' : 'rgba(149,73,33,0.3)'};display:inline-block;"></span>`
-        ).join('');
-
-        // Remove previous spotlight
-        const prevSpot = document.getElementById('mark-tour-spotlight');
-        if (prevSpot) prevSpot.remove();
-
-        let cardStyle = 'position:fixed;z-index:999999;background:white;border-radius:16px;padding:32px;max-width:380px;width:90%;'
-            + 'box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:Open Sans,sans-serif;';
-
-        if (isCenter) {
-            cardStyle += 'top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;';
-        } else {
-            // Find target element and position near it
-            const targetEl = document.querySelector(step.target);
-            if (targetEl) {
-                const rect = targetEl.getBoundingClientRect();
-                // Add spotlight border around target
-                const spot = document.createElement('div');
-                spot.id = 'mark-tour-spotlight';
-                spot.style.cssText = `position:fixed;z-index:999998;top:${rect.top - 4}px;left:${rect.left - 4}px;width:${rect.width + 8}px;height:${rect.height + 8}px;`
-                    + 'border:3px solid #fc9b6c;border-radius:8px;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,0.55);';
-                document.body.appendChild(spot);
-
-                cardStyle += `top:${rect.top}px;left:${rect.right + 20}px;`;
-                // If card goes off right edge, position below target instead
-                if (rect.right + 420 > window.innerWidth) {
-                    cardStyle = cardStyle.replace(`left:${rect.right + 20}px`, `left:50%;transform:translateX(-50%)`);
-                    cardStyle = cardStyle.replace(`top:${rect.top}px`, `top:${rect.bottom + 16}px`);
-                }
-            } else {
-                cardStyle += 'top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;';
-            }
-        }
-
-        const isLast = idx === TOUR_STEPS.length - 1;
-        const isFirst = idx === 0;
-
-        tourOverlay.innerHTML = `
-            <div style="${cardStyle}">
-                <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#fc9b6c,#954921);display:flex;align-items:center;justify-content:center;margin:${isCenter ? '0 auto' : '0'} 0 16px;">
-                    <span class="material-symbols-outlined" style="color:white;font-size:24px;">${step.icon}</span>
+        const container = $('#mark-modal-container');
+        if (!container) return;
+        container.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="markAdmin.closeModal(event)">
+            <div style="background:#ffffff;border-radius:20px;width:90%;max-width:520px;padding:40px;box-shadow:0 24px 80px rgba(0,0,0,0.2);text-align:center;font-family:'Open Sans',sans-serif;" onclick="event.stopPropagation()">
+                <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#fc9b6c,#954921);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+                    <span class="material-symbols-outlined" style="color:white;font-size:32px;">rocket_launch</span>
                 </div>
-                <h3 style="font-size:20px;font-weight:600;margin:0 0 8px;color:#1a1c1c;">${step.title}</h3>
-                <p style="font-size:14px;color:#42484a;line-height:1.6;margin:0 0 24px;">${step.body}</p>
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <div style="display:flex;gap:6px;">${progress}</div>
-                    <div style="display:flex;gap:8px;">
-                        ${!isLast ? `<button onclick="markAdmin.skipTour()" style="padding:8px 16px;border:1px solid #c2c7ca;border-radius:8px;background:none;color:#42484a;cursor:pointer;font-size:13px;">Skip</button>` : ''}
-                        ${!isFirst && !isLast ? `<button onclick="markAdmin.prevTourStep()" style="padding:8px 16px;border:1px solid #c2c7ca;border-radius:8px;background:none;color:#42484a;cursor:pointer;font-size:13px;">Back</button>` : ''}
-                        <button onclick="markAdmin.nextTourStep()" style="padding:8px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#fc9b6c,#954921);color:white;cursor:pointer;font-size:13px;font-weight:600;">
-                            ${isFirst ? "Let's Go!" : isLast ? 'Finish' : 'Next'}
-                        </button>
+                <h2 style="${T.headline}font-size:24px;font-weight:600;margin:0 0 8px;">Welcome to Mark AI!</h2>
+                <p style="color:#42484a;font-size:14px;margin:0 0 28px;line-height:1.6;">Here is a quick overview of your admin pages:</p>
+                <div style="text-align:left;display:flex;flex-direction:column;gap:14px;margin-bottom:28px;">
+                    <div style="display:flex;align-items:flex-start;gap:12px;">
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#954921;flex-shrink:0;margin-top:1px;">dashboard</span>
+                        <div><strong style="font-size:14px;">Dashboard</strong><br/><span style="font-size:13px;color:#42484a;">Conversation trends, peak hours, and a quick store summary.</span></div>
+                    </div>
+                    <div style="display:flex;align-items:flex-start;gap:12px;">
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#954921;flex-shrink:0;margin-top:1px;">storefront</span>
+                        <div><strong style="font-size:14px;">My Store</strong><br/><span style="font-size:13px;color:#42484a;">Robot name, personality, voice, sales skills, AI config, and embed code.</span></div>
+                    </div>
+                    <div style="display:flex;align-items:flex-start;gap:12px;">
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#954921;flex-shrink:0;margin-top:1px;">chat</span>
+                        <div><strong style="font-size:14px;">Conversations</strong><br/><span style="font-size:13px;color:#42484a;">All chat logs between Mark and your visitors.</span></div>
+                    </div>
+                    <div style="display:flex;align-items:flex-start;gap:12px;">
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#954921;flex-shrink:0;margin-top:1px;">settings</span>
+                        <div><strong style="font-size:14px;">Settings</strong><br/><span style="font-size:13px;color:#42484a;">API key, widget color, position, greeting sound, and connection test.</span></div>
                     </div>
                 </div>
+                <button style="${T.btnPrimary}padding:12px 32px;" onclick="markAdmin.endTour()">Got it!</button>
             </div>
-        `;
+        </div>`;
     }
-
-    function nextTourStep() { showTourStep(tourStep + 1); }
-    function prevTourStep() { showTourStep(Math.max(0, tourStep - 1)); }
-    function skipTour() { endTour(); }
 
     function endTour() {
         try { localStorage.setItem('mark_ai_tour_complete', '1'); } catch(_) {}
-        const spot = document.getElementById('mark-tour-spotlight');
-        if (spot) spot.remove();
-        if (tourOverlay) { tourOverlay.remove(); tourOverlay = null; }
+        closeModal();
     }
 
     /* ================================================================
@@ -1526,7 +1496,7 @@
         copyCode, copyText, closeModal,
         saveGlobalSettings, testConnection,
         completeSetup, showPreview,
-        startTour, nextTourStep, prevTourStep, skipTour,
+        startTour, endTour,
     };
 
     /* ================================================================

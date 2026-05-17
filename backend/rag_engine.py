@@ -286,10 +286,17 @@ class MarkRAG:
 
     # ── Crawling ─────────────────────────────────────────────
 
-    def _fetch_page(self, url: str, session: requests.Session) -> tuple:
-        """Fetch a single page. Returns (url, html) or (url, None)."""
+    _CRAWL_HEADERS = {
+        'User-Agent': 'MarkAI/1.1 Shopping Assistant (+https://mark-ai.com)',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+
+    def _fetch_page(self, url: str) -> tuple:
+        """Fetch a single page. Returns (url, html) or (url, None).
+        Uses requests.get() directly — no shared Session (not thread-safe)."""
         try:
-            resp = session.get(url, timeout=10)
+            resp = requests.get(url, headers=self._CRAWL_HEADERS, timeout=10)
             ct = resp.headers.get('content-type', '')
             if 'text/html' not in ct:
                 return (url, None)
@@ -299,17 +306,10 @@ class MarkRAG:
 
     def crawl(self) -> list:
         """Crawl website and return list of page data dicts.
-        Uses a local session (no instance-level _session to avoid leaks)."""
+        Each thread uses requests.get() directly (thread-safe)."""
         visited = set()
         to_visit = [self.base_url]
         pages = []
-
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'MarkAI/1.1 Shopping Assistant (+https://mark-ai.com)',
-            'Accept': 'text/html,application/xhtml+xml',
-            'Accept-Language': 'en-US,en;q=0.9',
-        })
 
         logger.info(f"Crawling {self.base_url} ...")
 
@@ -326,7 +326,7 @@ class MarkRAG:
                     break
 
                 with ThreadPoolExecutor(max_workers=5) as executor:
-                    futures = {executor.submit(self._fetch_page, u, session): u for u in batch}
+                    futures = {executor.submit(self._fetch_page, u): u for u in batch}
                     for future in as_completed(futures):
                         url, html = future.result()
                         if html is None:
@@ -354,8 +354,8 @@ class MarkRAG:
                                 to_visit.append(full_url)
 
                 time.sleep(0.3)
-        finally:
-            session.close()
+        except Exception:
+            raise
 
         logger.info(f"Crawled {len(pages)} pages ({len(visited)} visited)")
         return pages

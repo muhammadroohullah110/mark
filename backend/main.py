@@ -175,11 +175,12 @@ class RateLimiter:
         self._log: dict[str, list] = defaultdict(list)
         self._lock = threading.Lock()
 
-    def is_allowed(self, key: str) -> bool:
+    def is_allowed(self, key: str, custom_max: int | None = None) -> bool:
         now = time.time()
+        limit = custom_max if custom_max is not None else self.max_requests
         with self._lock:
             self._log[key] = [t for t in self._log[key] if now - t < self.window]
-            if len(self._log[key]) < self.max_requests:
+            if len(self._log[key]) < limit:
                 self._log[key].append(now)
                 return True
             return False
@@ -199,6 +200,16 @@ tts_limiter        = RateLimiter(RATE_TTS)
 def get_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
     return forwarded.split(",")[0].strip() if forwarded else request.client.host
+
+
+def get_tenant_rate(tenant: dict | None, field: str) -> int | None:
+    """Return per-tenant rate limit if set, otherwise None (use global default)."""
+    if not tenant:
+        return None
+    val = tenant.get(field)
+    if val is not None and val > 0:
+        return int(val)
+    return None
 
 
 # ── Multi-tenant Helper ─────────────────────────────────────
@@ -372,6 +383,13 @@ def fetch_products(url: str = None) -> list:
 if PRODUCTS_URL:
     fetch_products()
 
+def _fetch_tenant_products_background(tenant: dict):
+    """Background thread: fetch products for a tenant and update cache."""
+    sid = tenant["store_id"]
+    url = f"{tenant['website_url'].rstrip('/')}/wp-json/wc/v3/products"
+    products = fetch_products(url)
+    _tenant_products[sid] = {"products": products, "fetched_at": time.time()}
+
 def get_products(tenant: dict | None) -> list:
     if not tenant:
         if time.time() - _products_last_fetched > 300:
@@ -389,10 +407,10 @@ def get_products(tenant: dict | None) -> list:
         oldest_sid = min(_tenant_products, key=lambda s: _tenant_products[s].get("fetched_at", 0))
         del _tenant_products[oldest_sid]
 
-    url = f"{tenant['website_url'].rstrip('/')}/wp-json/wc/v3/products"
-    products = fetch_products(url)
-    _tenant_products[sid] = {"products": products, "fetched_at": time.time()}
-    return products
+    # Non-blocking: fetch in background thread, return stale cache (or empty list)
+    # This prevents blocking the async event loop with synchronous requests.get()
+    threading.Thread(target=_fetch_tenant_products_background, args=(tenant,), daemon=True).start()
+    return cache.get("products", [])
 
 def format_products_context(tenant: dict | None = None) -> str:
     products = get_products(tenant)
@@ -492,15 +510,15 @@ Never mention competitors. Never fabricate reviews. If you don't know then say s
 async def transcribe_audio(request: Request, audio: UploadFile = File(...),
                            x_store_id: Optional[str] = Header(None)):
     ip = get_ip(request)
-    if not transcribe_limiter.is_allowed(ip):
+    tenant = resolve_tenant(x_store_id)
+    custom_rate = get_tenant_rate(tenant, "rate_transcribe")
+    if not transcribe_limiter.is_allowed(ip, custom_max=custom_rate):
         raise HTTPException(status_code=429, detail="Too many requests. Please wait a moment.")
 
     max_bytes = MAX_AUDIO_MB * 1024 * 1024
     audio_bytes = await audio.read(max_bytes + 1)
     if len(audio_bytes) > max_bytes:
         raise HTTPException(status_code=413, detail=f"Audio too large. Max {MAX_AUDIO_MB}MB.")
-
-    tenant = resolve_tenant(x_store_id)
     groq = get_groq_client(tenant)
 
     try:
@@ -521,10 +539,10 @@ async def transcribe_audio(request: Request, audio: UploadFile = File(...),
 @app.post("/api/tts")
 async def text_to_speech(request: Request, body: TTSRequest):
     ip = get_ip(request)
-    if not tts_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Too many requests.")
-
     tenant = resolve_tenant(body.store_id)
+    custom_rate = get_tenant_rate(tenant, "rate_tts")
+    if not tts_limiter.is_allowed(ip, custom_max=custom_rate):
+        raise HTTPException(status_code=429, detail="Too many requests.")
     voice = get_edge_voice(tenant, body.language or "en")
     rate = (tenant or {}).get("tts_rate") or EDGE_TTS_RATE
     pitch = (tenant or {}).get("tts_pitch") or EDGE_TTS_PITCH
@@ -587,10 +605,10 @@ async def rag_crawl_trigger(request: Request, body: RAGCrawlRequest,
 @app.post("/api/rag-search")
 async def rag_search(request: Request, body: RAGSearchRequest):
     ip = get_ip(request)
-    if not rag_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Too many requests.")
-
     tenant = resolve_tenant(body.store_id)
+    custom_rate = get_tenant_rate(tenant, "rate_rag")
+    if not rag_limiter.is_allowed(ip, custom_max=custom_rate):
+        raise HTTPException(status_code=429, detail="Too many requests.")
     rag_instance = get_rag(tenant)
 
     if not rag_instance or not rag_instance.ready:
@@ -603,10 +621,10 @@ async def rag_search(request: Request, body: RAGSearchRequest):
 @app.post("/api/chat")
 async def chat_endpoint(request: Request, body: ChatRequest):
     ip = get_ip(request)
-    if not chat_limiter.is_allowed(ip):
-        raise HTTPException(status_code=429, detail="Too many requests.")
-
     tenant = resolve_tenant(body.store_id)
+    custom_rate = get_tenant_rate(tenant, "rate_chat")
+    if not chat_limiter.is_allowed(ip, custom_max=custom_rate):
+        raise HTTPException(status_code=429, detail="Too many requests.")
     groq = get_groq_client(tenant)
     name = get_assistant_name(tenant)
     product_context = format_products_context(tenant)
@@ -757,10 +775,15 @@ async def list_tts_voices():
 
 
 @app.get("/api/analytics")
-async def analytics_endpoint():
+async def analytics_endpoint(limit: int = 50, offset: int = 0):
+    # Clamp limit to max 100
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+
     log_dir = Path(LOG_DIR)
     if not log_dir.exists():
-        return {"total_conversations": 0, "today": 0, "languages": {}}
+        return {"total_conversations": 0, "today": 0, "languages": {}, "recent_questions": [],
+                "limit": limit, "offset": offset}
 
     today_str = datetime.now().strftime('%Y-%m-%d')
     today_count = 0
@@ -782,11 +805,17 @@ async def analytics_endpoint():
         except Exception:
             continue
 
+    # Paginate recent_questions: return only the requested slice, capped at limit
+    paginated_questions = recent_questions[offset:offset + limit]
+
     return {
         "total_conversations": total_count,
         "today": today_count,
         "languages": dict(languages),
-        "recent_questions": recent_questions[-20:],
+        "recent_questions": paginated_questions,
+        "limit": limit,
+        "offset": offset,
+        "total_questions": len(recent_questions),
     }
 
 

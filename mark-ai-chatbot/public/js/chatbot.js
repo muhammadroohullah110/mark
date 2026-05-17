@@ -95,10 +95,12 @@
     let markState         = 'loading';
     let walkTimer         = null;
     let idleTimer         = null;
+    let detectedLanguage  = 'en';
     let lastMarkText      = '';
     let exchangeCount     = 0;
     let currentAudio      = null;
     let ttsAvailable      = false;
+    let lastTalkingTimestamp = 0;
     let backendAlive      = false;
     let conversationHistory = [];
     const SESSION_ID = 'mark_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -357,10 +359,30 @@
         });
     }
 
+    let animationFrameId = null;
+    let frameCounter = 0;
+
     function animate() {
-        requestAnimationFrame(animate);
+        // Stop completely when loading or hidden
+        if (markState === 'loading') return;
+
+        animationFrameId = requestAnimationFrame(animate);
+
+        // Throttle to ~15fps when in widget mode (render every 4th frame)
+        if (markState === 'widget') {
+            frameCounter++;
+            if (frameCounter % 4 !== 0) return;
+        }
+
         window.markAnimator.update(clock.getDelta());
         renderer.render(scene, camera);
+    }
+
+    function stopAnimation() {
+        if (animationFrameId !== null) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
     }
 
     // ============================================================
