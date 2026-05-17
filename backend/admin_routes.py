@@ -16,6 +16,7 @@ from database import (
     create_store, get_store, get_stores_by_owner, update_store, delete_store,
     get_analytics, hash_password,
 )
+from config import BACKEND_URL
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -82,6 +83,18 @@ class StoreUpdateRequest(BaseModel):
 
     # Custom prompt
     custom_system_prompt: Optional[str] = None
+
+    # Sales intelligence
+    sales_mode: Optional[str] = None
+    sales_greeting: Optional[str] = None
+    sales_cta_text: Optional[str] = None
+    sales_cta_url: Optional[str] = None
+    sales_objection_handling: Optional[str] = None
+    sales_cross_sell: Optional[str] = None
+    sales_urgency_triggers: Optional[str] = None
+    sales_tone: Optional[str] = None
+    sales_followup_enabled: Optional[bool] = None
+    sales_max_suggestions: Optional[int] = None
 
     # Status
     is_active: Optional[bool] = None
@@ -197,6 +210,10 @@ def get_store_endpoint(store_id: str, user: dict = Depends(get_current_user)):
     store = get_store(store_id)
     if not store or store["owner_id"] != user["user_id"]:
         raise HTTPException(status_code=404, detail="Store not found")
+    if store.get("groq_api_key"):
+        key = store["groq_api_key"]
+        store["groq_api_key_masked"] = key[:8] + "..." + key[-4:] if len(key) > 12 else "***"
+        store["groq_api_key"] = ""
     return {"store": store}
 
 
@@ -210,7 +227,7 @@ def update_store_endpoint(store_id: str, body: StoreUpdateRequest, user: dict = 
     updates = {k: v for k, v in body.dict().items() if v is not None}
 
     # Convert booleans to int for SQLite
-    for key in ["walking_enabled", "sound_effects", "is_active"]:
+    for key in ["walking_enabled", "sound_effects", "is_active", "sales_followup_enabled"]:
         if key in updates:
             updates[key] = 1 if updates[key] else 0
 
@@ -253,18 +270,17 @@ def get_embed_code(store_id: str, user: dict = Depends(get_current_user)):
     if not store or store["owner_id"] != user["user_id"]:
         raise HTTPException(status_code=404, detail="Store not found")
 
-    # The embed code that store owners paste on their website
+    backend_url = BACKEND_URL.rstrip('/')
     embed_code = f"""<!-- Mark AI Shopping Companion -->
 <div id="mark-ai-widget" data-store-id="{store_id}"></div>
 <script>
-  // Set your Mark AI backend URL here
-  var markAIConfig = {{ backendUrl: 'YOUR_BACKEND_URL', storeId: '{store_id}' }};
+  var markAIConfig = {{ backendUrl: '{backend_url}', storeId: '{store_id}' }};
 </script>
-<script src="YOUR_SITE/wp-content/plugins/mark-ai-chatbot/public/js/chatbot.js"></script>
+<script src="{backend_url}/static/chatbot.js"></script>
 <!-- End Mark AI -->"""
 
     embed_iframe = f"""<!-- Mark AI Shopping Companion (iframe) -->
-<!-- For non-WordPress sites, contact admin for embed setup -->
+<!-- Backend: {backend_url} -->
 <!-- Store ID: {store_id} | Assistant: {store.get('assistant_name', 'Mark')} -->"""
 
     return {

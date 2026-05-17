@@ -180,7 +180,7 @@ class Mark_AI_Widget {
             'autoGreet'   => !empty($settings['auto_greet']),
             'position'    => $settings['widget_position'] ?? 'bottom-right',
             'storeId'     => $active_store ? $active_store['store_id'] : '',
-            'backendUrl'  => !empty($settings['backend_url']) ? $settings['backend_url'] : 'https://mark-ix64.onrender.com',
+            'backendUrl'  => MARK_AI_BACKEND,
             'accentColor'      => sanitize_hex_color( $settings['widget_accent_color'] ?? '' ) ?: '#667eea',
             'greetingSoundText' => sanitize_text_field( $settings['greeting_sound_text'] ?? 'Ayie!' ),
             'idleTimeout'      => $idle_timeout,

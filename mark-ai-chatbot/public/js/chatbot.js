@@ -100,6 +100,8 @@
     let exchangeCount     = 0;
     let currentAudio      = null;
     let ttsAvailable      = false;
+    let walkingEnabled    = true;
+    let soundEffects      = true;
     let lastTalkingTimestamp = 0;
     let backendAlive      = false;
     let conversationHistory = [];
@@ -242,7 +244,11 @@
             backendAlive = true;
             ttsAvailable = data.tts_available !== false;
             backendRetries = 0;
-            console.log('[Mark] Backend alive — TTS:', ttsAvailable);
+            if (data.store_config) {
+                if (data.store_config.walking_enabled === false) walkingEnabled = false;
+                if (data.store_config.sound_effects === false) soundEffects = false;
+            }
+            console.log('[Mark] Backend alive — TTS:', ttsAvailable, '| Walk:', walkingEnabled, '| Sound:', soundEffects);
             checkVoiceStatus();
         } catch(e) {
             console.log('[Mark] Backend check failed:', e.message, '(retry', backendRetries+1, '/', MAX_RETRIES, ')');
@@ -388,9 +394,9 @@
     // ============================================================
     // WALKING
     // ============================================================
-    function startWalking() { clearTimeout(walkTimer); scheduleWalk(); }
+    function startWalking() { clearTimeout(walkTimer); if (walkingEnabled) scheduleWalk(); }
     function scheduleWalk() {
-        if (markState !== 'widget') return;
+        if (markState !== 'widget' || !walkingEnabled) return;
         moveToRandomSpot();
         walkTimer = setTimeout(scheduleWalk, WALK_INTERVAL + Math.random() * 2000);
     }
@@ -850,6 +856,11 @@
         if (!cleanText) { resetIdleTimer(); return; }
         lastMarkText = cleanText;
         cancelIdleTimer();
+
+        if (!soundEffects) {
+            onSpeechDone();
+            return;
+        }
 
         console.log('[Mark] 🔊 speak() — audioUnlocked:', audioUnlocked,
                      '| backend:', backendAlive, '| tts:', ttsAvailable,

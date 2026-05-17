@@ -5,6 +5,9 @@
 
 import os
 
+# ── Backend URL (for embed code generation) ─────────────────
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://mark-ix64.onrender.com")
+
 # ── Website URL (set via env var or admin panel per-store) ───
 CLIENT_WEBSITE_URL = os.environ.get("CLIENT_WEBSITE_URL", "")
 MAX_CRAWL_PAGES = int(os.environ.get("MAX_CRAWL_PAGES", "120"))
@@ -60,3 +63,6 @@ STORE_CONFIG = {
 MAX_RAG_INSTANCES = int(os.environ.get("MAX_RAG_INSTANCES", "5"))
 MAX_PRODUCT_CACHES = int(os.environ.get("MAX_PRODUCT_CACHES", "10"))
 RATE_LIMITER_CLEANUP_INTERVAL = 300  # seconds
+
+# ── WP Shared Secret (for RAG crawl auth from WordPress) ───
+WP_SHARED_SECRET = os.environ.get("WP_SHARED_SECRET", "")

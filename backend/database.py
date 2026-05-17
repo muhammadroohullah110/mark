@@ -81,13 +81,28 @@ def init_db():
                 -- System prompt override (optional — blank = use default)
                 custom_system_prompt TEXT DEFAULT '',
 
+                -- Sales intelligence
+                sales_mode TEXT DEFAULT 'helpful',
+                sales_greeting TEXT DEFAULT '',
+                sales_cta_text TEXT DEFAULT '',
+                sales_cta_url TEXT DEFAULT '',
+                sales_objection_handling TEXT DEFAULT 'graceful',
+                sales_cross_sell TEXT DEFAULT '',
+                sales_urgency_triggers TEXT DEFAULT '',
+                sales_tone TEXT DEFAULT 'friendly',
+                sales_followup_enabled INTEGER DEFAULT 0,
+                sales_max_suggestions INTEGER DEFAULT 3,
+
+                -- Auto-registration token (WP plugin auth)
+                api_token TEXT DEFAULT '',
+
                 -- Status
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at REAL DEFAULT (strftime('%s','now')),
                 updated_at REAL DEFAULT (strftime('%s','now')),
 
-                -- Owner
-                owner_id INTEGER REFERENCES admin_users(id)
+                -- Owner (NULL for auto-registered WP stores)
+                owner_id INTEGER DEFAULT NULL
             );
 
             CREATE TABLE IF NOT EXISTS conversations (
@@ -104,6 +119,27 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_conv_store ON conversations(store_id);
             CREATE INDEX IF NOT EXISTS idx_conv_created ON conversations(created_at);
         """)
+
+        # Migration: add sales columns to existing stores table
+        sales_columns = {
+            "sales_mode": "TEXT DEFAULT 'helpful'",
+            "sales_greeting": "TEXT DEFAULT ''",
+            "sales_cta_text": "TEXT DEFAULT ''",
+            "sales_cta_url": "TEXT DEFAULT ''",
+            "sales_objection_handling": "TEXT DEFAULT 'graceful'",
+            "sales_cross_sell": "TEXT DEFAULT ''",
+            "sales_urgency_triggers": "TEXT DEFAULT ''",
+            "sales_tone": "TEXT DEFAULT 'friendly'",
+            "sales_followup_enabled": "INTEGER DEFAULT 0",
+            "sales_max_suggestions": "INTEGER DEFAULT 3",
+        }
+        # Also add api_token if missing
+        all_migrations = {**sales_columns, "api_token": "TEXT DEFAULT ''"}
+        existing = {row[1] for row in db.execute("PRAGMA table_info(stores)").fetchall()}
+        for col, typedef in all_migrations.items():
+            if col not in existing:
+                db.execute(f"ALTER TABLE stores ADD COLUMN {col} {typedef}")
+                logger.info(f"Migrated stores table: added {col}")
 
 
 def hash_password(password: str) -> str:
@@ -173,6 +209,10 @@ STORE_FIELDS = {
     "groq_api_key", "llm_model", "max_tokens", "temperature",
     "max_audio_mb", "max_message_length", "rate_transcribe", "rate_chat",
     "rate_rag", "rate_tts", "custom_system_prompt", "is_active", "updated_at",
+    "api_token",
+    "sales_mode", "sales_greeting", "sales_cta_text", "sales_cta_url",
+    "sales_objection_handling", "sales_cross_sell", "sales_urgency_triggers",
+    "sales_tone", "sales_followup_enabled", "sales_max_suggestions",
 }
 
 
@@ -199,6 +239,24 @@ def create_store(owner_id: int, store_name: str, website_url: str, **kwargs) -> 
 def get_store(store_id: str) -> dict | None:
     with get_db() as db:
         row = db.execute("SELECT * FROM stores WHERE store_id = ?", (store_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_store_by_token(token: str) -> dict | None:
+    if not token:
+        return None
+    with get_db() as db:
+        row = db.execute("SELECT * FROM stores WHERE api_token = ?", (token,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_store_by_url(url: str) -> dict | None:
+    if not url:
+        return None
+    with get_db() as db:
+        row = db.execute(
+            "SELECT * FROM stores WHERE website_url = ? AND is_active = 1", (url,)
+        ).fetchone()
         return dict(row) if row else None
 
 

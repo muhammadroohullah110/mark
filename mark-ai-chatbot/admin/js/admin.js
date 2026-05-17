@@ -925,7 +925,14 @@
        TAB: SALES SKILLS
        ================================================================ */
     function renderSalesTab(s) {
-        const ss = s.sales_settings || {};
+        const behavior = s.sales_behavior || 'helpful';
+        const noDiscounts = s.sales_no_discounts !== undefined ? s.sales_no_discounts : true;
+        const noPricePromises = s.sales_no_price_promises !== undefined ? s.sales_no_price_promises : true;
+        const noGuarantees = s.sales_no_guarantees !== undefined ? s.sales_no_guarantees : true;
+        const objStyle = s.sales_objection_style || 'graceful';
+        const leadCapture = s.sales_lead_capture || 'off';
+        const ctaUrl = s.sales_cta_url || '';
+        const ctaText = s.sales_cta_text || '';
         return `
         <div style="${T.glassLight}padding:40px;">
             <h3 style="${T.headline}font-size:24px;margin:0 0 8px;">Sales Intelligence</h3>
@@ -937,9 +944,9 @@
                 <div>
                     <label style="${T.label}">Sales Behavior Mode</label>
                     <select id="ss-behavior" style="${T.select}">
-                        <option value="helpful" ${(ss.behavior||'helpful')==='helpful'?'selected':''}>Helpful (Assist only — never push sales)</option>
-                        <option value="soft-sell" ${ss.behavior==='soft-sell'?'selected':''}>Soft Sell (Gently suggest products when relevant)</option>
-                        <option value="active" ${ss.behavior==='active'?'selected':''}>Active (Proactively recommend products from RAG)</option>
+                        <option value="helpful" ${behavior==='helpful'?'selected':''}>Helpful (Assist only — never push sales)</option>
+                        <option value="soft-sell" ${behavior==='soft-sell'?'selected':''}>Soft Sell (Gently suggest products when relevant)</option>
+                        <option value="active" ${behavior==='active'?'selected':''}>Active (Proactively recommend products from RAG)</option>
                     </select>
                     <span style="font-size:12px;color:#73787a;margin-top:4px;display:block;">
                         <strong>Helpful:</strong> Only answers questions, never suggests buying.
@@ -953,15 +960,15 @@
                     <label style="${T.label}color:#ba1a1a;">Discount & Pricing Policy</label>
                     <div style="display:flex;flex-direction:column;gap:12px;margin-top:8px;">
                         <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#42484a;cursor:pointer;">
-                            <input type="checkbox" id="ss-no-discounts" ${(ss.no_discounts !== false)?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
+                            <input type="checkbox" id="ss-no-discounts" ${noDiscounts?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
                             <strong>Block Mark from offering discounts</strong> (Recommended)
                         </label>
                         <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#42484a;cursor:pointer;">
-                            <input type="checkbox" id="ss-no-price-promises" ${(ss.no_price_promises !== false)?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
+                            <input type="checkbox" id="ss-no-price-promises" ${noPricePromises?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
                             <strong>Block Mark from promising specific prices</strong> without RAG data
                         </label>
                         <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#42484a;cursor:pointer;">
-                            <input type="checkbox" id="ss-no-guarantees" ${(ss.no_guarantees !== false)?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
+                            <input type="checkbox" id="ss-no-guarantees" ${noGuarantees?'checked':''} style="width:18px;height:18px;accent-color:#954921;" />
                             <strong>Block Mark from making guarantees</strong> (free shipping, returns, etc.)
                         </label>
                     </div>
@@ -971,8 +978,8 @@
                 <div>
                     <label style="${T.label}">Objection Handling Style</label>
                     <select id="ss-objection-style" style="${T.select}">
-                        <option value="graceful" ${(ss.objection_style||'graceful')==='graceful'?'selected':''}>Graceful Exit (Accept & move on — "No worries!")</option>
-                        <option value="one-try" ${ss.objection_style==='one-try'?'selected':''}>One Follow-up (Ask one question, then accept)</option>
+                        <option value="graceful" ${objStyle==='graceful'?'selected':''}>Graceful Exit (Accept & move on — "No worries!")</option>
+                        <option value="one-try" ${objStyle==='one-try'?'selected':''}>One Follow-up (Ask one question, then accept)</option>
                     </select>
                 </div>
 
@@ -980,9 +987,9 @@
                 <div>
                     <label style="${T.label}">Lead Capture</label>
                     <select id="ss-lead-capture" style="${T.select}">
-                        <option value="off" ${(ss.lead_capture||'off')==='off'?'selected':''}>Off (Don't ask for contact info)</option>
-                        <option value="natural" ${ss.lead_capture==='natural'?'selected':''}>Natural (Ask for email only if user shows strong interest)</option>
-                        <option value="proactive" ${ss.lead_capture==='proactive'?'selected':''}>Proactive (Ask for email after 3+ exchanges)</option>
+                        <option value="off" ${leadCapture==='off'?'selected':''}>Off (Don't ask for contact info)</option>
+                        <option value="natural" ${leadCapture==='natural'?'selected':''}>Natural (Ask for email only if user shows strong interest)</option>
+                        <option value="proactive" ${leadCapture==='proactive'?'selected':''}>Proactive (Ask for email after 3+ exchanges)</option>
                     </select>
                     <div style="margin-top:8px;padding:12px 16px;background:rgba(79,97,105,0.06);border:1px solid rgba(79,97,105,0.15);border-radius:8px;display:flex;align-items:flex-start;gap:8px;">
                         <span class="material-symbols-outlined" style="font-size:16px;color:#4f6169;flex-shrink:0;margin-top:1px;">info</span>
@@ -993,14 +1000,14 @@
                 <!-- CTA URL -->
                 <div>
                     <label style="${T.label}">Call-to-Action URL (Optional)</label>
-                    <input id="ss-cta-url" type="url" value="${esc(ss.cta_url||'')}" style="${T.input}" placeholder="e.g., /contact or /get-started" />
+                    <input id="ss-cta-url" type="url" value="${esc(ctaUrl)}" style="${T.input}" placeholder="e.g., /contact or /get-started" />
                     <span style="font-size:12px;color:#73787a;margin-top:4px;display:block;">If set, Mark will suggest this page when visitors show strong buying interest.</span>
                 </div>
 
                 <!-- CTA Text -->
                 <div>
                     <label style="${T.label}">CTA Button Text (Optional)</label>
-                    <input id="ss-cta-text" type="text" value="${esc(ss.cta_text||'')}" style="${T.input}" placeholder="e.g., Get Started, Book a Call, Contact Us" />
+                    <input id="ss-cta-text" type="text" value="${esc(ctaText)}" style="${T.input}" placeholder="e.g., Get Started, Book a Call, Contact Us" />
                 </div>
 
                 <div style="padding-top:24px;border-top:1px solid rgba(194,199,202,0.3);display:flex;justify-content:flex-end;">
@@ -1031,17 +1038,6 @@
         try {
             await api('PUT', 'stores/' + currentStore.store_id, data);
             currentStore = { ...currentStore, ...data };
-            // Rebuild the nested sales_settings object so renderSalesTab reads fresh data
-            currentStore.sales_settings = {
-                behavior: data.sales_behavior,
-                no_discounts: data.sales_no_discounts,
-                no_price_promises: data.sales_no_price_promises,
-                no_guarantees: data.sales_no_guarantees,
-                objection_style: data.sales_objection_style,
-                lead_capture: data.sales_lead_capture,
-                cta_url: data.sales_cta_url,
-                cta_text: data.sales_cta_text,
-            };
             toast('Sales settings saved!', 'success');
         } catch (e) { toast(e.message, 'error'); }
     }
@@ -1105,7 +1101,7 @@
             previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><div style="animation:markRobotBob 0.8s ease-in-out infinite;font-size:28px;">🤖</div><span style="font-size:14px;color:#42484a;">Generating voice...</span></div>`;
         }
         const settings = markAI || {};
-        const backendUrl = currentStore?.backend_url || settings.backendUrl || 'https://mark-ix64.onrender.com';
+        const backendUrl = settings.backendUrl || 'https://mark-ix64.onrender.com';
         try {
             const res = await fetch(backendUrl + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text, language: 'en', store_id: currentStore?.store_id || '' }) });

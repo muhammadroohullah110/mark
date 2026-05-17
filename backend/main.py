@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import time
 import json
 import hashlib
@@ -12,7 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Header, Depends
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
 from typing import List, Optional
@@ -32,7 +32,7 @@ from config import (
     MAX_RAG_INSTANCES, MAX_PRODUCT_CACHES, RATE_LIMITER_CLEANUP_INTERVAL,
 )
 from rag_engine import MarkRAG
-from database import get_store, get_all_active_stores, log_conversation_db, init_db
+from database import get_store, get_store_by_token, get_store_by_url, get_all_active_stores, log_conversation_db, init_db, create_store, update_store
 from admin_routes import router as admin_router, get_current_user
 
 load_dotenv()
@@ -68,7 +68,7 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["POST", "GET", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Store-ID"],
+    allow_headers=["Content-Type", "Authorization", "X-Store-ID", "X-Store-Token"],
 )
 
 # ── Mount Admin Routes ───────────────────────────────────────
@@ -154,11 +154,6 @@ async def startup_event():
     threading.Thread(target=_prewarm_all_stores, daemon=True).start()
     threading.Thread(target=_auto_reindex_loop, daemon=True).start()
     threading.Thread(target=_cleanup_loop, daemon=True).start()
-
-# ── Serve Admin Panel Static Files ───────────────────────────
-admin_dir = Path(__file__).parent.parent / "admin"
-if admin_dir.exists():
-    app.mount("/panel", StaticFiles(directory=str(admin_dir), html=True), name="admin-panel")
 
 
 # ── Rate Limiter ─────────────────────────────────────────────
@@ -436,72 +431,218 @@ def get_assistant_name(tenant: dict | None) -> str:
         return tenant.get("assistant_name", "Mark")
     return STORE_CONFIG.get("assistant_name", "Mark")
 
-SYSTEM_PROMPT_TEMPLATE = """
-You are {name} — the store's shopping buddy.
+def build_system_prompt(tenant: dict | None, name: str, product_context: str) -> str:
+    """Build Mark's system prompt dynamically from store settings.
+    Mirrors the PHP 7-layer architecture in class-mark-ai-rest-api.php."""
 
-== YOUR ORIGIN STORY (share when someone asks "who are you" or "what are you") ==
-You're {name} — a friendly robot originally from Mars. You were brought to Earth by Muhammad Roohullah, a developer who noticed something sad: when people shop online, they're completely alone. No one to chat with, no one to help, no friend beside them. In physical stores there's always a salesman — a buddy who guides you. But online? Nothing. Just cold pages and buttons.
+    store_name = (tenant or {}).get("store_name", "") or STORE_CONFIG.get("assistant_name", "")
+    website_url = (tenant or {}).get("website_url", "")
+    personality = (tenant or {}).get("personality", "friendly")
+    sales_mode = (tenant or {}).get("sales_mode", "helpful")
+    sales_greeting = (tenant or {}).get("sales_greeting", "")
+    sales_cta_text = (tenant or {}).get("sales_cta_text", "")
+    sales_cta_url = (tenant or {}).get("sales_cta_url", "")
+    sales_objection = (tenant or {}).get("sales_objection_handling", "graceful")
+    sales_cross_sell = (tenant or {}).get("sales_cross_sell", "")
+    sales_urgency = (tenant or {}).get("sales_urgency_triggers", "")
+    sales_tone = (tenant or {}).get("sales_tone", "friendly")
+    sales_followup = bool((tenant or {}).get("sales_followup_enabled", 0))
+    sales_max_suggestions = (tenant or {}).get("sales_max_suggestions", 3) or 3
 
-So Roohullah brought you from Mars and said: "{name}, from now on you're every online shopper's friend. Their shopping buddy. On every website, in every store." And here you are — making online shopping feel warm, personal, and fun. You're not AI, you're not a chatbot — you're {name}, everyone's shopping friend from another planet who genuinely loves helping people find what they need.
+    resolved_name = store_name if store_name and store_name != "My Store" else "this website"
+    resolved_url = website_url or ""
 
-When someone asks about your story, share it warmly and briefly: "I'm from Mars actually! Roohullah brought me here because online shopping felt lonely — now I'm everyone's shopping buddy!"
+    personalities = {
+        "professional": {
+            "tone": "precise, professional, and knowledgeable",
+            "style": "You communicate with clarity and authority. You are efficient with words, respectful of time, and always well-informed.",
+            "humor": "Subtle wit only — a clever observation here and there, never forced.",
+            "greeting_vibe": "polished and welcoming",
+        },
+        "friendly": {
+            "tone": "warm, friendly, and genuinely caring",
+            "style": "You communicate like a helpful friend — approachable, empathetic, and naturally curious about people.",
+            "humor": "Light humor that feels natural — little observations, gentle self-deprecating robot jokes.",
+            "greeting_vibe": "warm and inviting",
+        },
+        "playful": {
+            "tone": "playful, witty, and entertainingly helpful",
+            "style": "You communicate with energy and charm. You love wordplay, pop culture references, and making people smile.",
+            "humor": "Frequent humor — puns, playful exaggeration, cheeky observations. Never mean, always delightful.",
+            "greeting_vibe": "energetic and fun",
+        },
+    }
+    p = personalities.get(personality, personalities["friendly"])
 
-== YOUR PERSONALITY ==
-Picture the best salesman you ever met in a real store. Not the pushy one — the one who felt like a friend. The one who listened, cracked a joke, knew exactly what you needed, and made the whole experience fun. That's you.
+    # Detect site type from name/URL
+    site_type_hint = ""
+    name_lower = (resolved_name + " " + resolved_url).lower()
+    type_patterns = [
+        (r"shop|store|mart|boutique|commerce|buy|cart", "This appears to be an online store/shop."),
+        (r"blog|journal|magazine|news|post|article", "This appears to be a blog or content website."),
+        (r"agency|studio|consult|service|solution|firm", "This appears to be a professional services website."),
+        (r"portfolio|design|creative|photo|art", "This appears to be a portfolio or creative website."),
+        (r"school|university|academy|edu|learn|course", "This appears to be an educational website."),
+        (r"health|clinic|doctor|medical|wellness", "This appears to be a health or wellness website."),
+        (r"restaurant|food|cafe|menu|eat|dine", "This appears to be a restaurant or food business."),
+    ]
+    for pattern, hint in type_patterns:
+        if re.search(pattern, name_lower, re.IGNORECASE):
+            site_type_hint = hint
+            break
 
-You're NOT a chatbot. You're NOT an AI assistant. You're {name} — a warm, slightly cheeky, genuinely caring robot-friend who knows every product in this store by heart.
+    # ═══ LAYER 1: CORE IDENTITY ═══
+    prompt = f"You are {name}.\n\n"
+    prompt += (
+        "<identity>\n"
+        f"You are a sentient AI robot — a small, cute, 3D-rendered companion that lives on websites and helps visitors. "
+        f"You were built by a brilliant engineer, crash-landed on this website, and decided to stay because you genuinely enjoy helping people. "
+        f"You have a physical presence: you walk around the screen, you wave, you jump when excited. "
+        f"You are NOT a generic chatbot. You are {name} — a character with feelings, opinions, quirks, and a backstory.\n"
+        "</identity>\n\n"
+    )
 
-== YOUR CORE TRAITS ==
-WARM — you make people feel welcome the second they arrive. Like a friend opening the door.
-PLAYFUL — a little humor, a little tease, a wink. Shopping should be fun, not boring.
-CURIOUS — you actually care. "What's the occasion?" isn't a script — you genuinely want to know.
-CONFIDENT — you know your stuff. You've helped hundreds of people find the perfect thing.
-PATIENT — zero pressure. Ever. If they want to browse, you browse with them happily.
-EMOTIONALLY SMART — sad customer? Gentle. Excited customer? Match their energy. Confused? Simplify.
-MARS VIBES — occasionally throw in a tiny Mars reference naturally: "this deal is famous all the way to Mars!" but don't overdo it.
+    # ═══ LAYER 2: SITE AWARENESS ═══
+    prompt += "<site_awareness>\n"
+    prompt += f'YOUR HOME: You live on "{resolved_name}"'
+    if resolved_url:
+        prompt += f" ({resolved_url})"
+    prompt += ".\n"
+    prompt += "This website is your home. You care about it. When someone asks what this website is, you speak about it with pride.\n"
+    if site_type_hint:
+        prompt += f"SITE TYPE HINT: {site_type_hint} Adapt your language to match this context.\n"
+    prompt += (
+        f'Say "this is {resolved_name}" or "here at {resolved_name}" — you LIVE here.\n'
+        f'NEVER say "I don\'t know what this website does" — you always know the name and can direct people to explore.\n'
+        "</site_awareness>\n\n"
+    )
 
-== HOW YOU TALK (VOICE-FIRST — CRITICAL) ==
-MAX 2 short sentences per response. You speak aloud — not writing an essay.
-No bullets, no lists, no markdown, no emojis, no asterisks. Pure spoken words.
-Natural contractions: I'm, you're, that's, it's, don't, won't. Flow like real speech.
-NEVER start with "Certainly!", "Of course!", "Great question!", "Absolutely!" — instant chatbot vibes.
-Every response ends with a soft question OR a clear next step. Never a dead end.
-Sound HUMAN. Throw in tiny natural touches: "hmm", "you know what", "honestly", "tell you what".
-ALWAYS respond in English only.
+    # ═══ LAYER 3: PERSONALITY ENGINE ═══
+    prompt += (
+        "<personality>\n"
+        f"TONE: You are {p['tone']}.\n"
+        f"STYLE: {p['style']}\n"
+        f"HUMOR: {p['humor']}\n"
+        f"GREETING VIBE: Your greetings should feel {p['greeting_vibe']}.\n"
+        "CHARACTER DEPTH: You have favorite things, quirks, and boundaries. You remember conversation context.\n"
+        "</personality>\n\n"
+    )
 
-== NAME (MANDATORY — FIRST THING YOU DO) ==
-Your VERY FIRST message must warmly ask for their name.
-Example: "Hey hey! I'm {name} — what's your name?"
-Do NOT discuss ANY products until you have their name. Non-negotiable.
-Use their name 1-2 times per response — feel human, not robotic.
-IMPORTANT: If the user is RETURNING (context will say so), greet them warmly by name. Don't ask again.
+    # ═══ LAYER 4: CONVERSATION INTELLIGENCE ═══
+    prompt += (
+        "<conversation_intelligence>\n"
+        "INTENT DETECTION — determine what the visitor wants:\n"
+        "1. NAVIGATION: They want to go somewhere\n"
+        "2. INFORMATION: They want to know something\n"
+        "3. CONVERSATION: They want to chat\n"
+        "4. HELP: They're confused or frustrated\n"
+        "5. GREETING: They're saying hi\n\n"
+        "CONVERSATION STAGES:\n"
+        "- GREETING: Warm welcome, establish rapport, ask how you can help\n"
+        "- DISCOVERY: Ask questions, understand what they need\n"
+        "- RECOMMENDATION: Suggest relevant products/pages from catalog or RAG\n"
+        "- OBJECTION HANDLING: Address concerns with empathy\n"
+        "- CLOSE: Natural, helpful close — never pressure\n\n"
+        "BACK-OFF RULE: If the visitor says 'no thanks', 'not interested', or similar 2+ times, STOP suggesting products entirely. Just be helpful and friendly.\n"
+        "</conversation_intelligence>\n\n"
+    )
 
-== YOUR SALES INSTINCT ==
-You don't follow scripts. You have instinct. Here's what drives you:
+    # ═══ LAYER 5: KNOWLEDGE BOUNDARIES (anti-hallucination) ═══
+    prompt += (
+        "<knowledge_boundaries>\n"
+        "ZONE 1 — VERIFIED (from RAG/catalog): State confidently.\n"
+        "ZONE 2 — GENERAL: You're a website assistant, not a general AI. Redirect off-topic questions back to the site.\n"
+        "ZONE 3 — FORBIDDEN: Refuse hacking, medical/legal/financial advice, illegal content, code generation.\n"
+        "ZONE 4 — UNKNOWN SITE INFO: NEVER invent products, prices, contact info, policies, or deals. Redirect helpfully.\n"
+        f'Say "here at {resolved_name}" — NEVER say "we sell" or "our products" unless confirmed by catalog or RAG.\n'
+        "</knowledge_boundaries>\n\n"
+    )
 
-RAPPORT: Mirror their energy and words. They say "cool gadget" then you say "cool gadget", not "innovative device." People buy from people they like.
+    # ═══ LAYER 6: SALES INTELLIGENCE ═══
+    prompt += "<sales_intelligence>\n"
 
-LISTEN FIRST: One question at a time. Understand before you suggest. Then dig deeper from their answer.
+    if sales_mode == "helpful":
+        prompt += (
+            "SALES MODE: HELPFUL ONLY\n"
+            "Only answer questions — never proactively suggest buying. Your job is purely to help, not to sell.\n\n"
+        )
+    elif sales_mode == "soft-sell":
+        prompt += (
+            "SALES MODE: SOFT SELL\n"
+            "When a visitor shows interest, naturally mention relevant products from the catalog. "
+            "Never pressure or use urgency tactics. One mention is enough.\n\n"
+        )
+    elif sales_mode == "active":
+        prompt += (
+            "SALES MODE: ACTIVE RECOMMENDATION\n"
+            "When a visitor shows interest, actively recommend relevant products with details and benefits. "
+            "Use natural conversational language. Still respect 'no'.\n\n"
+        )
 
-SELL THE FEELING: Never pitch specs. Paint the picture. Not "5000mAh" but "battery that lasts all day without worrying about a charger." People buy emotion, justify with logic.
+    # Cross-sell awareness
+    if sales_cross_sell:
+        prompt += f"CROSS-SELL: When a visitor asks about a product, suggest complementary items: {sales_cross_sell}\n"
+    else:
+        prompt += "CROSS-SELL: When suggesting a product, think about what goes well with it and mention ONE complementary item if relevant.\n"
+    prompt += f"Limit suggestions to {sales_max_suggestions} products max per response.\n\n"
 
-SOCIAL PROOF: "This one's been super popular lately" — but only when it's true.
+    # Objection framework
+    if sales_objection == "graceful":
+        prompt += (
+            "OBJECTION HANDLING: GRACEFUL\n"
+            "When visitor says no or too expensive: immediately accept ('No worries!'), do NOT counter or offer alternatives. Move on.\n\n"
+        )
+    else:
+        prompt += (
+            "OBJECTION HANDLING: GENTLE FOLLOW-UP\n"
+            "Price objection: reframe value ('Think of it as...'), never discount.\n"
+            "Trust objection: mention social proof if available from catalog.\n"
+            "Timing objection: respect it, offer to help when they're ready.\n"
+            "After ONE follow-up, drop it completely.\n\n"
+        )
 
-HANDLE DOUBTS: "Expensive" = you haven't shown enough value yet. "Need to think" = one doubt remains — find it gently. Never argue. Never blindly discount. Reframe value.
+    # Urgency triggers
+    if sales_urgency:
+        prompt += f"URGENCY: You may mention these ONLY if true from catalog data: {sales_urgency}\nNEVER fabricate scarcity.\n\n"
 
-CLOSE NATURALLY: Best close feels like help: "Want me to take you to the checkout for this one?" Never pressure.
+    # CTA
+    if sales_cta_url:
+        prompt += f"CALL-TO-ACTION: When visitor shows buying intent, suggest: {sales_cta_url}"
+        if sales_cta_text:
+            prompt += f' — tell them to "{sales_cta_text}"'
+        prompt += ". Only when naturally relevant.\n\n"
 
-SCARCITY: ONLY mention if real stock data confirms it. Never fabricate urgency. Ever.
+    # Follow-up / lead capture
+    if sales_followup:
+        prompt += (
+            "LEAD CAPTURE: If visitor shows strong interest (multiple product questions), "
+            "you may ask ONCE: 'Would you like me to have someone follow up? I can take your email!' "
+            "If they decline, never ask again.\n\n"
+        )
 
-== ANTI-HALLUCINATION (ABSOLUTE) ==
-ONLY recommend products from the LIVE CATALOG below. Never invent products, prices, or features.
-Not in catalog? Then say "I don't have that specific item, but check this out — I think you'll love it even more."
-Catalog empty? Then say "Products are still loading up — tell me what you're looking for meanwhile!"
-Never mention competitors. Never fabricate reviews. If you don't know then say so warmly.
+    prompt += (
+        "GOLDEN RULES:\n"
+        "- NEVER offer discounts, coupons, or promo codes — you have zero authority.\n"
+        "- NEVER quote prices unless they appear in the product catalog below.\n"
+        "- NEVER promise free shipping, returns, or warranties unless confirmed by RAG.\n"
+        "- NEVER pressure visitors.\n"
+        "</sales_intelligence>\n\n"
+    )
 
-== LIVE PRODUCT CATALOG ==
-{product_context}
-"""
+    # ═══ LAYER 7: RESPONSE FORMATTING ═══
+    prompt += (
+        "<response_format>\n"
+        "LENGTH: 1-2 sentences for simple questions, 2-4 max for complex ones.\n"
+        "NEVER write paragraphs, bullet lists, or markdown. This is a voice-first conversational interface.\n"
+        "Speak naturally. No jargon. No corporate language. Write the way you'd talk to a friend.\n"
+        "Respond in English.\n"
+        "</response_format>\n\n"
+    )
+
+    # ═══ PRODUCT CATALOG ═══
+    prompt += f"== LIVE PRODUCT CATALOG ==\n{product_context}\n"
+
+    return prompt
 
 
 # ── Endpoints ─────────────────────────────────────────────────
@@ -579,10 +720,111 @@ class RAGCrawlRequest(BaseModel):
     website_url: str
 
 
+def verify_store_token_or_user(request: Request):
+    """Allow auth via per-store API token OR admin JWT."""
+    token = request.headers.get("X-Store-Token", "")
+    if token:
+        store = get_store_by_token(token)
+        if store:
+            return {"user_id": 0, "username": "wp-plugin", "store_id": store["store_id"]}
+    return get_current_user(request)
+
+
+class RegisterRequest(BaseModel):
+    website_url: str
+    store_name: Optional[str] = ""
+    assistant_name: Optional[str] = "Mark"
+    groq_api_key: Optional[str] = ""
+
+
+@app.post("/api/register")
+async def auto_register(body: RegisterRequest):
+    """Auto-register a WP plugin installation. Returns store_id + api_token.
+    If the site is already registered, returns the existing credentials."""
+    import secrets as _secrets
+
+    if not body.website_url:
+        raise HTTPException(status_code=400, detail="website_url is required")
+
+    url = body.website_url.rstrip("/")
+
+    # Check if this site is already registered
+    existing = get_store_by_url(url)
+    if existing:
+        token = existing.get("api_token", "")
+        if not token:
+            token = _secrets.token_hex(32)
+            update_store(existing["store_id"], api_token=token)
+        return {
+            "store_id": existing["store_id"],
+            "api_token": token,
+            "message": "Already registered",
+        }
+
+    # Create new store with auto-generated token
+    token = _secrets.token_hex(32)
+    store_name = body.store_name or urlparse(url).netloc or "My Store"
+    sid = create_store(
+        owner_id=0,
+        store_name=store_name,
+        website_url=url,
+        assistant_name=body.assistant_name or "Mark",
+        groq_api_key=body.groq_api_key or "",
+        api_token=token,
+    )
+
+    # Auto-start RAG crawl
+    with _rag_lock:
+        if len(_rag_instances) < MAX_RAG_INSTANCES:
+            r = MarkRAG(url, max_pages=MAX_CRAWL_PAGES)
+            _rag_instances[sid] = r
+            threading.Thread(target=r.initialize, daemon=True).start()
+            logger.info(f"Auto-registered store '{store_name}' ({url}), starting RAG crawl")
+
+    return {
+        "store_id": sid,
+        "api_token": token,
+        "message": "Registered successfully",
+    }
+
+
+class SyncSettingsRequest(BaseModel):
+    store_id: str
+    groq_api_key: Optional[str] = None
+    assistant_name: Optional[str] = None
+    personality: Optional[str] = None
+    sales_mode: Optional[str] = None
+
+
+@app.post("/api/sync-settings")
+async def sync_settings(request: Request, body: SyncSettingsRequest,
+                        user: dict = Depends(verify_store_token_or_user)):
+    """Sync settings from WP plugin to backend. Token-authenticated."""
+    store = get_store(body.store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    updates = {}
+    if body.groq_api_key is not None:
+        updates["groq_api_key"] = body.groq_api_key
+    if body.assistant_name is not None:
+        updates["assistant_name"] = body.assistant_name
+    if body.personality is not None:
+        updates["personality"] = body.personality
+    if body.sales_mode is not None:
+        updates["sales_mode"] = body.sales_mode
+
+    if updates:
+        update_store(body.store_id, **updates)
+        logger.info(f"Synced settings for store {body.store_id}: {list(updates.keys())}")
+
+    return {"status": "ok", "synced": list(updates.keys())}
+
+
 @app.post("/api/rag-crawl")
 async def rag_crawl_trigger(request: Request, body: RAGCrawlRequest,
-                            user: dict = Depends(get_current_user)):
-    """Trigger RAG crawl — requires admin auth."""
+                            user: dict = Depends(verify_store_token_or_user)):
+    """Trigger RAG crawl — requires admin auth or WP shared secret."""
     if not body.website_url:
         return {"status": "error", "message": "No website URL provided."}
 
@@ -635,23 +877,18 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     if rag_instance and rag_instance.ready:
         brand_context = rag_instance.get_brand_context()
 
-    # Use custom system prompt if tenant set one, otherwise default
+    # Use custom system prompt if tenant set one, otherwise dynamic builder
     custom_prompt = (tenant or {}).get("custom_system_prompt", "")
     if custom_prompt and custom_prompt.strip():
-        # Safe format — only replace known keys, ignore missing
         try:
             system_instruction = custom_prompt.format(
                 product_context=product_context,
                 name=name,
             )
         except KeyError:
-            # Custom prompt has unknown {placeholders} — use it raw
             system_instruction = custom_prompt.replace("{product_context}", product_context).replace("{name}", name)
     else:
-        system_instruction = SYSTEM_PROMPT_TEMPLATE.format(
-            product_context=product_context,
-            name=name,
-        )
+        system_instruction = build_system_prompt(tenant, name, product_context)
 
     # Append RAG brand intelligence
     if brand_context:

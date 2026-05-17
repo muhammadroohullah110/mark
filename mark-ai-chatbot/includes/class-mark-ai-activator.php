@@ -16,6 +16,7 @@ class Mark_AI_Activator {
         self::create_tables();
         self::set_defaults();
         self::auto_create_store();
+        self::auto_register_backend();
         flush_rewrite_rules();
     }
 
@@ -25,6 +26,19 @@ class Mark_AI_Activator {
      */
     public static function upgrade_tables() {
         self::create_tables();
+    }
+
+    /**
+     * Retry backend registration if it failed during activation.
+     * Throttled to once per 5 minutes to avoid hammering the backend.
+     */
+    public static function auto_register_retry() {
+        $last_attempt = get_transient('mark_ai_register_attempt');
+        if ($last_attempt) {
+            return; // Already tried recently
+        }
+        set_transient('mark_ai_register_attempt', 1, 300); // 5 min cooldown
+        self::auto_register_backend();
     }
 
     /**
@@ -133,6 +147,43 @@ class Mark_AI_Activator {
         // Only set defaults if not already configured
         if (!get_option('mark_ai_settings')) {
             update_option('mark_ai_settings', $defaults);
+        }
+    }
+
+    /**
+     * Auto-register with the Mark AI backend.
+     * Gets a store_id + api_token so the plugin works with zero config.
+     * Safe to call multiple times — backend returns existing credentials.
+     */
+    private static function auto_register_backend() {
+        $settings = get_option('mark_ai_settings', []);
+
+        // Already registered? Skip.
+        if (!empty($settings['api_token']) && !empty($settings['remote_store_id'])) {
+            return;
+        }
+
+        $response = wp_remote_post(MARK_AI_BACKEND . '/api/register', [
+            'timeout'  => 15,
+            'headers'  => ['Content-Type' => 'application/json'],
+            'body'     => wp_json_encode([
+                'website_url'    => home_url(),
+                'store_name'     => get_bloginfo('name') ?: 'My Store',
+                'assistant_name' => 'Mark',
+                'groq_api_key'   => $settings['groq_api_key'] ?? '',
+            ]),
+        ]);
+
+        if (is_wp_error($response)) {
+            // Backend might be sleeping (Render cold start). Will retry on next page load.
+            return;
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        if (!empty($body['store_id']) && !empty($body['api_token'])) {
+            $settings['remote_store_id'] = $body['store_id'];
+            $settings['api_token']       = $body['api_token'];
+            update_option('mark_ai_settings', $settings);
         }
     }
 

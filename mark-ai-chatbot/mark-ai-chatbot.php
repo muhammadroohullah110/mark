@@ -26,6 +26,7 @@ define('MARK_AI_PATH', plugin_dir_path(__FILE__));
 define('MARK_AI_URL', plugin_dir_url(__FILE__));
 define('MARK_AI_BASENAME', plugin_basename(__FILE__));
 define('MARK_AI_SLUG', 'mark-ai');
+define('MARK_AI_BACKEND', 'https://mark-ix64.onrender.com');
 
 // ── Autoload Classes ────────────────────────────────────────
 require_once MARK_AI_PATH . 'includes/class-mark-ai-activator.php';
@@ -56,6 +57,12 @@ function mark_ai_init() {
     $current_db_version = get_option('mark_ai_db_version', '1.0.0');
     if (version_compare($current_db_version, MARK_AI_VERSION, '<')) {
         Mark_AI_Activator::upgrade_tables();
+    }
+
+    // Auto-register with backend if not done yet (handles Render cold start)
+    $settings = get_option('mark_ai_settings', []);
+    if (empty($settings['api_token']) || empty($settings['remote_store_id'])) {
+        Mark_AI_Activator::auto_register_retry();
     }
 
     // REST API endpoints (always loaded)

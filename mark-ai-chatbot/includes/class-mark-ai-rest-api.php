@@ -238,7 +238,7 @@ class Mark_AI_Rest_API {
             'groq_api_key', 'default_voice',
             'tts_rate', 'tts_pitch', 'llm_model', 'max_tokens', 'temperature',
             'widget_enabled', 'widget_position', 'auto_greet', 'primary_language',
-            'backend_url', 'widget_accent_color', 'greeting_sound_text', 'idle_timeout',
+            'widget_accent_color', 'greeting_sound_text', 'idle_timeout',
         ];
 
         foreach ($allowed as $key) {
@@ -252,7 +252,7 @@ class Mark_AI_Rest_API {
                     $value = is_numeric( $value ) ? $value : $current[ $key ] ?? '';
                 } elseif ( $key === 'widget_accent_color' ) {
                     $value = sanitize_hex_color( $value ) ?: '';
-                } elseif ( $key === 'backend_url' || $key === 'widget_position' ) {
+                } elseif ( $key === 'widget_position' ) {
                     $value = sanitize_text_field( $value );
                 } elseif ( $key === 'groq_api_key' ) {
                     // Only update if a real key is provided (not masked)
@@ -270,6 +270,12 @@ class Mark_AI_Rest_API {
 
         update_option('mark_ai_settings', $current);
         $this->bust_cache( 'dashboard' );
+
+        // Sync Groq API key to backend if we have a token
+        if (!empty($current['api_token']) && !empty($current['remote_store_id']) && isset($body['groq_api_key'])) {
+            $this->sync_key_to_backend($current);
+        }
+
         return new WP_REST_Response(['message' => 'Settings saved!', 'settings' => $current], 200);
     }
 
@@ -1177,19 +1183,45 @@ class Mark_AI_Rest_API {
     }
 
     /**
+     * Sync Groq API key to the backend so it can use it for this store.
+     */
+    private function sync_key_to_backend($settings) {
+        $token    = $settings['api_token'] ?? '';
+        $store_id = $settings['remote_store_id'] ?? '';
+        $key      = $settings['groq_api_key'] ?? '';
+        if (!$token || !$store_id || !$key) return;
+
+        wp_remote_post(MARK_AI_BACKEND . '/api/sync-settings', [
+            'timeout'  => 5,
+            'blocking' => false,
+            'headers'  => [
+                'Content-Type'  => 'application/json',
+                'X-Store-Token' => $token,
+            ],
+            'body'     => wp_json_encode([
+                'store_id'     => $store_id,
+                'groq_api_key' => $key,
+            ]),
+        ]);
+    }
+
+    /**
      * Trigger RAG crawl on the Python backend.
      * Non-blocking — fires and forgets so store creation isn't delayed.
      */
     private function trigger_rag_crawl($store_id, $website_url) {
-        $settings    = get_option('mark_ai_settings', []);
-        $backend_url = !empty($settings['backend_url'])
-            ? $settings['backend_url']
-            : 'https://mark-ix64.onrender.com';
+        $settings  = get_option('mark_ai_settings', []);
+        $api_token = $settings['api_token'] ?? '';
 
-        wp_remote_post($backend_url . '/api/rag-crawl', [
+        $headers = ['Content-Type' => 'application/json'];
+        if ($api_token) {
+            $headers['X-Store-Token'] = $api_token;
+        }
+
+        wp_remote_post(MARK_AI_BACKEND . '/api/rag-crawl', [
             'timeout'  => 3,
             'blocking' => false,
-            'headers'  => ['Content-Type' => 'application/json'],
+            'headers'  => $headers,
             'body'     => wp_json_encode([
                 'store_id'    => $store_id,
                 'website_url' => $website_url,
