@@ -1101,7 +1101,7 @@
             previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><div style="animation:markRobotBob 0.8s ease-in-out infinite;font-size:28px;">🤖</div><span style="font-size:14px;color:#42484a;">Generating voice...</span></div>`;
         }
         const settings = markAI || {};
-        const backendUrl = settings.backendUrl || 'https://mark-ix64.onrender.com';
+        const backendUrl = settings.backendUrl || 'https://mark-udfz.onrender.com';
         try {
             const res = await fetch(backendUrl + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text, language: 'en', store_id: currentStore?.store_id || '' }) });

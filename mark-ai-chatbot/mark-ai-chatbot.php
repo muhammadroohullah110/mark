@@ -26,7 +26,7 @@ define('MARK_AI_PATH', plugin_dir_path(__FILE__));
 define('MARK_AI_URL', plugin_dir_url(__FILE__));
 define('MARK_AI_BASENAME', plugin_basename(__FILE__));
 define('MARK_AI_SLUG', 'mark-ai');
-define('MARK_AI_BACKEND', 'https://mark-ix64.onrender.com');
+define('MARK_AI_BACKEND', 'https://mark-udfz.onrender.com');
 
 // ── Autoload Classes ────────────────────────────────────────
 require_once MARK_AI_PATH . 'includes/class-mark-ai-activator.php';

@@ -6,7 +6,7 @@
 import os
 
 # ── Backend URL (for embed code generation) ─────────────────
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://mark-ix64.onrender.com")
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://mark-udfz.onrender.com")
 
 # ── Website URL (set via env var or admin panel per-store) ───
 CLIENT_WEBSITE_URL = os.environ.get("CLIENT_WEBSITE_URL", "")

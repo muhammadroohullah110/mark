@@ -33,7 +33,7 @@ This plugin connects to the following external services:
 
 1. **Groq API** (https://groq.com) — Used for AI chat responses. Requires a free API key from https://console.groq.com. [Terms of Use](https://groq.com/terms-of-use/) | [Privacy Policy](https://groq.com/privacy-policy/)
 
-2. **Mark AI Backend** (https://mark-ix64.onrender.com) — Optional Python backend for voice synthesis (Edge TTS), speech-to-text (Whisper), and RAG content indexing. This is an open-source companion service. The plugin works without it using WordPress REST fallback for text chat. [Source Code](https://github.com/muhammadroohullah110/mark)
+2. **Mark AI Backend** (https://mark-udfz.onrender.com) — Optional Python backend for voice synthesis (Edge TTS), speech-to-text (Whisper), and RAG content indexing. This is an open-source companion service. The plugin works without it using WordPress REST fallback for text chat. [Source Code](https://github.com/muhammadroohullah110/mark)
 
 3. **GitHub API** (https://api.github.com) — Used only for checking plugin updates from the GitHub releases page. No user data is sent.
 

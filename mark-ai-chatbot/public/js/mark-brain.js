@@ -11,7 +11,7 @@
     const CFG = (typeof markAIConfig !== 'undefined') ? markAIConfig : {};
 
     // Backend URL — Python FastAPI on Render (primary for chat, TTS, transcribe, RAG)
-    const BACKEND = CFG.backendUrl || 'https://mark-ix64.onrender.com';
+    const BACKEND = CFG.backendUrl || 'https://mark-udfz.onrender.com';
 
     // WP REST — fallback for chat if backend is down
     const WP_REST = CFG.restUrl || '/wp-json/mark-ai/v1/';
