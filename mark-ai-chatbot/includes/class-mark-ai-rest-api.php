@@ -1212,6 +1212,8 @@ class Mark_AI_Rest_API {
     private function trigger_rag_crawl($store_id, $website_url) {
         $settings  = get_option('mark_ai_settings', []);
         $api_token = $settings['api_token'] ?? '';
+        // Use backend's remote_store_id (not WP's local store_id)
+        $remote_id = $settings['remote_store_id'] ?? $store_id;
 
         $headers = ['Content-Type' => 'application/json'];
         if ($api_token) {
@@ -1223,7 +1225,7 @@ class Mark_AI_Rest_API {
             'blocking' => false,
             'headers'  => $headers,
             'body'     => wp_json_encode([
-                'store_id'    => $store_id,
+                'store_id'    => $remote_id,
                 'website_url' => $website_url,
             ]),
         ]);

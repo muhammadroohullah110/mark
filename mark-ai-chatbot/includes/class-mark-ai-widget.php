@@ -62,6 +62,7 @@ class Mark_AI_Widget {
         echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
         echo '<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>' . "\n";
         echo '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="' . esc_url(MARK_AI_BACKEND) . '" crossorigin>' . "\n";
     }
 
     /**
@@ -179,7 +180,7 @@ class Mark_AI_Widget {
             'language'    => $settings['primary_language'] ?? 'en',
             'autoGreet'   => !empty($settings['auto_greet']),
             'position'    => $settings['widget_position'] ?? 'bottom-right',
-            'storeId'     => $active_store ? $active_store['store_id'] : '',
+            'storeId'     => !empty($settings['remote_store_id']) ? $settings['remote_store_id'] : ($active_store ? $active_store['store_id'] : ''),
             'backendUrl'  => MARK_AI_BACKEND,
             'accentColor'      => sanitize_hex_color( $settings['widget_accent_color'] ?? '' ) ?: '#667eea',
             'greetingSoundText' => sanitize_text_field( $settings['greeting_sound_text'] ?? 'Ayie!' ),

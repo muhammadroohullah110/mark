@@ -129,9 +129,11 @@
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 8000);
 
+            const ragHeaders = { 'Content-Type': 'application/json' };
+            if (STORE_ID) ragHeaders['X-Store-ID'] = STORE_ID;
             const response = await fetch(`${BACKEND}/api/rag-search`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: ragHeaders,
                 body: JSON.stringify({
                     query,
                     top_k: topK,

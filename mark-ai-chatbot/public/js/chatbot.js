@@ -238,7 +238,9 @@
     async function checkBackend() {
         if (!BACKEND) return;
         try {
-            const res = await fetch(`${BACKEND}/api/status`, { signal: AbortSignal.timeout(12000) });
+            const headers = {};
+            if (STORE_ID) headers['X-Store-ID'] = STORE_ID;
+            const res = await fetch(`${BACKEND}/api/status`, { headers, signal: AbortSignal.timeout(5000) });
             if (!res.ok) throw new Error('Status ' + res.status);
             const data = await res.json();
             backendAlive = true;
@@ -603,9 +605,11 @@
         // Try backend first (has Mark's full personality + product catalog)
         if (backendAlive) {
             try {
+                const greetHeaders = { 'Content-Type': 'application/json' };
+                if (STORE_ID) greetHeaders['X-Store-ID'] = STORE_ID;
                 const res = await fetch(`${BACKEND}/api/chat`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: greetHeaders,
                     body: JSON.stringify({
                         messages: [{ role: 'user', content: msg }],
                         user_language: language || detectedLanguage,
@@ -879,9 +883,11 @@
     }
 
     async function playBackendTTS(text) {
+        const ttsHeaders = { 'Content-Type': 'application/json' };
+        if (STORE_ID) ttsHeaders['X-Store-ID'] = STORE_ID;
         const res = await fetch(`${BACKEND}/api/tts`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: ttsHeaders,
             body: JSON.stringify({ text, language: detectedLanguage, store_id: STORE_ID }),
             signal: AbortSignal.timeout(12000)
         });
@@ -983,9 +989,9 @@
         }, 3000);
     }
 
-    /** Show a one-time hint when voice is blocked */
+    /** Show hint when voice is blocked — allows re-showing after dismiss */
     function showVoiceHint() {
-        if (document.getElementById('mark-voice-hint')) return; // already shown
+        if (document.getElementById('mark-voice-hint')) return; // already visible
         const hint = document.createElement('div');
         hint.id = 'mark-voice-hint';
         hint.innerHTML = '🔇 Voice blocked by browser. <button id="mark-enable-voice" style="background:' + ACCENT + ';color:#fff;border:none;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:12px;margin-left:6px;">Enable Voice</button>';
@@ -1011,7 +1017,13 @@
     /** Called when speech finishes (or fails). Resets Mark to idle. */
     function onSpeechDone() {
         window.markAnimator.play('idle');
-        hideCaption();
+        // Keep caption visible for minimum reading time (80ms per char, min 3s)
+        const text = liveCaption ? liveCaption.textContent : '';
+        const minDisplayMs = Math.max(3000, text.length * 80);
+        clearTimeout(hideCaptionTimer);
+        hideCaptionTimer = setTimeout(() => {
+            if (liveCaption) liveCaption.style.opacity = '0.6';
+        }, minDisplayMs);
         resetIdleTimer();
         // Update voice status after each speech attempt
         checkVoiceStatus();
@@ -1303,9 +1315,11 @@
                     messages.push({ role: 'system', content: ragContext });
                 }
 
+                const brainHeaders = { 'Content-Type': 'application/json' };
+                if (STORE_ID) brainHeaders['X-Store-ID'] = STORE_ID;
                 const res = await fetch(`${BACKEND}/api/chat`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: brainHeaders,
                     body: JSON.stringify({
                         messages: messages,
                         user_language: detectedLanguage,
