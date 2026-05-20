@@ -67,7 +67,19 @@
     // Robot — 3D model loaded from CDN (keeps plugin under 10MB for WordPress)
     const MODEL_CDN         = CFG.modelCdnUrl || (PLUGIN_URL + 'public/model/');
     const ROBOT_URL         = MODEL_CDN + 'robot.glb';
-    const WIDGET_PX         = DEVICE.mobile ? 90 : DEVICE.tablet ? 100 : 115;
+
+    // Admin-configurable size (scale 1-10, default 5)
+    const SCALE_DESK = Math.max(1, Math.min(10, parseInt(CFG.scaleDesktop) || 5));
+    const SCALE_MOB  = Math.max(1, Math.min(10, parseInt(CFG.scaleMobile)  || 5));
+    // Map scale 1-10 to pixel size: Desktop 60-200px, Mobile 45-150px, Tablet interpolated
+    function scaleToSize(scale, type) {
+        if (type === 'desktop') return Math.round(60 + (scale - 1) * (200 - 60) / 9);
+        if (type === 'mobile')  return Math.round(45 + (scale - 1) * (150 - 45) / 9);
+        return Math.round(50 + (scale - 1) * (170 - 50) / 9); // tablet
+    }
+    const WIDGET_PX = DEVICE.mobile ? scaleToSize(SCALE_MOB, 'mobile')
+                    : DEVICE.tablet ? scaleToSize(SCALE_DESK, 'tablet')
+                    : scaleToSize(SCALE_DESK, 'desktop');
     const TALKING_PX        = DEVICE.mobile ? 240 : DEVICE.tablet ? 280 : 320;
     // Idle timeout — uses admin setting, with sensible floor (15s min)
     const IDLE_TIMEOUT_SHORT = Math.max(IDLE_TIMEOUT_CFG, 15000);
@@ -636,70 +648,37 @@
     // GREETINGS — routes through backend (has Mark's soul + products)
     // ============================================================
     async function sendGreeting(type, name, language) {
-        showThinking();
-
-        let msg;
-        if (type === 'returning') {
-            msg = `__RETURNING__:Name is ${name}. Language preference is English.`;
-        } else {
-            msg = '__INIT__';
-        }
-
-        // Try backend first (has Mark's full personality + product catalog)
-        if (backendAlive) {
-            try {
-                const greetHeaders = { 'Content-Type': 'application/json' };
-                if (STORE_ID) greetHeaders['X-Store-ID'] = STORE_ID;
-                const res = await fetch(`${BACKEND}/api/chat`, {
-                    method: 'POST',
-                    headers: greetHeaders,
-                    body: JSON.stringify({
-                        messages: [{ role: 'user', content: msg }],
-                        user_language: language || detectedLanguage,
-                        store_id: STORE_ID
-                    }),
-                    signal: AbortSignal.timeout(15000)
-                });
-                const data = await res.json();
-                hideThinking();
-                if (data.response) {
-                    conversationHistory.push({ role: 'assistant', content: data.response });
-                    showCaption(data.response);
-                    speak(data.response);
-                    return;
-                }
-            } catch(e) {
-                console.log('[Mark] Backend chat failed:', e.message);
-                // fall through to WP fallback
-            }
-        }
-
-        // Fallback to WP REST
-        try {
-            const res = await fetch(WP_REST + 'chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE },
-                body: JSON.stringify({ message: msg, language: language || detectedLanguage, store_id: STORE_ID, session_id: SESSION_ID }),
-                signal: AbortSignal.timeout(15000)
-            });
-            const data = await res.json();
-            hideThinking();
-            if (data.reply) {
-                conversationHistory.push({ role: 'assistant', content: data.reply });
-                showCaption(data.reply);
-                speak(data.reply);
-                return;
-            }
-        } catch(e) {
-            console.log('[Mark] WP REST chat failed:', e.message);
-        }
-
-        // Hardcoded fallback — ALWAYS shows something
+        // ── INSTANT greeting — show immediately, don't wait for backend ──
+        // This eliminates the 2-5s latency for first interaction
+        const instantGreet = type === 'returning'
+            ? `${name}! Welcome back! How can I help you today?`
+            : "Hey there! I'm Mark. What's your name?";
         hideThinking();
-        const fb = type === 'returning'
-            ? `${name}! Welcome back! What are you looking for today?`
-            : "Hey hey! I'm Mark, your friendly robot assistant. What's your name?";
-        showCaption(fb); speak(fb);
+        showCaption(instantGreet);
+        speak(instantGreet);
+        conversationHistory.push({ role: 'assistant', content: instantGreet });
+
+        // Fire backend greeting in background to warm up the session
+        // (next message will be fast since Groq connection is primed)
+        const msg = type === 'returning'
+            ? `__RETURNING__:Name is ${name}. Language preference is English.`
+            : '__INIT__';
+
+        if (backendAlive) {
+            fetch(`${BACKEND}/api/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(STORE_ID ? { 'X-Store-ID': STORE_ID } : {})
+                },
+                body: JSON.stringify({
+                    messages: [{ role: 'user', content: msg }],
+                    user_language: language || detectedLanguage,
+                    store_id: STORE_ID
+                }),
+                signal: AbortSignal.timeout(10000)
+            }).catch(() => {}); // Fire and forget — primes the connection
+        }
     }
 
     // ============================================================
@@ -1338,15 +1317,9 @@
     window.processChatMessage = async function(userInput, ragContext) {
         conversationHistory.push({ role: 'user', content: userInput });
 
-        // Build the enriched message with RAG context (if available)
-        const enrichedInput = ragContext
-            ? userInput + ragContext
-            : userInput;
-
-        // Try Python backend first (full Mark personality + products + RAG)
+        // Try Python backend first with STREAMING (shows text as it arrives)
         if (backendAlive) {
             try {
-                // For backend, send RAG context as a separate system hint
                 const messages = conversationHistory.slice(-12);
                 if (ragContext) {
                     messages.push({ role: 'system', content: ragContext });
@@ -1360,9 +1333,60 @@
                     body: JSON.stringify({
                         messages: messages,
                         user_language: detectedLanguage,
-                        store_id: STORE_ID
-                    })
+                        store_id: STORE_ID,
+                        stream: true
+                    }),
+                    signal: AbortSignal.timeout(20000)
                 });
+
+                // ── Stream mode: read SSE tokens and show caption live ──
+                if (res.ok && res.headers.get('content-type')?.includes('text/event-stream')) {
+                    hideThinking();
+                    let fullReply = '';
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+
+                        // Parse SSE lines
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // Keep incomplete line in buffer
+                        for (const line of lines) {
+                            if (!line.startsWith('data: ')) continue;
+                            try {
+                                const evt = JSON.parse(line.slice(6));
+                                if (evt.token) {
+                                    fullReply += evt.token;
+                                    // Show caption live as tokens arrive
+                                    showCaption(fullReply, false);
+                                }
+                                if (evt.done && evt.response) {
+                                    fullReply = evt.response;
+                                }
+                                if (evt.error) {
+                                    console.log('[Mark] Stream error:', evt.error);
+                                }
+                            } catch(_) {}
+                        }
+                    }
+
+                    if (fullReply) {
+                        const reply = fullReply.trim();
+                        conversationHistory.push({ role: 'assistant', content: reply });
+                        exchangeCount++;
+                        if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
+                        saveSessionHistory();
+                        showCaption(reply, true);
+                        speak(reply);
+                        return;
+                    }
+                }
+
+                // Non-streaming fallback (if backend doesn't stream)
                 const data = await res.json();
                 hideThinking();
                 if (data.response) {
@@ -1376,15 +1400,14 @@
                     return;
                 }
             } catch(e) {
-                // Backend failed, try WP fallback
+                console.log('[Mark] Backend chat failed:', e.message);
             }
         }
 
-        // Fallback: WP REST — inject RAG context into history so Groq sees it
+        // Fallback: WP REST (non-streaming)
         try {
             const historyForWP = conversationHistory.slice(-12);
             if (ragContext) {
-                // Add RAG context as a system message in the history
                 historyForWP.push({ role: 'system', content: ragContext });
             }
 
@@ -1397,7 +1420,8 @@
                     store_id: STORE_ID,
                     session_id: SESSION_ID,
                     history: historyForWP
-                })
+                }),
+                signal: AbortSignal.timeout(15000)
             });
             const data = await res.json();
             hideThinking();
@@ -1481,6 +1505,9 @@
     function init() {
         buildDOM();
         assignDOMRefs();
+        // Apply admin-configured size to widget
+        markWidget.style.width  = WIDGET_PX + 'px';
+        markWidget.style.height = WIDGET_PX + 'px';
         bindEvents();
         initThree();
 

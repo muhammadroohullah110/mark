@@ -60,6 +60,31 @@
     background: #73787a;
 }
 
+/* -- Range slider (Mark Size) -- */
+#mark-ai-app input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fc9b6c, #954921);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(149,73,33,0.35);
+    border: 2px solid #fff;
+    margin-top: -7px;
+    transition: transform 0.15s ease;
+}
+#mark-ai-app input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+#mark-ai-app input[type="range"]::-moz-range-thumb {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fc9b6c, #954921);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(149,73,33,0.35);
+    border: 2px solid #fff;
+}
+
 /* -- Chart canvas -- */
 #mark-ai-app canvas {
     max-width: 100%;

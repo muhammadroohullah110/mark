@@ -874,6 +874,8 @@
        TAB: SETTINGS
        ================================================================ */
     function renderSettingsTab(s) {
+        const deskScale = s.widget_scale_desktop || 5;
+        const mobScale  = s.widget_scale_mobile  || 5;
         return `
         <div style="${T.glassLight}padding:40px;">
             <form style="display:flex;flex-direction:column;gap:40px;" onsubmit="event.preventDefault();markAdmin.saveStoreSettings();">
@@ -887,11 +889,104 @@
                     <div><label style="${T.label}">Max Crawl Pages</label><input id="s-max-crawl" type="number" value="${s.max_crawl_pages||120}" style="${T.input}" /></div>
                     <div><label style="${T.label}">Status</label><select id="s-is-active" style="${T.select}"><option value="1" ${s.is_active?'selected':''}>Active (Deployed)</option><option value="0" ${!s.is_active?'selected':''}>Inactive (Maintenance)</option></select></div>
                 </div>
+
+                <!-- ── MARK SIZE CONTROL ── -->
+                <div style="padding:28px;border:1px solid rgba(149,73,33,0.15);border-radius:12px;background:rgba(252,155,108,0.04);">
+                    <h3 style="${T.headline}font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:8px;">
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#954921;">straighten</span>
+                        Mark Size
+                    </h3>
+                    <p style="color:#73787a;font-size:13px;margin:0 0 24px;">Control how big Mark appears on your website. Desktop and mobile have separate scales.</p>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;">
+                        <!-- Desktop Size -->
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                <label style="${T.label}margin:0;">
+                                    <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">desktop_windows</span>
+                                    Desktop Size
+                                </label>
+                                <span id="s-desk-val" style="font-size:22px;font-weight:600;color:#954921;font-family:'Open Sans',sans-serif;">${deskScale}</span>
+                            </div>
+                            <div style="position:relative;padding:4px 0;">
+                                <input id="s-scale-desktop" type="range" min="1" max="10" step="1" value="${deskScale}"
+                                    oninput="document.getElementById('s-desk-val').textContent=this.value;markAdmin.updateSizePreview();"
+                                    style="width:100%;height:6px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,rgba(149,73,33,0.15),rgba(149,73,33,0.4));border-radius:3px;outline:none;cursor:pointer;" />
+                            </div>
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#73787a;margin-top:4px;">
+                                <span>Tiny</span><span>Default</span><span>Large</span>
+                            </div>
+                        </div>
+
+                        <!-- Mobile Size -->
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                <label style="${T.label}margin:0;">
+                                    <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">smartphone</span>
+                                    Mobile Size
+                                </label>
+                                <span id="s-mob-val" style="font-size:22px;font-weight:600;color:#954921;font-family:'Open Sans',sans-serif;">${mobScale}</span>
+                            </div>
+                            <div style="position:relative;padding:4px 0;">
+                                <input id="s-scale-mobile" type="range" min="1" max="10" step="1" value="${mobScale}"
+                                    oninput="document.getElementById('s-mob-val').textContent=this.value;markAdmin.updateSizePreview();"
+                                    style="width:100%;height:6px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,rgba(149,73,33,0.15),rgba(149,73,33,0.4));border-radius:3px;outline:none;cursor:pointer;" />
+                            </div>
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#73787a;margin-top:4px;">
+                                <span>Tiny</span><span>Default</span><span>Large</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview -->
+                    <div style="margin-top:24px;padding:20px;background:rgba(255,255,255,0.7);border-radius:10px;border:1px dashed rgba(149,73,33,0.2);">
+                        <div style="display:flex;align-items:center;justify-content:center;gap:48px;">
+                            <div style="text-align:center;">
+                                <div id="s-preview-desktop" style="width:115px;height:115px;border-radius:12px;background:linear-gradient(135deg,#fc9b6c,#954921);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;transition:all 0.3s ease;box-shadow:0 4px 15px rgba(149,73,33,0.25);">
+                                    <svg width="40" height="40" viewBox="0 0 20 20" fill="none"><line x1="10" y1="1" x2="10" y2="3.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="10" cy="1" r="1" fill="rgba(255,255,255,0.7)"/><rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="white"/><circle cx="7.2" cy="8" r="1.8" fill="#954921"/><circle cx="12.8" cy="8" r="1.8" fill="#954921"/><path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#fc9b6c" stroke-width="0.8" fill="none" stroke-linecap="round"/><rect x="5.5" y="13.5" width="9" height="4.5" rx="1.5" fill="white"/></svg>
+                                </div>
+                                <span style="font-size:12px;color:#73787a;font-weight:600;">Desktop</span>
+                                <span id="s-preview-desk-px" style="display:block;font-size:11px;color:#954921;">115px</span>
+                            </div>
+                            <div style="text-align:center;">
+                                <div id="s-preview-mobile" style="width:90px;height:90px;border-radius:10px;background:linear-gradient(135deg,#fc9b6c,#954921);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;transition:all 0.3s ease;box-shadow:0 4px 15px rgba(149,73,33,0.25);">
+                                    <svg width="30" height="30" viewBox="0 0 20 20" fill="none"><line x1="10" y1="1" x2="10" y2="3.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="10" cy="1" r="1" fill="rgba(255,255,255,0.7)"/><rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="white"/><circle cx="7.2" cy="8" r="1.8" fill="#954921"/><circle cx="12.8" cy="8" r="1.8" fill="#954921"/><path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#fc9b6c" stroke-width="0.8" fill="none" stroke-linecap="round"/><rect x="5.5" y="13.5" width="9" height="4.5" rx="1.5" fill="white"/></svg>
+                                </div>
+                                <span style="font-size:12px;color:#73787a;font-weight:600;">Mobile</span>
+                                <span id="s-preview-mob-px" style="display:block;font-size:11px;color:#954921;">90px</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div style="padding-top:24px;border-top:1px solid rgba(194,199,202,0.3);display:flex;justify-content:flex-end;">
                     <button type="submit" style="${T.btnPrimary}">Save Settings</button>
                 </div>
             </form>
         </div>`;
+    }
+
+    /** Map scale 1-10 to pixel size for preview */
+    function scaleToPixels(scale, type) {
+        // Desktop: 60px (scale 1) → 200px (scale 10), default 115px at scale 5
+        // Mobile:  45px (scale 1) → 150px (scale 10), default 90px at scale 5
+        if (type === 'desktop') return Math.round(60 + (scale - 1) * (200 - 60) / 9);
+        return Math.round(45 + (scale - 1) * (150 - 45) / 9);
+    }
+
+    function updateSizePreview() {
+        const dv = parseInt($('#s-scale-desktop')?.value || 5);
+        const mv = parseInt($('#s-scale-mobile')?.value || 5);
+        const dpx = scaleToPixels(dv, 'desktop');
+        const mpx = scaleToPixels(mv, 'mobile');
+        const dp = $('#s-preview-desktop');
+        const mp = $('#s-preview-mobile');
+        if (dp) { dp.style.width = dpx + 'px'; dp.style.height = dpx + 'px'; }
+        if (mp) { mp.style.width = mpx + 'px'; mp.style.height = mpx + 'px'; }
+        const dpxEl = $('#s-preview-desk-px');
+        const mpxEl = $('#s-preview-mob-px');
+        if (dpxEl) dpxEl.textContent = dpx + 'px';
+        if (mpxEl) mpxEl.textContent = mpx + 'px';
     }
 
     async function saveStoreSettings() {
@@ -913,6 +1008,8 @@
             assistant_name: $('#s-assistant-name').value, personality: $('#s-personality').value,
             primary_language: $('#s-primary-lang').value, is_active: $('#s-is-active').value === '1',
             max_crawl_pages: maxCrawl, idle_timeout: idleTimeout,
+            widget_scale_desktop: parseInt($('#s-scale-desktop')?.value || 5),
+            widget_scale_mobile: parseInt($('#s-scale-mobile')?.value || 5),
         };
         try {
             await api('PUT', 'stores/' + currentStore.store_id, data);
@@ -1493,6 +1590,7 @@
         saveGlobalSettings, testConnection,
         completeSetup, showPreview,
         startTour, endTour,
+        updateSizePreview,
     };
 
     /* ================================================================

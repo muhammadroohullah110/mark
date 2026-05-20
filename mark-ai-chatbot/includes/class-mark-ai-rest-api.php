@@ -346,6 +346,8 @@ class Mark_AI_Rest_API {
             'sales_behavior', 'sales_no_discounts', 'sales_no_price_promises',
             'sales_no_guarantees', 'sales_objection_style',
             'sales_lead_capture', 'sales_cta_url', 'sales_cta_text',
+            // Widget size scale (1-10)
+            'widget_scale_desktop', 'widget_scale_mobile',
         ];
 
         $updates = [];
@@ -354,7 +356,9 @@ class Mark_AI_Rest_API {
                 $value = $body[$key];
 
                 // Type-specific validation
-                if ( in_array( $key, [ 'max_crawl_pages', 'idle_timeout', 'max_tokens', 'rate_chat', 'rate_tts', 'rate_transcribe' ], true ) ) {
+                if ( in_array( $key, [ 'widget_scale_desktop', 'widget_scale_mobile' ], true ) ) {
+                    $value = max( 1, min( 10, intval( $value ) ) );
+                } elseif ( in_array( $key, [ 'max_crawl_pages', 'idle_timeout', 'max_tokens', 'rate_chat', 'rate_tts', 'rate_transcribe' ], true ) ) {
                     $value = max( 1, intval( $value ) );
                 } elseif ( $key === 'temperature' ) {
                     $value = max( 0.0, min( 2.0, floatval( $value ) ) );

@@ -322,6 +322,7 @@ class ChatRequest(BaseModel):
     messages: List[Message]
     user_language: Optional[str] = "en"
     store_id: Optional[str] = None
+    stream: Optional[bool] = False
 
 class TTSRequest(BaseModel):
     text: str
@@ -934,6 +935,35 @@ async def chat_endpoint(request: Request, body: ChatRequest):
 
     messages_for_api.extend(cleaned)
 
+    # ── Streaming mode: send tokens as SSE for instant display ──
+    if body.stream:
+        def stream_generator():
+            full_reply = []
+            try:
+                stream_resp = groq.chat.completions.create(
+                    model=llm_model,
+                    messages=messages_for_api,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    stream=True,
+                )
+                for chunk in stream_resp:
+                    delta = chunk.choices[0].delta
+                    if delta and delta.content:
+                        full_reply.append(delta.content)
+                        yield f"data: {json.dumps({'token': delta.content})}\n\n"
+                # Final event with complete response
+                complete = ''.join(full_reply)
+                yield f"data: {json.dumps({'done': True, 'response': complete})}\n\n"
+                log_conversation(ip, cleaned, body.user_language, complete, body.store_id)
+            except Exception as e:
+                logger.error(f"Stream error: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return StreamingResponse(stream_generator(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    # ── Non-streaming mode (fallback) ──
     try:
         response = groq.chat.completions.create(
             model=llm_model,
