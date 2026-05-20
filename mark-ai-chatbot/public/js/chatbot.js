@@ -359,7 +359,7 @@
         // Draco decoder for compressed meshes (92% smaller GLB)
         if (typeof THREE.DRACOLoader !== 'undefined') {
             const dracoLoader = new THREE.DRACOLoader();
-            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/gltf/');
             loader.setDRACOLoader(dracoLoader);
         }
 
@@ -390,7 +390,7 @@
 
         // Try loading from browser Cache API first (instant on repeat visits)
         if ('caches' in window) {
-            caches.open('mark-ai-model-v1').then(cache => {
+            caches.open('mark-ai-model-v2').then(cache => {
                 cache.match(ROBOT_URL).then(cachedResponse => {
                     if (cachedResponse) {
                         console.log('[Mark] 🚀 Loading robot from cache (instant)');
