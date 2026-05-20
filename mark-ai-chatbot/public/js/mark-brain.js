@@ -36,6 +36,7 @@
         /\b(take me to|go to|navigate to|redirect to|open|bring me to)\b/i,
         /\b(checkout|my cart|shopping cart|proceed to)\b/i,
         /\b(visit|head to|jump to|switch to)\s+(the\s+)?\w+\s*(page|section|category)/i,
+        /\b(le jao|le chalo|page kholo|wahan jao)\b/i,
     ];
 
     // Browse intent — user wants to see/find something (Mark talks + offers link)
@@ -45,6 +46,7 @@
         /\b(new arrival|latest|collection|category|categories)\b/i,
         /\b(sale|offer|discount|deal|trending|popular|best seller)\b/i,
         /\b(where (can|do|is)|how (to|do I))\b/i,
+        /\b(dikhao|dikha do|le chalo|kahan hai|batao kahan)\b/i,
     ];
 
     // Product-specific patterns — Mark should answer from product knowledge
@@ -265,21 +267,35 @@
         // ── Strong navigation: try to redirect ──
         if (intent.type === 'navigate') {
             const results = await ragSearch(userMessage);
-            if (results.length > 0 && results[0].score >= 0.15) {
+            if (results.length > 0 && results[0].score >= 0.08) {
+                // Store links for UI buttons even on navigate
+                window._markPendingLinks = results.slice(0, 3).filter(r => r.url && r.title).map(r => ({
+                    url: r.url, title: r.title, type: r.page_type || 'page'
+                }));
                 redirectToPage(results[0].url, results[0].title);
                 return; // Navigation happening — don't chat
             }
             // Low-confidence navigation → fall through to chat with context
         }
 
-        // ── Browse / Product / Chat: enrich with RAG context ──
+        // ── All non-greeting intents: enrich with RAG context ──
         let ragContext = '';
-        if (intent.type === 'browse' || intent.type === 'product' || intent.type === 'navigate') {
+        let ragLinks = [];
+        if (intent.type !== 'greeting') {
             const results = await ragSearch(userMessage);
             if (results.length > 0) {
                 ragContext = buildRAGContext(results);
+                // Collect top links for clickable buttons in the UI
+                ragLinks = results.slice(0, 3).filter(r => r.url && r.title).map(r => ({
+                    url: r.url,
+                    title: r.title,
+                    type: r.page_type || 'page'
+                }));
             }
         }
+
+        // Store links globally so chatbot.js can show clickable buttons
+        window._markPendingLinks = ragLinks;
 
         // Pass to chat handler with optional RAG context
         if (typeof window.processChatMessage === 'function') {

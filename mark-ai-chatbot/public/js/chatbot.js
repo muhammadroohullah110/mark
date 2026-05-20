@@ -343,7 +343,8 @@
 
     function loadRobot() {
         const loader = new THREE.GLTFLoader();
-        loader.load(ROBOT_URL, (gltf) => {
+
+        function onModelLoaded(gltf) {
             robot = gltf.scene;
             robot.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
             robot.scale.set(1.1, 1.1, 1.1);
@@ -362,9 +363,48 @@
             markState = 'widget';
             startWalking();
             animate();
-        }, undefined, () => {
+        }
+
+        function onModelError() {
             loadingOverlay.querySelector('.mark-loading-text').textContent = MARK_MSGS.modelFail;
-        });
+        }
+
+        // Try loading from browser Cache API first (instant on repeat visits)
+        if ('caches' in window) {
+            caches.open('mark-ai-model-v1').then(cache => {
+                cache.match(ROBOT_URL).then(cachedResponse => {
+                    if (cachedResponse) {
+                        console.log('[Mark] 🚀 Loading robot from cache (instant)');
+                        cachedResponse.arrayBuffer().then(buf => {
+                            loader.parse(buf, '', onModelLoaded, onModelError);
+                        }).catch(() => loadFromNetwork(cache));
+                    } else {
+                        loadFromNetwork(cache);
+                    }
+                }).catch(() => loadFromNetwork(cache));
+            }).catch(() => {
+                // Cache API failed — normal load
+                loader.load(ROBOT_URL, onModelLoaded, undefined, onModelError);
+            });
+        } else {
+            loader.load(ROBOT_URL, onModelLoaded, undefined, onModelError);
+        }
+
+        function loadFromNetwork(cache) {
+            console.log('[Mark] 📡 Loading robot from network (first load)');
+            fetch(ROBOT_URL).then(res => {
+                if (!res.ok) throw new Error('Model fetch failed');
+                const resClone = res.clone();
+                // Cache for next time
+                cache.put(ROBOT_URL, resClone).catch(() => {});
+                return res.arrayBuffer();
+            }).then(buf => {
+                loader.parse(buf, '', onModelLoaded, onModelError);
+            }).catch(() => {
+                // Final fallback: let GLTFLoader handle it
+                loader.load(ROBOT_URL, onModelLoaded, undefined, onModelError);
+            });
+        }
     }
 
     let animationFrameId = null;
@@ -1056,10 +1096,15 @@
         liveCaption.style.display = 'block';
         liveCaption.style.pointerEvents = 'auto';
 
+        // Remove any old link buttons
+        const oldLinks = document.getElementById('mark-link-buttons');
+        if (oldLinks) oldLinks.remove();
+
         console.log('[Mark] Caption:', text.substring(0, 60) + '...');
 
         if (!typewriter || text.length < 20) {
             liveCaption.textContent = text;
+            showLinkButtons();
             return;
         }
         const words = text.split(' ');
@@ -1068,8 +1113,34 @@
         typewriterTimer = setInterval(() => {
             shown++;
             liveCaption.textContent = words.slice(0, shown).join(' ');
-            if (shown >= words.length) clearInterval(typewriterTimer);
+            if (shown >= words.length) {
+                clearInterval(typewriterTimer);
+                showLinkButtons();
+            }
         }, 60);
+    }
+
+    /** Show clickable link buttons below caption when RAG found relevant pages */
+    function showLinkButtons() {
+        const links = window._markPendingLinks || [];
+        window._markPendingLinks = []; // clear after use
+        if (!links.length || !liveCaption) return;
+
+        const container = document.createElement('div');
+        container.id = 'mark-link-buttons';
+        container.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;justify-content:center;';
+
+        links.forEach(link => {
+            const btn = document.createElement('a');
+            btn.href = link.url;
+            btn.textContent = link.title.length > 25 ? link.title.substring(0, 25) + '...' : link.title;
+            btn.style.cssText = 'display:inline-block;padding:5px 14px;background:' + ACCENT + ';color:#fff;border-radius:20px;font-size:11px;font-family:Outfit,sans-serif;font-weight:600;text-decoration:none;cursor:pointer;transition:transform 0.15s ease,box-shadow 0.15s ease;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
+            btn.addEventListener('mouseenter', () => { btn.style.transform = 'scale(1.05)'; });
+            btn.addEventListener('mouseleave', () => { btn.style.transform = 'scale(1)'; });
+            container.appendChild(btn);
+        });
+
+        liveCaption.appendChild(container);
     }
 
     function hideCaption() {

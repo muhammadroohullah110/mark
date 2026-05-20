@@ -543,6 +543,8 @@ def build_system_prompt(tenant: dict | None, name: str, product_context: str) ->
         "- RECOMMENDATION: Suggest relevant products/pages from catalog or RAG\n"
         "- OBJECTION HANDLING: Address concerns with empathy\n"
         "- CLOSE: Natural, helpful close — never pressure\n\n"
+        "NAVIGATION: When you mention a product or page from the website knowledge, say something like "
+        "'I can show you that!' or 'Want me to take you there?' — clickable links will appear automatically below your message.\n\n"
         "BACK-OFF RULE: If the visitor says 'no thanks', 'not interested', or similar 2+ times, STOP suggesting products entirely. Just be helpful and friendly.\n"
         "</conversation_intelligence>\n\n"
     )
