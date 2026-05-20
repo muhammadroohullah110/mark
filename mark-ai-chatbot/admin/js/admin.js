@@ -1186,7 +1186,21 @@
 
     async function saveVoice() {
         const data = { tts_voice: $('#s-tts-voice').value, tts_rate: $('#s-tts-rate').value, tts_pitch: $('#s-tts-pitch').value };
-        try { await api('PUT', 'stores/' + currentStore.store_id, data); currentStore = { ...currentStore, ...data }; toast('Voice settings saved!', 'success'); }
+        try {
+            await api('PUT', 'stores/' + currentStore.store_id, data);
+            currentStore = { ...currentStore, ...data };
+            // Sync voice settings to backend so TTS uses the new voice immediately
+            const remoteId = globalSettings.remote_store_id;
+            if (remoteId) {
+                const backendUrl = (markAI || {}).backendUrl || 'https://mark-udfz.onrender.com';
+                fetch(backendUrl + '/api/sync-voice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId },
+                    body: JSON.stringify({ tts_voice: data.tts_voice, tts_rate: data.tts_rate, tts_pitch: data.tts_pitch })
+                }).catch(() => {});
+            }
+            toast('Voice settings saved!', 'success');
+        }
         catch (e) { toast(e.message, 'error'); }
     }
 
@@ -1199,9 +1213,17 @@
         }
         const settings = markAI || {};
         const backendUrl = settings.backendUrl || 'https://mark-udfz.onrender.com';
+        const remoteId = globalSettings.remote_store_id || '';
         try {
-            const res = await fetch(backendUrl + '/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, language: 'en', store_id: currentStore?.store_id || '' }) });
+            const headers = { 'Content-Type': 'application/json' };
+            if (remoteId) headers['X-Store-ID'] = remoteId;
+            // Send currently selected voice (not saved yet) so user can preview before saving
+            const selectedVoice = $('#s-tts-voice')?.value || '';
+            const selectedRate = $('#s-tts-rate')?.value || '';
+            const selectedPitch = $('#s-tts-pitch')?.value || '';
+            const res = await fetch(backendUrl + '/api/tts', { method: 'POST', headers,
+                body: JSON.stringify({ text, language: 'en', store_id: remoteId,
+                    voice_override: selectedVoice, rate_override: selectedRate, pitch_override: selectedPitch }) });
             if (res.ok) {
                 const blob = await res.blob(); const url = URL.createObjectURL(blob);
                 const audio = new Audio(url); audio.onended = () => URL.revokeObjectURL(url); await audio.play();

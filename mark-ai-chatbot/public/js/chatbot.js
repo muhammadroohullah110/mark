@@ -911,7 +911,7 @@
             method: 'POST',
             headers: ttsHeaders,
             body: JSON.stringify({ text, language: detectedLanguage, store_id: STORE_ID }),
-            signal: AbortSignal.timeout(12000)
+            signal: AbortSignal.timeout(8000)
         });
         if (!res.ok) throw new Error('TTS HTTP ' + res.status);
 
