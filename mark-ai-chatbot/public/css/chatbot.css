@@ -144,7 +144,8 @@
     border: 1px solid rgba(var(--mark-accent-rgb),0.4);
     box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 20px rgba(var(--mark-accent-rgb),0.15);
     z-index: 10005; line-height: 1.45;
-    transition: opacity 0.4s ease;
+    /* NO transition delay — caption must appear instantly when JS shows it */
+    transition: none !important;
 }
 @media(max-width:768px) {
     #mark-live-caption { transform:translate(-50%,-210px); font-size:14px; padding:10px 18px; }

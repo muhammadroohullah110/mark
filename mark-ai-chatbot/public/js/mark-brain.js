@@ -218,13 +218,9 @@
     // ================================================================
 
     function redirectToPage(url, title) {
-        // Security: only allow same-origin URLs or relative paths
+        // Security: only allow same-origin or matching domain URLs
         try {
             const parsed = new URL(url, window.location.origin);
-            if (parsed.origin !== window.location.origin) {
-                console.warn('[Mark Brain] Blocked external redirect:', url);
-                return;
-            }
             if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
                 console.warn('[Mark Brain] Blocked non-HTTP redirect:', url);
                 return;
@@ -234,12 +230,22 @@
             return;
         }
 
-        const feedback = `Taking you to ${title}!`;
-        if (typeof window.speak === 'function') window.speak(feedback);
+        console.log('[Mark Brain] 🚀 Redirecting to:', title, url);
+        const feedback = 'Taking you to ' + title + '!';
 
+        // Show caption immediately
+        if (typeof window.showCaption === 'function') {
+            window.showCaption(feedback, false);
+        }
+        // Speak it
+        if (typeof window.speak === 'function') {
+            window.speak(feedback);
+        }
+
+        // Navigate after brief delay so user sees/hears feedback
         setTimeout(() => {
             window.location.href = url;
-        }, 2200);
+        }, 1800);
     }
 
     // ================================================================
@@ -264,38 +270,31 @@
             return;
         }
 
-        // ── Strong navigation: try to redirect ──
-        if (intent.type === 'navigate') {
+        // ── Navigate or Browse: AUTO-REDIRECT when RAG has a match ──
+        if (intent.type === 'navigate' || intent.type === 'browse') {
             const results = await ragSearch(userMessage);
-            if (results.length > 0 && results[0].score >= 0.08) {
-                // Store links for UI buttons even on navigate
-                window._markPendingLinks = results.slice(0, 3).filter(r => r.url && r.title).map(r => ({
-                    url: r.url, title: r.title, type: r.page_type || 'page'
-                }));
+            if (results.length > 0 && results[0].score >= 0.05) {
                 redirectToPage(results[0].url, results[0].title);
-                return; // Navigation happening — don't chat
+                return; // Redirecting — no chat needed
             }
-            // Low-confidence navigation → fall through to chat with context
+            // No good match → fall through to chat with context
+            if (results.length > 0) {
+                const ragContext = buildRAGContext(results);
+                if (typeof window.processChatMessage === 'function') {
+                    await window.processChatMessage(userMessage, ragContext);
+                }
+                return;
+            }
         }
 
-        // ── All non-greeting intents: enrich with RAG context ──
+        // ── Product / Chat: enrich with RAG context, no redirect ──
         let ragContext = '';
-        let ragLinks = [];
         if (intent.type !== 'greeting') {
             const results = await ragSearch(userMessage);
             if (results.length > 0) {
                 ragContext = buildRAGContext(results);
-                // Collect top links for clickable buttons in the UI
-                ragLinks = results.slice(0, 3).filter(r => r.url && r.title).map(r => ({
-                    url: r.url,
-                    title: r.title,
-                    type: r.page_type || 'page'
-                }));
             }
         }
-
-        // Store links globally so chatbot.js can show clickable buttons
-        window._markPendingLinks = ragLinks;
 
         // Pass to chat handler with optional RAG context
         if (typeof window.processChatMessage === 'function') {

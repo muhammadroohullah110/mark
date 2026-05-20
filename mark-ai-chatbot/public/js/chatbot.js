@@ -583,7 +583,9 @@
 
         root.classList.remove('mark-talking');
         markWidget.classList.remove('mark-talking');
-        liveCaption.style.opacity = '0';
+        // Fully hide caption on exit
+        if (liveCaption) { liveCaption.style.opacity = '0'; liveCaption.style.visibility = 'hidden'; liveCaption.textContent = ''; }
+        clearTimeout(hideCaptionTimer);
         hideThinking();
 
         // PERSIST conversation — don't wipe! Mark remembers within the session
@@ -607,7 +609,8 @@
     // THINKING
     // ============================================================
     function showThinking() {
-        if (liveCaption) liveCaption.style.opacity = '0';
+        // Hide caption to make room for thinking indicator
+        if (liveCaption) { liveCaption.style.opacity = '0'; liveCaption.style.visibility = 'hidden'; }
         if (thinkingEl) {
             thinkingEl.textContent = pickRandom(MARK_MSGS.thinking);
             thinkingEl.classList.add('mark-show');
@@ -1057,15 +1060,15 @@
     /** Called when speech finishes (or fails). Resets Mark to idle. */
     function onSpeechDone() {
         window.markAnimator.play('idle');
-        // Keep caption visible for minimum reading time (80ms per char, min 3s)
+        // Caption stays fully visible — only fades slightly after generous reading time
+        // Caption is NEVER hidden here. It stays until next showCaption() or returnToWidget()
         const text = liveCaption ? liveCaption.textContent : '';
-        const minDisplayMs = Math.max(3000, text.length * 80);
+        const minDisplayMs = Math.max(5000, text.length * 100);
         clearTimeout(hideCaptionTimer);
         hideCaptionTimer = setTimeout(() => {
-            if (liveCaption) liveCaption.style.opacity = '0.6';
+            if (liveCaption && markState === 'talking') liveCaption.style.opacity = '0.7';
         }, minDisplayMs);
         resetIdleTimer();
-        // Update voice status after each speech attempt
         checkVoiceStatus();
     }
 
@@ -1090,21 +1093,13 @@
         clearInterval(typewriterTimer);
         clearTimeout(hideCaptionTimer);
 
-        // Force show — override any lingering CSS
-        liveCaption.style.opacity = '1';
-        liveCaption.style.visibility = 'visible';
-        liveCaption.style.display = 'block';
-        liveCaption.style.pointerEvents = 'auto';
+        // Force show — override ALL CSS, no transitions, instant visibility
+        liveCaption.style.cssText = 'opacity:1 !important; visibility:visible !important; display:block !important; pointer-events:auto !important; transition:none !important;';
 
-        // Remove any old link buttons
-        const oldLinks = document.getElementById('mark-link-buttons');
-        if (oldLinks) oldLinks.remove();
-
-        console.log('[Mark] Caption:', text.substring(0, 60) + '...');
+        console.log('[Mark] Caption SHOW:', text.substring(0, 60) + '...');
 
         if (!typewriter || text.length < 20) {
             liveCaption.textContent = text;
-            showLinkButtons();
             return;
         }
         const words = text.split(' ');
@@ -1113,42 +1108,13 @@
         typewriterTimer = setInterval(() => {
             shown++;
             liveCaption.textContent = words.slice(0, shown).join(' ');
-            if (shown >= words.length) {
-                clearInterval(typewriterTimer);
-                showLinkButtons();
-            }
+            if (shown >= words.length) clearInterval(typewriterTimer);
         }, 60);
     }
 
-    /** Show clickable link buttons below caption when RAG found relevant pages */
-    function showLinkButtons() {
-        const links = window._markPendingLinks || [];
-        window._markPendingLinks = []; // clear after use
-        if (!links.length || !liveCaption) return;
-
-        const container = document.createElement('div');
-        container.id = 'mark-link-buttons';
-        container.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;justify-content:center;';
-
-        links.forEach(link => {
-            const btn = document.createElement('a');
-            btn.href = link.url;
-            btn.textContent = link.title.length > 25 ? link.title.substring(0, 25) + '...' : link.title;
-            btn.style.cssText = 'display:inline-block;padding:5px 14px;background:' + ACCENT + ';color:#fff;border-radius:20px;font-size:11px;font-family:Outfit,sans-serif;font-weight:600;text-decoration:none;cursor:pointer;transition:transform 0.15s ease,box-shadow 0.15s ease;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
-            btn.addEventListener('mouseenter', () => { btn.style.transform = 'scale(1.05)'; });
-            btn.addEventListener('mouseleave', () => { btn.style.transform = 'scale(1)'; });
-            container.appendChild(btn);
-        });
-
-        liveCaption.appendChild(container);
-    }
-
     function hideCaption() {
-        clearTimeout(hideCaptionTimer);
-        // Keep caption visible for 10 seconds, then fade (not disappear)
-        hideCaptionTimer = setTimeout(() => {
-            if (liveCaption) liveCaption.style.opacity = '0.6';
-        }, 10000);
+        // No-op during talking mode — captions managed by onSpeechDone()
+        // Caption only fully hides when returnToWidget() is called
     }
 
     // ============================================================
@@ -1456,6 +1422,7 @@
     // EXPOSE GLOBALS for mark-brain.js
     // ============================================================
     window.speak = function(t) { speak(t); };
+    window.showCaption = function(t, tw) { showCaption(t, tw); };
     Object.defineProperty(window, 'detectedLanguage', {
         get() { return detectedLanguage; },
         set(v) { detectedLanguage = v; },
