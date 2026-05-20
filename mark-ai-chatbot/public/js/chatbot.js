@@ -356,6 +356,13 @@
     function loadRobot() {
         const loader = new THREE.GLTFLoader();
 
+        // Draco decoder for compressed meshes (92% smaller GLB)
+        if (typeof THREE.DRACOLoader !== 'undefined') {
+            const dracoLoader = new THREE.DRACOLoader();
+            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+            loader.setDRACOLoader(dracoLoader);
+        }
+
         function onModelLoaded(gltf) {
             robot = gltf.scene;
             robot.traverse(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });

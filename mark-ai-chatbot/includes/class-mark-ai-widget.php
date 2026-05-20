@@ -39,6 +39,7 @@ class Mark_AI_Widget {
         $defer_handles = [
             'three-js',
             'three-gltf-loader',
+            'three-draco-loader',
             'mark-ai-animator',
             'mark-ai-brain',
             'mark-ai-chatbot',
@@ -105,6 +106,15 @@ class Mark_AI_Widget {
             true
         );
 
+        // DRACOLoader (decompresses Draco-compressed meshes in optimized .glb)
+        wp_enqueue_script(
+            'three-draco-loader',
+            'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js',
+            ['three-js'],
+            'r128',
+            true
+        );
+
         // Mark Animator (procedural robot animations)
         wp_enqueue_script(
             'mark-ai-animator',
@@ -127,7 +137,7 @@ class Mark_AI_Widget {
         wp_enqueue_script(
             'mark-ai-chatbot',
             MARK_AI_URL . 'public/js/chatbot.js',
-            ['three-js', 'three-gltf-loader', 'mark-ai-animator', 'mark-ai-brain'],
+            ['three-js', 'three-gltf-loader', 'three-draco-loader', 'mark-ai-animator', 'mark-ai-brain'],
             MARK_AI_VERSION,
             true
         );
