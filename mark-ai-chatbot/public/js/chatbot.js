@@ -642,6 +642,11 @@
             thinkingEl.classList.remove('mark-show');
             thinkingEl.style.display = 'none';
         }
+        // Restore caption visibility (showThinking hides it)
+        if (liveCaption) {
+            liveCaption.style.opacity = '';
+            liveCaption.style.visibility = '';
+        }
     }
 
     // ============================================================
@@ -924,7 +929,7 @@
         const cleanup = () => { URL.revokeObjectURL(url); currentAudio = null; };
         currentAudio.onended = () => {
             console.log('[Mark] ✅ Backend TTS playback completed');
-            cleanup(); window.markAnimator.play('idle'); hideCaption(); resetIdleTimer();
+            cleanup(); onSpeechDone();
         };
         currentAudio.onerror = (e) => {
             console.log('[Mark] ⚠️ Audio element error:', e?.type || 'unknown');
@@ -1320,7 +1325,7 @@
         // Try Python backend first with STREAMING (shows text as it arrives)
         if (backendAlive) {
             try {
-                const messages = conversationHistory.slice(-12);
+                const messages = conversationHistory.slice(-6);
                 if (ragContext) {
                     messages.push({ role: 'system', content: ragContext });
                 }
@@ -1336,7 +1341,7 @@
                         store_id: STORE_ID,
                         stream: true
                     }),
-                    signal: AbortSignal.timeout(20000)
+                    signal: AbortSignal.timeout(12000)
                 });
 
                 // ── Stream mode: read SSE tokens and show caption live ──
