@@ -176,8 +176,8 @@
 
         root.innerHTML = `
         <div class="mark-loading-overlay" id="markLoadingOverlay">
-            <div class="mark-loading-text">Loading Mark...</div>
             <div class="mark-loading-spinner"></div>
+            <div class="mark-loading-text">Mark is getting ready</div>
         </div>
 
         <div id="mark-talk-backdrop"></div>

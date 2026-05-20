@@ -34,28 +34,27 @@
     opacity: 1; pointer-events: all;
 }
 
-/* ── WIDGET (floating robot circle) ── */
+/* ── WIDGET (free-roam robot — no circle, transparent background) ── */
 #mark-widget {
     position: fixed;
     width: 115px; height: 115px;
     left: 5%; top: 70vh;
-    border-radius: 50%; overflow: hidden; cursor: grab;
+    cursor: grab;
     z-index: 9999;
-    border: 3px solid rgba(var(--mark-accent-rgb),0.95);
-    background: #080814;
-    box-shadow:
-        0 0 0 6px rgba(var(--mark-accent-rgb),0.12),
-        0 0 25px rgba(var(--mark-accent-rgb),0.7),
-        0 0 50px rgba(var(--mark-accent-rgb),0.35);
+    /* NO background, NO border, NO circle — robot walks freely */
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    /* Subtle drop shadow on robot for depth */
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));
     transition:
         left 3.2s cubic-bezier(0.45,0,0.25,1),
         top 3.2s cubic-bezier(0.45,0,0.25,1),
         width 0.7s cubic-bezier(0.4,0,0.2,1),
         height 0.7s cubic-bezier(0.4,0,0.2,1),
-        box-shadow 0.5s ease,
-        border 0.5s ease,
+        filter 0.5s ease,
         transform 0.6s cubic-bezier(0.4,0,0.2,1);
-    /* Prevent browser from hijacking touch for scroll/zoom */
     touch-action: none;
     -webkit-user-select: none;
     user-select: none;
@@ -71,11 +70,9 @@
     left: 50% !important; top: 50% !important;
     transform: translate(-50%, -55%) !important;
     cursor: default !important;
-    border-color: rgba(var(--mark-accent-rgb),0.95);
-    box-shadow:
-        0 0 0 8px rgba(var(--mark-accent-rgb),0.18),
-        0 0 50px rgba(var(--mark-accent-rgb),0.7),
-        0 0 100px rgba(var(--mark-accent-rgb),0.4);
+    /* Add glow effect when talking */
+    filter: drop-shadow(0 0 30px rgba(var(--mark-accent-rgb),0.6))
+            drop-shadow(0 0 60px rgba(var(--mark-accent-rgb),0.3));
     transition: all 0.7s cubic-bezier(0.4,0,0.2,1);
 }
 
@@ -90,22 +87,22 @@
 
 /* ── HINT BUBBLE ── */
 #mark-hint {
-    position: absolute; bottom: calc(100% + 10px); left: 50%;
+    position: absolute; bottom: calc(100% + 6px); left: 50%;
     transform: translateX(-50%);
-    background: rgba(var(--mark-accent-rgb),0.95); color: #fff;
-    font-size: 11px; font-weight: 700; padding: 5px 14px;
+    background: rgba(255,255,255,0.95); color: #2a2a3a;
+    font-size: 12px; font-weight: 600; padding: 6px 16px;
     border-radius: 20px; white-space: nowrap; pointer-events: none;
-    box-shadow: 0 4px 14px rgba(var(--mark-accent-rgb),0.5);
-    animation: markHintBounce 1.8s ease-in-out infinite;
+    box-shadow: 0 3px 15px rgba(0,0,0,0.1), 0 0 0 1px rgba(var(--mark-accent-rgb),0.15);
+    animation: markHintBounce 2s ease-in-out infinite;
 }
 #mark-hint::after {
     content:''; position:absolute; top:100%; left:50%;
-    transform:translateX(-50%); border:6px solid transparent;
-    border-top-color:rgba(var(--mark-accent-rgb),0.95);
+    transform:translateX(-50%); border:5px solid transparent;
+    border-top-color:rgba(255,255,255,0.95);
 }
 @keyframes markHintBounce {
     0%,100% { transform:translateX(-50%) translateY(0); }
-    50% { transform:translateX(-50%) translateY(-7px); }
+    50% { transform:translateX(-50%) translateY(-5px); }
 }
 #mark-ai-chatbot-root.mark-talking #mark-hint { display: none; }
 
@@ -258,31 +255,31 @@
     #mark-text-input-area { width:260px; transform:translate(-50%,250px); }
 }
 
-/* ── LOADING OVERLAY (contained in widget, not full-screen) ── */
+/* ── LOADING INDICATOR (minimal, non-intrusive) ── */
 .mark-loading-overlay {
     position: fixed;
-    bottom: 30px; right: 30px;
-    width: 140px; height: 140px;
-    border-radius: 50%;
-    background: rgba(8,8,20,0.95);
-    border: 3px solid rgba(var(--mark-accent-rgb),0.6);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
+    bottom: 24px; right: 24px;
+    padding: 8px 18px 8px 14px;
+    border-radius: 30px;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid rgba(var(--mark-accent-rgb),0.2);
+    display: flex; align-items: center; gap: 10px;
     z-index: 99999;
-    transition: opacity 0.5s ease;
-    box-shadow: 0 0 25px rgba(var(--mark-accent-rgb),0.5);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08), 0 0 0 1px rgba(var(--mark-accent-rgb),0.05);
+    font-family: 'Outfit', -apple-system, sans-serif;
 }
-.mark-loading-overlay.mark-hidden { opacity: 0; pointer-events: none; }
+.mark-loading-overlay.mark-hidden { opacity: 0; pointer-events: none; transform: translateY(10px) scale(0.95); }
 .mark-loading-text {
-    color: #fff; font-size: 11px; font-weight: 700; margin-bottom: 8px;
-    text-align: center; padding: 0 10px;
+    color: #2a2a3a; font-size: 13px; font-weight: 600;
+    letter-spacing: 0.01em;
 }
 .mark-loading-spinner {
-    width: 28px; height: 28px;
-    border: 3px solid rgba(var(--mark-accent-rgb),0.3);
+    width: 18px; height: 18px;
+    border: 2.5px solid rgba(var(--mark-accent-rgb),0.2);
     border-top-color: var(--mark-accent);
     border-radius: 50%;
-    animation: markSpin 0.9s linear infinite;
+    animation: markSpin 0.8s linear infinite;
 }
 @keyframes markSpin { to { transform: rotate(360deg); } }
 
