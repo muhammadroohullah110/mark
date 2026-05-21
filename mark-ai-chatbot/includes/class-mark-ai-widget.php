@@ -59,11 +59,11 @@ class Mark_AI_Widget {
      * Add preconnect hints for CDN origins (fonts, Three.js CDN).
      */
     public function add_preconnect() {
-        echo '<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>' . "\n";
-        echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
-        echo '<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>' . "\n";
-        echo '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>' . "\n";
-        echo '<link rel="preconnect" href="' . esc_url(MARK_AI_BACKEND) . '" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="' . esc_url( 'https://fonts.googleapis.com' ) . '" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="' . esc_url( 'https://fonts.gstatic.com' ) . '" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="' . esc_url( 'https://cdnjs.cloudflare.com' ) . '" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="' . esc_url( 'https://cdn.jsdelivr.net' ) . '" crossorigin>' . "\n";
+        echo '<link rel="preconnect" href="' . esc_url( MARK_AI_BACKEND ) . '" crossorigin>' . "\n";
     }
 
     /**

@@ -311,41 +311,100 @@
     // ============================================================
     // THREE.JS
     // ============================================================
+    // ── 2D Fallback — CSS-animated robot when WebGL unavailable ──
+    let is2DMode = false;
+
+    function canWebGL() {
+        try {
+            const c = document.createElement('canvas');
+            return !!(c.getContext('webgl') || c.getContext('experimental-webgl'));
+        } catch(e) { return false; }
+    }
+
+    function initFallback2D() {
+        is2DMode = true;
+        console.log('[Mark] Using 2D fallback (WebGL unavailable)');
+
+        // Provide no-op animator so all markAnimator.play() calls are safe
+        window.markAnimator = window.markAnimator || {};
+        window.markAnimator.init = window.markAnimator.init || function(){};
+        window.markAnimator.update = window.markAnimator.update || function(){};
+        window.markAnimator.play = function(anim) {
+            const el = document.getElementById('mark-2d-avatar');
+            if (!el) return;
+            el.className = 'mark-2d-avatar mark-2d-' + (anim || 'idle');
+        };
+
+        // Insert 2D avatar SVG into the three container
+        const svg = `<div id="mark-2d-avatar" class="mark-2d-avatar mark-2d-idle" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 100 120" style="width:70%;height:70%;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.15));">
+                <rect x="25" y="10" width="50" height="45" rx="12" fill="${ACCENT}" opacity="0.9"/>
+                <circle cx="38" cy="30" r="5" fill="#fff"/>
+                <circle cx="62" cy="30" r="5" fill="#fff"/>
+                <circle cx="38" cy="30" r="2.5" fill="#1a1a2e"/>
+                <circle cx="62" cy="30" r="2.5" fill="#1a1a2e"/>
+                <rect x="38" y="42" width="24" height="4" rx="2" fill="#fff" opacity="0.8" class="mark-2d-mouth"/>
+                <rect x="15" y="20" width="8" height="5" rx="2.5" fill="${ACCENT}" opacity="0.7"/>
+                <rect x="77" y="20" width="8" height="5" rx="2.5" fill="${ACCENT}" opacity="0.7"/>
+                <rect x="30" y="58" width="40" height="35" rx="8" fill="${ACCENT}" opacity="0.85"/>
+                <rect x="18" y="62" width="10" height="22" rx="5" fill="${ACCENT}" opacity="0.7" class="mark-2d-arm-l"/>
+                <rect x="72" y="62" width="10" height="22" rx="5" fill="${ACCENT}" opacity="0.7" class="mark-2d-arm-r"/>
+                <rect x="35" y="95" width="12" height="18" rx="5" fill="${ACCENT}" opacity="0.75"/>
+                <rect x="53" y="95" width="12" height="18" rx="5" fill="${ACCENT}" opacity="0.75"/>
+            </svg>
+        </div>`;
+        threeContainer.innerHTML = svg;
+
+        // Done loading
+        loadingOverlay.classList.add('mark-hidden');
+        markState = 'widget';
+        checkBackend();
+        startWalking();
+    }
+
     function initThree() {
-        if (typeof THREE === 'undefined') {
-            loadingOverlay.querySelector('.mark-loading-text').textContent = MARK_MSGS.engineFail;
+        // WebGL detection — fall back to 2D if unavailable
+        if (typeof THREE === 'undefined' || !canWebGL()) {
+            console.warn('[Mark] WebGL not available, using 2D fallback');
+            initFallback2D();
             return;
         }
 
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(W_CAM.fov, 1, 0.1, 1000);
-        camera.position.set(W_CAM.x, W_CAM.y, W_CAM.z);
+        try {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(W_CAM.fov, 1, 0.1, 1000);
+            camera.position.set(W_CAM.x, W_CAM.y, W_CAM.z);
 
-        // Device-adaptive renderer quality
-        const useAntialias = !DEVICE.lowEnd;
-        const useShadows = !DEVICE.lowEnd && !DEVICE.mobile;
-        renderer = new THREE.WebGLRenderer({ antialias: useAntialias, alpha: true, powerPreference: DEVICE.lowEnd ? 'low-power' : 'high-performance' });
-        renderer.setSize(WIDGET_PX, WIDGET_PX);
-        renderer.setPixelRatio(DEVICE.dpr);
-        renderer.setClearColor(0x000000, 0);
-        renderer.shadowMap.enabled = useShadows;
-        if (useShadows) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        threeContainer.appendChild(renderer.domElement);
+            // Device-adaptive renderer quality
+            const useAntialias = !DEVICE.lowEnd;
+            const useShadows = !DEVICE.lowEnd && !DEVICE.mobile;
+            renderer = new THREE.WebGLRenderer({ antialias: useAntialias, alpha: true, powerPreference: DEVICE.lowEnd ? 'low-power' : 'high-performance' });
+            renderer.setSize(WIDGET_PX, WIDGET_PX);
+            renderer.setPixelRatio(DEVICE.dpr);
+            renderer.setClearColor(0x000000, 0);
+            renderer.shadowMap.enabled = useShadows;
+            if (useShadows) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            threeContainer.appendChild(renderer.domElement);
 
-        // Make canvas not intercept touch/pointer events (fixes mobile drag)
-        renderer.domElement.style.pointerEvents = 'none';
+            // Make canvas not intercept touch/pointer events (fixes mobile drag)
+            renderer.domElement.style.pointerEvents = 'none';
 
-        scene.add(new THREE.AmbientLight(0xffffff, 1.4));
-        const dir = new THREE.DirectionalLight(0x9bb0ff, 2.6);
-        dir.position.set(5, 10, 7);
-        dir.castShadow = useShadows;
-        scene.add(dir);
-        if (!DEVICE.lowEnd) {
-            const fill = new THREE.DirectionalLight(0x9b59ff, 1.4);
-            fill.position.set(-5, 5, -5); scene.add(fill);
+            scene.add(new THREE.AmbientLight(0xffffff, 1.4));
+            const dir = new THREE.DirectionalLight(0x9bb0ff, 2.6);
+            dir.position.set(5, 10, 7);
+            dir.castShadow = useShadows;
+            scene.add(dir);
+            if (!DEVICE.lowEnd) {
+                const fill = new THREE.DirectionalLight(0x9b59ff, 1.4);
+                fill.position.set(-5, 5, -5); scene.add(fill);
+            }
+
+            clock = new THREE.Clock();
+        } catch(e) {
+            console.warn('[Mark] WebGL init failed, using 2D fallback:', e.message);
+            initFallback2D();
+            return;
         }
-
-        clock = new THREE.Clock();
 
         // Check backend health (non-blocking)
         checkBackend();
@@ -430,6 +489,8 @@
     let frameCounter = 0;
 
     function animate() {
+        // 2D mode doesn't need animation loop (CSS handles it)
+        if (is2DMode) return;
         // Stop completely when loading or hidden
         if (markState === 'loading') return;
 
@@ -565,10 +626,12 @@
         markWidget.classList.add('mark-talking');
 
         setTimeout(() => {
-            renderer.setSize(TALKING_PX, TALKING_PX);
-            camera.fov = T_CAM.fov;
-            camera.position.set(T_CAM.x, T_CAM.y, T_CAM.z);
-            camera.updateProjectionMatrix();
+            if (!is2DMode && renderer) {
+                renderer.setSize(TALKING_PX, TALKING_PX);
+                camera.fov = T_CAM.fov;
+                camera.position.set(T_CAM.x, T_CAM.y, T_CAM.z);
+                camera.updateProjectionMatrix();
+            }
         }, 720);
 
         // ── Session memory: restore conversation & skip greeting on quick reopen ──
@@ -612,10 +675,12 @@
         lastTalkingTimestamp = Date.now();
 
         setTimeout(() => {
-            renderer.setSize(WIDGET_PX, WIDGET_PX);
-            camera.fov = W_CAM.fov;
-            camera.position.set(W_CAM.x, W_CAM.y, W_CAM.z);
-            camera.updateProjectionMatrix();
+            if (!is2DMode && renderer) {
+                renderer.setSize(WIDGET_PX, WIDGET_PX);
+                camera.fov = W_CAM.fov;
+                camera.position.set(W_CAM.x, W_CAM.y, W_CAM.z);
+                camera.updateProjectionMatrix();
+            }
             startWalking();
         }, 720);
     }

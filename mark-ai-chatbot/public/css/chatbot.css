@@ -301,3 +301,44 @@
     }
 }
 
+/* ── 2D FALLBACK ROBOT — when WebGL is unavailable ── */
+.mark-2d-avatar { transition: transform 0.3s ease; }
+.mark-2d-idle { animation: mark2dBob 3s ease-in-out infinite; }
+.mark-2d-speak, .mark-2d-talk { animation: mark2dTalk 0.4s ease-in-out infinite; }
+.mark-2d-think { animation: mark2dThink 1.5s ease-in-out infinite; }
+.mark-2d-listen { animation: mark2dListen 1s ease-in-out infinite; }
+.mark-2d-wave { animation: mark2dWave 0.6s ease-in-out 3; }
+.mark-2d-jump { animation: mark2dJump 0.5s ease-out 1; }
+.mark-2d-blush { animation: mark2dBlush 1s ease-in-out 1; }
+.mark-2d-wink { animation: mark2dBob 3s ease-in-out infinite; }
+
+@keyframes mark2dBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+@keyframes mark2dTalk {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-3px) scale(1.02); }
+}
+@keyframes mark2dThink {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-3deg); }
+    75% { transform: rotate(3deg); }
+}
+@keyframes mark2dListen {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+@keyframes mark2dWave {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(8deg); }
+}
+@keyframes mark2dJump {
+    0%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-18px); }
+}
+@keyframes mark2dBlush {
+    0%, 100% { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15)); }
+    50% { filter: drop-shadow(0 4px 20px rgba(255,100,100,0.4)); }
+}
+

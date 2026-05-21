@@ -2,9 +2,9 @@
 Contributors: muhammadroohullah
 Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
-Tested up to: 6.7
+Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -77,6 +77,17 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 
 == Changelog ==
 
+= 1.2.0 =
+* Draco-compressed 3D model (5.2MB to 431KB — 92% faster loading)
+* Pro-max intelligence upgrade with structured conversation engine
+* Admin-configurable widget size (scale 1-10, desktop and mobile separately)
+* Caption visibility fix during voice responses
+* SSE streaming for instant chat responses
+* Voice change now works correctly from admin panel
+* 2D CSS fallback when WebGL is unavailable (no broken widgets)
+* Reduced chat latency (optimized history and timeouts)
+* WordPress.org compliance (proper escaping, license file)
+
 = 1.1.0 =
 * Added anti-hallucination system (3-layer defense)
 * Added security hardening (rate limiting, input sanitization)
@@ -98,6 +109,9 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 * Conversation tracking and analytics
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Major performance upgrade: 92% faster 3D model loading, smarter AI conversations, streaming responses, and 2D fallback for all devices.
 
 = 1.1.0 =
 Major UX upgrade: anti-hallucination system, security hardening, accent color customization, and animated onboarding tour.
