@@ -32,7 +32,11 @@ from config import (
     MAX_RAG_INSTANCES, MAX_PRODUCT_CACHES, RATE_LIMITER_CLEANUP_INTERVAL,
 )
 from rag_engine import MarkRAG
-from database import get_store, get_store_by_token, get_store_by_url, get_all_active_stores, log_conversation_db, init_db, create_store, update_store
+from database import (
+    get_store, get_store_by_token, get_store_by_url, get_all_active_stores,
+    log_conversation_db, init_db, create_store, update_store,
+    log_event, get_event_analytics, save_lead, get_leads, get_lead_count,
+)
 from admin_routes import router as admin_router, get_current_user
 
 load_dotenv()
@@ -998,6 +1002,102 @@ async def analytics_endpoint(limit: int = 50, offset: int = 0):
 
 
 # ── Memory & Health Monitoring ────────────────────────────────
+
+# ── Analytics Event Tracking ─────────────────────────────────
+
+class TrackEventRequest(BaseModel):
+    store_id: Optional[str] = None
+    event_type: str
+    visitor_hash: Optional[str] = ""
+    metadata: Optional[dict] = None
+
+    @validator("event_type")
+    def valid_event(cls, v):
+        allowed = {"widget_open", "chat_start", "chat_message", "voice_used", "link_clicked", "cta_clicked", "lead_submitted"}
+        if v not in allowed:
+            raise ValueError(f"Invalid event type: {v}")
+        return v
+
+track_limiter = RateLimiter(60)  # 60 events/min per IP
+
+@app.post("/api/track")
+async def track_event(request: Request, body: TrackEventRequest):
+    """Fire-and-forget analytics event. Always returns 200."""
+    ip = get_ip(request)
+    if not track_limiter.is_allowed(ip):
+        return {"ok": True}  # silently drop — never error on tracking
+    sid = body.store_id or ""
+    v_hash = body.visitor_hash or hashlib.sha256(ip.encode()).hexdigest()[:12]
+    if sid:
+        log_event(sid, body.event_type, v_hash, body.metadata)
+    return {"ok": True}
+
+
+@app.get("/api/stores/{store_id}/event-analytics")
+async def get_store_event_analytics(store_id: str, days: int = 30, user=Depends(get_current_user)):
+    """Admin-only: aggregated event analytics for a store."""
+    data = get_event_analytics(store_id, min(days, 90))
+    return data
+
+
+# ── Lead Capture ─────────────────────────────────────────────
+
+class LeadRequest(BaseModel):
+    store_id: Optional[str] = None
+    email: str
+    name: Optional[str] = ""
+    visitor_hash: Optional[str] = ""
+    context: Optional[str] = ""
+
+    @validator("email")
+    def valid_email(cls, v):
+        if not v or "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Invalid email")
+        return v.strip()[:200]
+
+lead_limiter = RateLimiter(5)  # 5 leads/min per IP
+
+@app.post("/api/lead")
+async def capture_lead(request: Request, body: LeadRequest):
+    """Public: capture visitor email. Rate-limited."""
+    ip = get_ip(request)
+    if not lead_limiter.is_allowed(ip):
+        raise HTTPException(status_code=429, detail="Too many submissions. Try again later.")
+    sid = body.store_id or ""
+    v_hash = body.visitor_hash or hashlib.sha256(ip.encode()).hexdigest()[:12]
+    if not sid:
+        raise HTTPException(status_code=400, detail="Store ID required")
+    ok = save_lead(sid, body.email, v_hash, body.name or "", body.context or "")
+    if ok:
+        log_event(sid, "lead_submitted", v_hash, {"email": body.email[:30] + "..."})
+        # Webhook delivery (non-blocking)
+        tenant = resolve_tenant(sid)
+        if tenant and tenant.get("webhook_url"):
+            webhook_data = {"event": "new_lead", "email": body.email, "name": body.name, "store_id": sid}
+            threading.Thread(target=_send_webhook, args=(tenant["webhook_url"], webhook_data), daemon=True).start()
+    return {"ok": ok, "message": "Thank you! We'll be in touch."}
+
+
+@app.get("/api/stores/{store_id}/leads")
+async def get_store_leads(store_id: str, limit: int = 50, offset: int = 0, user=Depends(get_current_user)):
+    """Admin-only: list captured leads."""
+    leads = get_leads(store_id, min(limit, 200), offset)
+    total = get_lead_count(store_id)
+    return {"leads": leads, "total": total}
+
+
+def _send_webhook(url: str, data: dict):
+    """Non-blocking webhook delivery with 1 retry."""
+    for attempt in range(2):
+        try:
+            resp = http_requests.post(url, json=data, timeout=5)
+            if resp.ok:
+                logger.info(f"Webhook delivered to {url}")
+                return
+        except Exception as e:
+            logger.warning(f"Webhook attempt {attempt+1} failed: {e}")
+            time.sleep(1)
+
 
 @app.get("/api/health")
 async def health_endpoint():

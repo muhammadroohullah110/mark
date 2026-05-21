@@ -118,6 +118,29 @@ def init_db():
 
             CREATE INDEX IF NOT EXISTS idx_conv_store ON conversations(store_id);
             CREATE INDEX IF NOT EXISTS idx_conv_created ON conversations(created_at);
+
+            CREATE TABLE IF NOT EXISTS analytics_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id TEXT NOT NULL REFERENCES stores(store_id),
+                event_type TEXT NOT NULL,
+                visitor_hash TEXT NOT NULL,
+                metadata TEXT DEFAULT '{}',
+                created_at REAL DEFAULT (strftime('%s','now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_events_store ON analytics_events(store_id);
+            CREATE INDEX IF NOT EXISTS idx_events_type ON analytics_events(event_type);
+            CREATE INDEX IF NOT EXISTS idx_events_created ON analytics_events(created_at);
+
+            CREATE TABLE IF NOT EXISTS leads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id TEXT NOT NULL REFERENCES stores(store_id),
+                email TEXT NOT NULL,
+                name TEXT DEFAULT '',
+                visitor_hash TEXT NOT NULL,
+                context TEXT DEFAULT '',
+                created_at REAL DEFAULT (strftime('%s','now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_leads_store ON leads(store_id);
         """)
 
         # Migration: add sales columns to existing stores table
@@ -133,8 +156,8 @@ def init_db():
             "sales_followup_enabled": "INTEGER DEFAULT 0",
             "sales_max_suggestions": "INTEGER DEFAULT 3",
         }
-        # Also add api_token if missing
-        all_migrations = {**sales_columns, "api_token": "TEXT DEFAULT ''"}
+        # Also add api_token and webhook_url if missing
+        all_migrations = {**sales_columns, "api_token": "TEXT DEFAULT ''", "webhook_url": "TEXT DEFAULT ''"}
         existing = {row[1] for row in db.execute("PRAGMA table_info(stores)").fetchall()}
         for col, typedef in all_migrations.items():
             if col not in existing:
@@ -357,6 +380,87 @@ def get_analytics(store_id: str) -> dict:
             "languages": languages,
             "recent": [dict(r) for r in recent],
         }
+
+
+# ── Analytics Events ────────────────────────────────────────
+
+def log_event(store_id: str, event_type: str, visitor_hash: str, metadata: dict = None):
+    """Fire-and-forget event logging. Never throws."""
+    try:
+        meta_json = json.dumps(metadata or {}, ensure_ascii=False)
+        with get_db() as db:
+            db.execute(
+                "INSERT INTO analytics_events (store_id, event_type, visitor_hash, metadata) VALUES (?, ?, ?, ?)",
+                (store_id, event_type, visitor_hash, meta_json)
+            )
+    except Exception as e:
+        logger.warning(f"Event log error: {e}")
+
+
+def get_event_analytics(store_id: str, days: int = 30) -> dict:
+    """Aggregate event counts by type and day for the last N days."""
+    since = time.time() - days * 86400
+    with get_db() as db:
+        # Total counts by type
+        type_rows = db.execute(
+            "SELECT event_type, COUNT(*) as cnt FROM analytics_events WHERE store_id = ? AND created_at >= ? GROUP BY event_type",
+            (store_id, since)
+        ).fetchall()
+        totals = {r["event_type"]: r["cnt"] for r in type_rows}
+
+        # Daily breakdown (last 14 days for charts)
+        daily_since = time.time() - 14 * 86400
+        daily_rows = db.execute(
+            """SELECT date(created_at, 'unixepoch') as day, event_type, COUNT(*) as cnt
+               FROM analytics_events WHERE store_id = ? AND created_at >= ?
+               GROUP BY day, event_type ORDER BY day""",
+            (store_id, daily_since)
+        ).fetchall()
+        daily = {}
+        for r in daily_rows:
+            d = r["day"]
+            if d not in daily:
+                daily[d] = {}
+            daily[d][r["event_type"]] = r["cnt"]
+
+        # Unique visitors (by hash)
+        unique = db.execute(
+            "SELECT COUNT(DISTINCT visitor_hash) as cnt FROM analytics_events WHERE store_id = ? AND created_at >= ?",
+            (store_id, since)
+        ).fetchone()["cnt"]
+
+        return {"totals": totals, "daily": daily, "unique_visitors": unique, "days": days}
+
+
+# ── Leads ──────────────────────────────────────────────────
+
+def save_lead(store_id: str, email: str, visitor_hash: str, name: str = "", context: str = ""):
+    try:
+        with get_db() as db:
+            db.execute(
+                "INSERT INTO leads (store_id, email, name, visitor_hash, context) VALUES (?, ?, ?, ?, ?)",
+                (store_id, email[:200], name[:100], visitor_hash, context[:1000])
+            )
+        return True
+    except Exception as e:
+        logger.warning(f"Lead save error: {e}")
+        return False
+
+
+def get_leads(store_id: str, limit: int = 50, offset: int = 0) -> list:
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT id, email, name, context, created_at FROM leads WHERE store_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (store_id, limit, offset)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_lead_count(store_id: str) -> int:
+    with get_db() as db:
+        return db.execute(
+            "SELECT COUNT(*) as cnt FROM leads WHERE store_id = ?", (store_id,)
+        ).fetchone()["cnt"]
 
 
 # ── Initialize on import ────────────────────────────────────

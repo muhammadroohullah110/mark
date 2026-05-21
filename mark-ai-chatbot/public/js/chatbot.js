@@ -119,6 +119,19 @@
     let conversationHistory = [];
     const SESSION_ID = 'mark_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
+    // ── Analytics — fire-and-forget event tracking ──
+    const VISITOR_HASH = SESSION_ID; // unique per session
+    function trackEvent(eventType, metadata) {
+        try {
+            fetch(BACKEND + '/api/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ store_id: STORE_ID, event_type: eventType, visitor_hash: VISITOR_HASH, metadata: metadata || {} }),
+                keepalive: true,
+            }).catch(() => {}); // never fail
+        } catch(e) {} // never fail
+    }
+
     // ── Session Persistence — survive close/reopen within same page session ──
     const SESSION_HISTORY_KEY = 'mark_session_history';
     const SESSION_TIMESTAMP_KEY = 'mark_session_ts';
@@ -611,6 +624,7 @@
         markState = 'talking'; exchangeCount = 0;
         clearTimeout(walkTimer);
         markHint.style.display = 'none';
+        trackEvent('widget_open');
 
         console.log('[Mark] Entering talking mode — backendAlive:', backendAlive,
                      'ttsAvailable:', ttsAvailable, 'audioUnlocked:', audioUnlocked);
@@ -1173,6 +1187,46 @@
         // Caption only fully hides when returnToWidget() is called
     }
 
+    // ── Lead Capture — detect when Mark asks for email ──
+    let leadFormShown = false;
+    const LEAD_PATTERNS = /\b(email|e-mail|contact.*(?:you|us)|reach out|get.*(?:back|touch)|subscribe|sign.*up|newsletter)\b/i;
+
+    function maybeShowLeadForm(reply) {
+        if (leadFormShown || !reply || !STORE_ID) return;
+        if (!LEAD_PATTERNS.test(reply)) return;
+        // Only show after 2+ exchanges (not on greeting)
+        if (exchangeCount < 2) return;
+
+        leadFormShown = true;
+        const formEl = document.createElement('div');
+        formEl.className = 'mark-lead-form';
+        formEl.innerHTML = `
+            <input type="email" class="mark-lead-input" placeholder="Your email" autocomplete="email" />
+            <button class="mark-lead-submit" type="button">Send</button>
+        `;
+        // Insert below caption
+        if (liveCaption && liveCaption.parentNode) {
+            liveCaption.parentNode.insertBefore(formEl, liveCaption.nextSibling);
+        }
+        const input = formEl.querySelector('.mark-lead-input');
+        const btn = formEl.querySelector('.mark-lead-submit');
+        btn.addEventListener('click', () => {
+            const email = input.value.trim();
+            if (!email || !email.includes('@')) { input.style.borderColor = '#e74c3c'; return; }
+            fetch(BACKEND + '/api/lead', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ store_id: STORE_ID, email, visitor_hash: VISITOR_HASH, context: conversationHistory.slice(-4).map(m => m.content).join(' | ').substring(0, 500) }),
+                keepalive: true,
+            }).catch(() => {});
+            formEl.innerHTML = '<div style="color:var(--mark-accent);font-weight:600;font-size:13px;padding:8px 0;">Got it! We\'ll be in touch.</div>';
+            trackEvent('lead_submitted', { email: email.substring(0, 5) + '***' });
+            window.markAnimator.play('wave');
+            setTimeout(() => formEl.remove(), 4000);
+        });
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+    }
+
     // ============================================================
     // HOLD-TO-RECORD MIC — Whisper transcription via backend
     // ============================================================
@@ -1207,6 +1261,7 @@
             mediaRecorder.start();
             isRecording = true;
             micBtn.classList.add('mark-listening');
+            trackEvent('voice_used');
             micHint.textContent = 'Release to send';
         } catch {
             micHint.textContent = MARK_MSGS.micDenied;
@@ -1393,6 +1448,8 @@
      */
     window.processChatMessage = async function(userInput, ragContext) {
         conversationHistory.push({ role: 'user', content: userInput });
+        if (exchangeCount === 0) trackEvent('chat_start');
+        trackEvent('chat_message', { direction: 'user' });
 
         // Try Python backend first with STREAMING (shows text as it arrives)
         if (backendAlive) {
@@ -1459,6 +1516,7 @@
                         saveSessionHistory();
                         showCaption(reply, true);
                         speak(reply);
+                        maybeShowLeadForm(reply);
                         return;
                     }
                 }
@@ -1474,6 +1532,7 @@
                     saveSessionHistory();
                     showCaption(reply, true);
                     speak(reply);
+                    maybeShowLeadForm(reply);
                     return;
                 }
             } catch(e) {
@@ -1510,6 +1569,7 @@
                 saveSessionHistory();
                 showCaption(reply, true);
                 speak(reply);
+                maybeShowLeadForm(reply);
                 return;
             }
         } catch(e) { /* both failed */ }
