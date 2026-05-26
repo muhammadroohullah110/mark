@@ -806,8 +806,8 @@
 
         <!-- Tab Navigation -->
         <div style="border-bottom:1px solid rgba(194,199,202,0.3);margin-bottom:40px;display:flex;gap:0;overflow-x:auto;" id="store-tabs">
-            ${['settings','sales','voice','ai','conversations','embed'].map(tab => {
-                const labels = { settings:'Settings', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
+            ${['settings','training','sales','voice','ai','conversations','embed'].map(tab => {
+                const labels = { settings:'Settings', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
                 const isActive = tab === activeTab;
                 return `<button data-tab="${tab}" style="${isActive ? T.tabBtnActive : T.tabBtn}"
                     onclick="markAdmin.switchTab('${tab}')"
@@ -862,6 +862,7 @@
         const s = currentStore;
         switch (tab) {
             case 'settings':      container.innerHTML = renderSettingsTab(s); break;
+            case 'training':      container.innerHTML = renderTrainingTab(s); initTrainingTab(s); break;
             case 'sales':         container.innerHTML = renderSalesTab(s); break;
             case 'voice':         container.innerHTML = renderVoiceTab(s); break;
             case 'ai':            container.innerHTML = renderAITab(s); break;
@@ -1016,6 +1017,178 @@
             currentStore = { ...currentStore, ...data };
             toast('Settings saved!', 'success');
         } catch (e) { toast(e.message, 'error'); }
+    }
+
+    /* ================================================================
+       TAB: MARK TRAINING — Brand Knowledge + Product Awareness
+       ================================================================ */
+    function renderTrainingTab(s) {
+        const brandInfo = s.brand_description || '';
+        const seasonalProducts = s.seasonal_products || '';
+        const priorityProducts = s.priority_products || '';
+        return `
+        <div style="${T.glassLight}padding:40px;">
+            <h3 style="${T.headline}font-size:24px;margin:0 0 4px;">
+                <span class="material-symbols-outlined" style="vertical-align:middle;font-size:28px;margin-right:8px;color:#954921;">school</span>
+                Train Mark About Your Brand
+            </h3>
+            <p style="color:#42484a;font-size:14px;margin:0 0 36px;">The more Mark knows about your brand, the better conversations he'll have with your visitors.</p>
+
+            <!-- SECTION 1: Brand Knowledge -->
+            <div style="margin-bottom:40px;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                    <span class="material-symbols-outlined" style="font-size:22px;color:#954921;">store</span>
+                    <label style="${T.label}margin:0;">Brand Story & Identity</label>
+                </div>
+                <p style="font-size:13px;color:#73787a;margin:0 0 12px;">Tell Mark everything about your brand — mission, values, what makes you unique, target audience, tone. The more detail, the smarter Mark becomes.</p>
+                <textarea id="tt-brand-info" style="${T.input}min-height:140px;resize:vertical;line-height:1.6;" placeholder="Example: We are FreshBite — a family-owned organic food store since 2018. We believe in farm-to-table freshness. Our customers are health-conscious families aged 25-45. We're known for our handpicked seasonal fruits and same-day delivery in Lahore...">${esc(brandInfo)}</textarea>
+                <span style="font-size:12px;color:#73787a;margin-top:6px;display:block;">This is fed directly into Mark's brain. He'll speak about your brand with pride and accuracy.</span>
+            </div>
+
+            <!-- SECTION 2: Products from RAG -->
+            <div style="margin-bottom:40px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#954921;">inventory_2</span>
+                        <label style="${T.label}margin:0;">Products Mark Knows About</label>
+                    </div>
+                    <button type="button" id="tt-sync-btn" style="${T.btnSecondary}padding:8px 16px;font-size:13px;" onclick="markAdmin.syncProducts()">
+                        <span class="material-symbols-outlined" style="font-size:16px;">sync</span> Sync Products
+                    </button>
+                </div>
+                <p style="font-size:13px;color:#73787a;margin:0 0 12px;">These products were auto-discovered from your website via RAG crawling. If products are missing, click <strong>Sync Products</strong> to re-crawl.</p>
+                <div id="tt-products-list" style="background:rgba(255,255,255,0.5);border:1px solid #e2e5e8;border-radius:10px;padding:16px;min-height:80px;">
+                    <div style="text-align:center;color:#73787a;font-size:14px;padding:20px 0;">
+                        <span class="material-symbols-outlined" style="font-size:32px;display:block;margin-bottom:8px;opacity:0.5;">hourglass_top</span>
+                        Loading products...
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: Seasonal / Priority Products -->
+            <div style="margin-bottom:40px;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                    <span class="material-symbols-outlined" style="font-size:22px;color:#954921;">trending_up</span>
+                    <label style="${T.label}margin:0;">Priority Products (What to Push)</label>
+                </div>
+                <p style="font-size:13px;color:#73787a;margin:0 0 12px;">Tell Mark which products are your current focus — bestsellers, new arrivals, or seasonal items. Mark will naturally recommend these first.</p>
+                <textarea id="tt-priority-products" style="${T.input}min-height:90px;resize:vertical;line-height:1.6;" placeholder="Example: Our Mango Collection is the star right now — Pakistani Chaunsa and Sindhri mangoes are in season. Also push the Summer Hydration Bundle (20% off this week).">${esc(priorityProducts)}</textarea>
+            </div>
+
+            <div style="margin-bottom:40px;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                    <span class="material-symbols-outlined" style="font-size:22px;color:#954921;">calendar_month</span>
+                    <label style="${T.label}margin:0;">Seasonal Context</label>
+                </div>
+                <p style="font-size:13px;color:#73787a;margin:0 0 12px;">Current season, events, or promotions Mark should know about. Update this regularly.</p>
+                <textarea id="tt-seasonal" style="${T.input}min-height:80px;resize:vertical;line-height:1.6;" placeholder="Example: It's Ramadan season — our Iftar Boxes are selling fast. Free delivery on orders above Rs 3,000. Eid sale starts next week with 30% off on all dry fruits.">${esc(seasonalProducts)}</textarea>
+            </div>
+
+            <!-- Save Button -->
+            <div style="display:flex;justify-content:flex-end;">
+                <button type="button" style="${T.btnPrimary}padding:14px 32px;font-size:15px;" onclick="markAdmin.saveTraining()">
+                    <span class="material-symbols-outlined" style="font-size:18px;">save</span> Save Training Data
+                </button>
+            </div>
+        </div>`;
+    }
+
+    async function initTrainingTab(s) {
+        // Load products from RAG
+        const remoteId = globalSettings.remote_store_id;
+        const backendUrl = globalSettings.backend_url || 'https://mark-udfz.onrender.com';
+        if (!remoteId) {
+            const el = document.getElementById('tt-products-list');
+            if (el) el.innerHTML = '<p style="color:#73787a;font-size:14px;padding:8px;">Connect to backend first (set Remote Store ID in Settings).</p>';
+            return;
+        }
+        try {
+            const resp = await fetch(backendUrl + '/api/status', {
+                headers: { 'X-Store-ID': remoteId }
+            });
+            const data = await resp.json();
+            const el = document.getElementById('tt-products-list');
+            if (!el) return;
+
+            const pagesIndexed = data.pages_indexed || 0;
+            const productsLoaded = data.products_loaded || 0;
+            const ragReady = data.rag_ready;
+
+            let html = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">`;
+            html += `<div style="padding:8px 16px;border-radius:8px;background:${ragReady ? 'rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3)' : 'rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3)'};font-size:13px;font-weight:600;color:${ragReady ? '#16a34a' : '#d97706'};">
+                RAG: ${ragReady ? 'Ready' : 'Indexing...'}
+            </div>`;
+            html += `<div style="padding:8px 16px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:13px;font-weight:600;color:#6366f1;">
+                ${pagesIndexed} Pages Indexed
+            </div>`;
+            html += `<div style="padding:8px 16px;border-radius:8px;background:rgba(149,73,33,0.08);border:1px solid rgba(149,73,33,0.2);font-size:13px;font-weight:600;color:#954921;">
+                ${productsLoaded} Products Found
+            </div>`;
+            html += `</div>`;
+
+            if (productsLoaded === 0) {
+                html += `<p style="font-size:13px;color:#73787a;">No products detected yet. If your site has products, click <strong>Sync Products</strong> to re-crawl.</p>`;
+            } else {
+                html += `<p style="font-size:13px;color:#73787a;">Mark knows about ${productsLoaded} products from your website. These are used for recommendations and answering product questions.</p>`;
+            }
+            el.innerHTML = html;
+        } catch (e) {
+            const el = document.getElementById('tt-products-list');
+            if (el) el.innerHTML = '<p style="color:#ba1a1a;font-size:14px;padding:8px;">Could not reach backend. Make sure your backend is running.</p>';
+        }
+    }
+
+    async function syncProducts() {
+        const btn = document.getElementById('tt-sync-btn');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;animation:spin 1s linear infinite;">sync</span> Syncing...'; }
+
+        const remoteId = globalSettings.remote_store_id;
+        const backendUrl = globalSettings.backend_url || 'https://mark-udfz.onrender.com';
+        try {
+            await fetch(backendUrl + '/api/rag/crawl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId },
+                body: JSON.stringify({ store_id: remoteId })
+            });
+            showToast('Product sync started! RAG is re-crawling your website. This may take a minute.');
+            // Refresh after a few seconds
+            setTimeout(() => { if (currentStore) initTrainingTab(currentStore); }, 8000);
+        } catch (e) {
+            showToast('Sync failed. Check your backend connection.', 'error');
+        }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">sync</span> Sync Products'; }
+    }
+
+    async function saveTraining() {
+        const brandInfo = document.getElementById('tt-brand-info')?.value || '';
+        const priorityProducts = document.getElementById('tt-priority-products')?.value || '';
+        const seasonalProducts = document.getElementById('tt-seasonal')?.value || '';
+
+        try {
+            await api('PUT', 'stores/' + currentStore.store_id, {
+                brand_description: brandInfo,
+                priority_products: priorityProducts,
+                seasonal_products: seasonalProducts,
+            });
+            currentStore.brand_description = brandInfo;
+            currentStore.priority_products = priorityProducts;
+            currentStore.seasonal_products = seasonalProducts;
+
+            // Also sync to backend
+            const remoteId = globalSettings.remote_store_id;
+            const backendUrl = globalSettings.backend_url || 'https://mark-udfz.onrender.com';
+            if (remoteId) {
+                fetch(backendUrl + '/api/sync-training', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId },
+                    body: JSON.stringify({ brand_description: brandInfo, priority_products: priorityProducts, seasonal_products: seasonalProducts })
+                }).catch(() => {});
+            }
+
+            showToast('Training data saved! Mark is now smarter about your brand.');
+        } catch (e) {
+            showToast('Failed to save training data.', 'error');
+        }
     }
 
     /* ================================================================
@@ -1607,6 +1780,7 @@
     window.markAdmin = {
         navigate, openStore, switchTab,
         saveStoreSettings, saveSalesSettings, saveVoice, testVoice, saveAI,
+        saveTraining, syncProducts,
         confirmDelete, deleteStore,
         copyCode, copyText, closeModal,
         saveGlobalSettings, testConnection,

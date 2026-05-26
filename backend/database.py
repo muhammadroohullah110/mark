@@ -93,6 +93,11 @@ def init_db():
                 sales_followup_enabled INTEGER DEFAULT 0,
                 sales_max_suggestions INTEGER DEFAULT 3,
 
+                -- Mark Training data (brand knowledge)
+                brand_description TEXT DEFAULT '',
+                priority_products TEXT DEFAULT '',
+                seasonal_products TEXT DEFAULT '',
+
                 -- Auto-registration token (WP plugin auth)
                 api_token TEXT DEFAULT '',
 
@@ -236,6 +241,7 @@ STORE_FIELDS = {
     "sales_mode", "sales_greeting", "sales_cta_text", "sales_cta_url",
     "sales_objection_handling", "sales_cross_sell", "sales_urgency_triggers",
     "sales_tone", "sales_followup_enabled", "sales_max_suggestions",
+    "brand_description", "priority_products", "seasonal_products",
 }
 
 

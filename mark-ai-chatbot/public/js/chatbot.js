@@ -1608,7 +1608,7 @@
         }
 
         closeBtn.addEventListener('click', returnToWidget);
-        talkBackdrop.addEventListener('click', returnToWidget);
+        // Backdrop click does NOT close — only the X button closes Mark
 
         micBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); startRecording(); });
         micBtn.addEventListener('pointerup',   (e) => { e.preventDefault(); stopRecording(); });

@@ -564,6 +564,20 @@ EMOJI: Avoid emoji unless the visitor uses them first.
 </response_format>
 """
 
+    # ── BRAND TRAINING DATA (from admin panel) ──
+    brand_desc = (tenant or {}).get("brand_description", "")
+    priority_prods = (tenant or {}).get("priority_products", "")
+    seasonal_ctx = (tenant or {}).get("seasonal_products", "")
+
+    if brand_desc and brand_desc.strip():
+        prompt += f"\n<brand_knowledge>\nThe owner told you this about the brand:\n{brand_desc.strip()[:3000]}\nUse this to speak about the brand authentically and accurately.\n</brand_knowledge>\n"
+
+    if priority_prods and priority_prods.strip():
+        prompt += f"\n<priority_products>\nThe owner wants you to naturally recommend these first:\n{priority_prods.strip()[:1500]}\nMention these when relevant, but don't force them into every conversation.\n</priority_products>\n"
+
+    if seasonal_ctx and seasonal_ctx.strip():
+        prompt += f"\n<seasonal_context>\nCurrent seasonal info from the owner:\n{seasonal_ctx.strip()[:1500]}\nUse this for timely, relevant conversations.\n</seasonal_context>\n"
+
     if product_context and product_context.strip():
         prompt += f"\n== PRODUCT CATALOG ==\n{product_context}\n"
 
@@ -928,6 +942,28 @@ async def sync_voice(body: SyncVoiceRequest, x_store_id: Optional[str] = Header(
     if body.tts_pitch: updates["tts_pitch"] = body.tts_pitch
     if updates:
         update_store(tenant["store_id"], updates)
+    return {"status": "ok", "updated": list(updates.keys())}
+
+
+class SyncTrainingRequest(BaseModel):
+    brand_description: Optional[str] = None
+    priority_products: Optional[str] = None
+    seasonal_products: Optional[str] = None
+
+@app.post("/api/sync-training")
+async def sync_training(body: SyncTrainingRequest, x_store_id: Optional[str] = Header(None)):
+    """Sync training data from WP admin to backend store record."""
+    tenant = resolve_tenant(x_store_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Store not found")
+    updates = {}
+    if body.brand_description is not None: updates["brand_description"] = body.brand_description[:5000]
+    if body.priority_products is not None: updates["priority_products"] = body.priority_products[:2000]
+    if body.seasonal_products is not None: updates["seasonal_products"] = body.seasonal_products[:2000]
+    if updates:
+        update_store(tenant["store_id"], updates)
+        # Invalidate cache since training data changed
+        response_cache.invalidate_store(tenant["store_id"])
     return {"status": "ok", "updated": list(updates.keys())}
 
 

@@ -348,6 +348,8 @@ class Mark_AI_Rest_API {
             'sales_lead_capture', 'sales_cta_url', 'sales_cta_text',
             // Widget size scale (1-10)
             'widget_scale_desktop', 'widget_scale_mobile',
+            // Mark Training fields
+            'brand_description', 'priority_products', 'seasonal_products',
         ];
 
         $updates = [];
@@ -366,7 +368,7 @@ class Mark_AI_Rest_API {
                     $value = $value ? 1 : 0;
                 } elseif ( $key === 'website_url' ) {
                     $value = esc_url_raw( $value );
-                } elseif ( $key === 'custom_system_prompt' ) {
+                } elseif ( in_array( $key, [ 'custom_system_prompt', 'brand_description', 'priority_products', 'seasonal_products' ], true ) ) {
                     $value = wp_kses_post( $value );
                 } elseif ( $key === 'groq_api_key' ) {
                     // Don't overwrite with masked value
