@@ -806,8 +806,8 @@
 
         <!-- Tab Navigation -->
         <div style="border-bottom:1px solid rgba(194,199,202,0.3);margin-bottom:40px;display:flex;gap:0;overflow-x:auto;" id="store-tabs">
-            ${['settings','training','sales','voice','ai','conversations','embed'].map(tab => {
-                const labels = { settings:'Settings', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
+            ${['settings','analytics','training','sales','voice','ai','conversations','embed'].map(tab => {
+                const labels = { settings:'Settings', analytics:'Analytics', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
                 const isActive = tab === activeTab;
                 return `<button data-tab="${tab}" style="${isActive ? T.tabBtnActive : T.tabBtn}"
                     onclick="markAdmin.switchTab('${tab}')"
@@ -862,6 +862,7 @@
         const s = currentStore;
         switch (tab) {
             case 'settings':      container.innerHTML = renderSettingsTab(s); break;
+            case 'analytics':     container.innerHTML = renderAnalyticsTab(s); loadEventAnalytics(s); break;
             case 'training':      container.innerHTML = renderTrainingTab(s); initTrainingTab(s); break;
             case 'sales':         container.innerHTML = renderSalesTab(s); break;
             case 'voice':         container.innerHTML = renderVoiceTab(s); break;
@@ -1189,6 +1190,273 @@
         } catch (e) {
             showToast('Failed to save training data.', 'error');
         }
+    }
+
+    /* ================================================================
+       TAB: ANALYTICS (Event-driven insights)
+       ================================================================ */
+    function renderAnalyticsTab(s) {
+        return `
+        <div style="margin-bottom:32px;">
+            <h3 style="${T.headline}font-size:24px;font-weight:400;margin:0 0 8px;">
+                <span class="material-symbols-outlined" style="font-size:24px;vertical-align:middle;margin-right:8px;color:#954921;">analytics</span>
+                Event Analytics
+            </h3>
+            <p style="color:#42484a;font-size:14px;margin:0;">Track how visitors interact with Mark on your site.</p>
+        </div>
+
+        <!-- Event Stat Cards -->
+        <div id="analytics-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:40px;">
+            ${renderMiniStat('Widget Opens', '--', 'widgets')}
+            ${renderMiniStat('Chats Started', '--', 'chat_bubble')}
+            ${renderMiniStat('Messages', '--', 'forum')}
+            ${renderMiniStat('Voice Used', '--', 'mic')}
+            ${renderMiniStat('Links Clicked', '--', 'link')}
+            ${renderMiniStat('Leads', '--', 'contact_mail')}
+        </div>
+
+        <!-- Conversion Funnel -->
+        <div style="${T.glass}padding:32px;margin-bottom:32px;">
+            <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0 0 24px;">
+                <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#954921;">filter_alt</span>
+                Conversion Funnel (30 days)
+            </h4>
+            <div id="analytics-funnel" style="display:flex;flex-direction:column;gap:0;">
+                ${renderFunnelStep('Widget Opened', '--', 100, '#fc9b6c')}
+                ${renderFunnelStep('Chat Started', '--', 0, '#e88a5e')}
+                ${renderFunnelStep('Message Sent', '--', 0, '#d47a50')}
+                ${renderFunnelStep('Lead Captured', '--', 0, '#954921')}
+            </div>
+        </div>
+
+        <!-- Daily Trends Chart -->
+        <div style="${T.glass}padding:32px;margin-bottom:32px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+                <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0;">
+                    <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#954921;">trending_up</span>
+                    Daily Trends (14 days)
+                </h4>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#42484a;">
+                        <span style="width:12px;height:3px;border-radius:2px;background:#954921;display:inline-block;"></span> Widget Opens
+                    </span>
+                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#42484a;">
+                        <span style="width:12px;height:3px;border-radius:2px;background:#4f6169;display:inline-block;"></span> Chats
+                    </span>
+                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#42484a;">
+                        <span style="width:12px;height:3px;border-radius:2px;background:#16a34a;display:inline-block;"></span> Voice
+                    </span>
+                </div>
+            </div>
+            <div style="height:260px;position:relative;">
+                <canvas id="analytics-trend-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Unique Visitors -->
+        <div style="${T.glassLight}padding:24px;display:flex;align-items:center;gap:16px;">
+            <span class="material-symbols-outlined" style="font-size:32px;color:#4f6169;">group</span>
+            <div>
+                <div style="font-size:14px;color:#42484a;font-weight:600;">Unique Visitors (30 days)</div>
+                <div id="analytics-unique" style="font-family:'Open Sans',sans-serif;font-size:28px;font-weight:300;color:#1a1c1c;">--</div>
+            </div>
+        </div>`;
+    }
+
+    function renderFunnelStep(label, value, pct, color) {
+        const width = Math.max(pct, 8);
+        return `
+        <div style="display:flex;align-items:center;gap:16px;padding:8px 0;">
+            <div style="width:140px;font-size:13px;color:#42484a;font-weight:500;text-align:right;flex-shrink:0;">${label}</div>
+            <div style="flex:1;position:relative;height:36px;background:rgba(194,199,202,0.1);border-radius:6px;overflow:hidden;">
+                <div style="height:100%;width:${width}%;background:${color};border-radius:6px;transition:width 0.6s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:12px;">
+                    <span style="font-size:14px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.2);" class="funnel-val">${formatNum(value)}</span>
+                </div>
+            </div>
+            <div style="width:50px;font-size:12px;color:#73787a;text-align:right;flex-shrink:0;" class="funnel-pct">${pct > 0 ? pct + '%' : '--'}</div>
+        </div>`;
+    }
+
+    async function loadEventAnalytics(s) {
+        // Ensure globalSettings is loaded (may not be if user navigated directly to store page)
+        if (!globalSettings || !globalSettings.api_token) {
+            try { globalSettings = await api('GET', 'settings'); } catch (e) {}
+        }
+        const backendUrl = globalSettings.backend_url || 'https://mark-udfz.onrender.com';
+        const settings = globalSettings || {};
+        const token = settings.api_token || '';
+        const remoteStoreId = settings.remote_store_id || s.store_id;
+
+        try {
+            const resp = await fetch(backendUrl + '/api/stores/' + remoteStoreId + '/event-analytics?days=30', {
+                headers: { 'X-Store-Token': token }
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+
+            const totals = data.totals || {};
+            const daily = data.daily || {};
+            const leads = data.lead_count || 0;
+            const unique = data.unique_visitors || 0;
+
+            // Update stat cards
+            const cardValues = [
+                totals.widget_open || 0,
+                totals.chat_start || 0,
+                totals.chat_message || 0,
+                totals.voice_used || 0,
+                totals.link_clicked || 0,
+                leads
+            ];
+            const cards = document.querySelectorAll('#analytics-cards > div');
+            cards.forEach((card, i) => {
+                const numEl = card.querySelector('div:last-child');
+                if (numEl && cardValues[i] !== undefined) numEl.textContent = formatNum(cardValues[i]);
+            });
+
+            // Update funnel
+            const funnelData = [
+                totals.widget_open || 0,
+                totals.chat_start || 0,
+                totals.chat_message || 0,
+                leads
+            ];
+            const funnelMax = Math.max(funnelData[0], 1);
+            const funnelContainer = document.getElementById('analytics-funnel');
+            if (funnelContainer) {
+                const steps = funnelContainer.querySelectorAll(':scope > div');
+                steps.forEach((step, i) => {
+                    const pct = Math.round((funnelData[i] / funnelMax) * 100);
+                    const bar = step.querySelector('div:nth-child(2) > div');
+                    const valEl = step.querySelector('.funnel-val');
+                    const pctEl = step.querySelector('.funnel-pct');
+                    if (bar) bar.style.width = Math.max(pct, 8) + '%';
+                    if (valEl) valEl.textContent = formatNum(funnelData[i]);
+                    if (pctEl) pctEl.textContent = pct + '%';
+                });
+            }
+
+            // Update unique visitors
+            const uniqueEl = document.getElementById('analytics-unique');
+            if (uniqueEl) uniqueEl.textContent = formatNum(unique);
+
+            // Render daily trends chart
+            renderAnalyticsTrendChart(daily);
+
+        } catch (e) {
+            console.warn('Event analytics load error:', e);
+            // Show a subtle error message in the cards area
+            const cards = document.getElementById('analytics-cards');
+            if (cards) {
+                cards.insertAdjacentHTML('afterend',
+                    `<p style="color:#73787a;font-size:13px;margin:-24px 0 24px;font-style:italic;">
+                        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">info</span>
+                        Event analytics unavailable — backend may be starting up. Try again in a moment.
+                    </p>`);
+            }
+        }
+    }
+
+    function renderAnalyticsTrendChart(dailyData) {
+        const canvas = document.getElementById('analytics-trend-chart');
+        if (!canvas || typeof Chart === 'undefined') return;
+
+        if (chartInstances.analyticsTrend) {
+            try { chartInstances.analyticsTrend.destroy(); } catch (e) {}
+        }
+
+        // Build sorted date labels from daily data
+        const dates = Object.keys(dailyData).sort();
+        const labels = dates.map(d => {
+            const dt = new Date(d + 'T00:00:00');
+            return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        });
+
+        const widgetOpens = dates.map(d => (dailyData[d] || {}).widget_open || 0);
+        const chatStarts = dates.map(d => (dailyData[d] || {}).chat_start || 0);
+        const voiceUsed = dates.map(d => (dailyData[d] || {}).voice_used || 0);
+
+        chartInstances.analyticsTrend = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Widget Opens',
+                        data: widgetOpens,
+                        borderColor: '#954921',
+                        backgroundColor: 'rgba(149,73,33,0.08)',
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#954921',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                    },
+                    {
+                        label: 'Chats',
+                        data: chatStarts,
+                        borderColor: '#4f6169',
+                        backgroundColor: 'rgba(79,97,105,0.06)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#4f6169',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                    },
+                    {
+                        label: 'Voice',
+                        data: voiceUsed,
+                        borderColor: '#16a34a',
+                        backgroundColor: 'rgba(22,163,74,0.06)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#16a34a',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(26,28,28,0.92)',
+                        titleFont: { family: "'Open Sans', sans-serif", size: 12 },
+                        bodyFont: { family: "'Open Sans', sans-serif", size: 13 },
+                        padding: 12,
+                        cornerRadius: 8,
+                        callbacks: {
+                            label: function(ctx) {
+                                return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y;
+                            }
+                        }
+                    },
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(194,199,202,0.12)' },
+                        ticks: { font: { family: "'Open Sans', sans-serif", size: 11 }, color: '#73787a', maxRotation: 45 },
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(194,199,202,0.12)' },
+                        ticks: { font: { family: "'Open Sans', sans-serif", size: 11 }, color: '#73787a', stepSize: 1 },
+                    },
+                },
+            },
+        });
     }
 
     /* ================================================================

@@ -1115,9 +1115,13 @@ async def track_event(request: Request, body: TrackEventRequest):
 
 
 @app.get("/api/stores/{store_id}/event-analytics")
-async def get_store_event_analytics(store_id: str, days: int = 30, user=Depends(get_current_user)):
-    """Admin-only: aggregated event analytics for a store."""
+async def get_store_event_analytics(store_id: str, days: int = 30, user=Depends(verify_store_token_or_user)):
+    """Admin or token-auth: aggregated event analytics for a store."""
+    # Verify token user can only access their own store
+    if user.get("store_id") and user["store_id"] != store_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     data = get_event_analytics(store_id, min(days, 90))
+    data["lead_count"] = get_lead_count(store_id)
     return data
 
 
