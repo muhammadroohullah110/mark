@@ -192,7 +192,7 @@ class Mark_AI_Widget {
             'position'    => $settings['widget_position'] ?? 'bottom-right',
             'storeId'     => !empty($settings['remote_store_id']) ? $settings['remote_store_id'] : ($active_store ? $active_store['store_id'] : ''),
             'backendUrl'  => MARK_AI_BACKEND,
-            'accentColor'      => sanitize_hex_color( $settings['widget_accent_color'] ?? '' ) ?: '#667eea',
+            'accentColor'      => sanitize_hex_color( $settings['widget_accent_color'] ?? '' ) ?: '#954921',
             'greetingSoundText' => sanitize_text_field( $settings['greeting_sound_text'] ?? 'Ayie!' ),
             'idleTimeout'      => $idle_timeout,
             'scaleDesktop'     => max( 1, min( 10, intval( $active_store['widget_scale_desktop'] ?? 5 ) ) ),

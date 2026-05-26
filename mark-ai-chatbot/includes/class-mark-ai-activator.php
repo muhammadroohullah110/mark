@@ -144,7 +144,7 @@ class Mark_AI_Activator {
             'widget_position'  => 'bottom-right',
             'auto_greet'          => 1,
             'primary_language'    => 'en',
-            'widget_accent_color' => '#667eea',
+            'widget_accent_color' => '#954921',
         ];
 
         // Only set defaults if not already configured

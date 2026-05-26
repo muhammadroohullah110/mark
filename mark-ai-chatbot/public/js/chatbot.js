@@ -17,7 +17,7 @@
     const POSITION   = CFG.position || 'bottom-right';
     const AUTO_GREET = CFG.autoGreet !== false;
     const LANG       = CFG.language || 'en';
-    const ACCENT     = CFG.accentColor || '#667eea';
+    const ACCENT     = CFG.accentColor || '#954921';
     const GREET_SOUND = CFG.greetingSoundText || 'Ayie!';
     const IDLE_TIMEOUT_CFG = (parseInt(CFG.idleTimeout) || 60) * 1000; // from admin (seconds → ms)
 
@@ -80,7 +80,7 @@
     const WIDGET_PX = DEVICE.mobile ? scaleToSize(SCALE_MOB, 'mobile')
                     : DEVICE.tablet ? scaleToSize(SCALE_DESK, 'tablet')
                     : scaleToSize(SCALE_DESK, 'desktop');
-    const TALKING_PX        = DEVICE.mobile ? 240 : DEVICE.tablet ? 280 : 320;
+    const TALKING_PX        = DEVICE.mobile ? 140 : DEVICE.tablet ? 160 : 180;
     // Idle timeout — uses admin setting, with sensible floor (15s min)
     const IDLE_TIMEOUT_SHORT = Math.max(IDLE_TIMEOUT_CFG, 15000);
     const IDLE_TIMEOUT_LONG  = Math.max(IDLE_TIMEOUT_CFG * 2, 30000);
@@ -212,31 +212,41 @@
             <div id="mark-three-container"></div>
         </div>
 
-        <div id="mark-live-caption" class="mark-chat-ui"></div>
-        <div id="mark-thinking-indicator" class="mark-chat-ui">Mark is thinking</div>
+        <div id="mark-robot-label" class="mark-chat-ui">
+            <span class="mark-status-dot"></span> Mark
+        </div>
+
         <button id="mark-close-btn" class="mark-chat-ui" title="Close">&times;</button>
 
-        <button id="mark-mic-btn" class="mark-chat-ui" title="Hold to talk">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-                <line x1="8"  y1="23" x2="16" y2="23"/>
-            </svg>
-        </button>
-        <div id="mark-mic-hint" class="mark-chat-ui">Hold to talk</div>
+        <div id="mark-chat-area" class="mark-chat-ui"></div>
+
+        <div id="mark-live-caption" class="mark-chat-ui"></div>
+        <div id="mark-thinking-indicator" class="mark-chat-ui">Mark is thinking</div>
+
+        <div id="mark-mic-hint" class="mark-chat-ui">Recording...</div>
 
         <div id="mark-text-input-area" class="mark-chat-ui">
-            <input type="text" id="mark-text-input" placeholder="or type here..." autocomplete="off" />
+            <input type="text" id="mark-text-input" placeholder="Type a message..." autocomplete="off" />
+            <button id="mark-mic-btn" title="Hold to talk">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8"  y1="23" x2="16" y2="23"/>
+                </svg>
+            </button>
             <button id="mark-send-btn" title="Send">&#10148;</button>
         </div>
+
+        <div id="mark-celebration"></div>
         `;
     }
 
     // DOM refs
     let markWidget, threeContainer, loadingOverlay, micBtn, micHint,
-        liveCaption, markHint, closeBtn, thinkingEl, textInput, sendBtn, talkBackdrop;
+        liveCaption, markHint, closeBtn, thinkingEl, textInput, sendBtn, talkBackdrop,
+        chatArea, celebrationEl;
 
     function assignDOMRefs() {
         markWidget     = document.getElementById('mark-widget');
@@ -251,6 +261,8 @@
         textInput      = document.getElementById('mark-text-input');
         sendBtn        = document.getElementById('mark-send-btn');
         talkBackdrop   = document.getElementById('mark-talk-backdrop');
+        chatArea       = document.getElementById('mark-chat-area');
+        celebrationEl  = document.getElementById('mark-celebration');
     }
 
     // ============================================================
@@ -319,6 +331,54 @@
             }
         }
         return null;
+    }
+
+    // ============================================================
+    // NAME CELEBRATION — elite welcome moment
+    // ============================================================
+    let celebrationShown = false;
+
+    function showNameCelebration(name) {
+        if (celebrationShown || !celebrationEl) return;
+        celebrationShown = true;
+
+        // Create particles
+        const particleColors = ['#fc9b6c', '#954921', '#e8c547', '#fff', '#f59e0b'];
+        let particlesHTML = '';
+        for (let i = 0; i < 16; i++) {
+            const color = particleColors[i % particleColors.length];
+            const px = (Math.random() - 0.5) * 200;
+            const py = -40 - Math.random() * 120;
+            const delay = Math.random() * 0.5;
+            const size = 3 + Math.random() * 4;
+            particlesHTML += '<div class="mark-celeb-particle" style="' +
+                'background:' + color + ';' +
+                'width:' + size + 'px;height:' + size + 'px;' +
+                'left:calc(50% + ' + (Math.random() - 0.5) * 40 + 'px);' +
+                'top:50%;' +
+                '--px:' + px + 'px;--py:' + py + 'px;' +
+                'animation-delay:' + delay + 's;' +
+                '"></div>';
+        }
+
+        celebrationEl.innerHTML =
+            particlesHTML +
+            '<div class="mark-celeb-welcome">Welcome</div>' +
+            '<div class="mark-celeb-name">' + name + '</div>' +
+            '<div class="mark-celeb-line"></div>';
+        celebrationEl.classList.add('mark-show');
+
+        // Fade out after 2.5s
+        setTimeout(() => {
+            celebrationEl.style.transition = 'opacity 0.6s ease';
+            celebrationEl.style.opacity = '0';
+            setTimeout(() => {
+                celebrationEl.classList.remove('mark-show');
+                celebrationEl.style.opacity = '';
+                celebrationEl.style.transition = '';
+                celebrationEl.innerHTML = '';
+            }, 600);
+        }, 2500);
     }
 
     // ============================================================
@@ -679,8 +739,8 @@
 
         root.classList.remove('mark-talking');
         markWidget.classList.remove('mark-talking');
-        // Fully hide caption on exit
-        if (liveCaption) { liveCaption.style.opacity = '0'; liveCaption.style.visibility = 'hidden'; liveCaption.textContent = ''; }
+        // Clear chat bubbles on exit
+        if (chatArea) chatArea.innerHTML = '';
         clearTimeout(hideCaptionTimer);
         hideThinking();
 
@@ -707,31 +767,33 @@
     // THINKING
     // ============================================================
     function showThinking() {
-        // Hide caption to make room for thinking indicator
-        if (liveCaption) { liveCaption.style.opacity = '0'; liveCaption.style.visibility = 'hidden'; }
-        if (thinkingEl) {
-            thinkingEl.textContent = pickRandom(MARK_MSGS.thinking);
-            thinkingEl.classList.add('mark-show');
-            thinkingEl.style.visibility = 'visible';
-            thinkingEl.style.display = 'block';
+        // Add a thinking bubble to the chat area
+        if (chatArea) {
+            // Remove any existing thinking bubble first
+            const existing = chatArea.querySelector('.mark-msg-thinking');
+            if (existing) existing.remove();
+
+            const thinkBubble = document.createElement('div');
+            thinkBubble.className = 'mark-msg mark-msg-thinking';
+            thinkBubble.textContent = pickRandom(MARK_MSGS.thinking);
+            chatArea.appendChild(thinkBubble);
+            chatArea.scrollTop = chatArea.scrollHeight;
+
             // Rotate thinking messages every 3 seconds
             clearInterval(thinkingMsgTimer);
             thinkingMsgTimer = setInterval(() => {
-                if (thinkingEl) thinkingEl.textContent = pickRandom(MARK_MSGS.thinking);
+                const bubble = chatArea.querySelector('.mark-msg-thinking');
+                if (bubble) bubble.textContent = pickRandom(MARK_MSGS.thinking);
             }, 3000);
         }
         window.markAnimator.play('think');
     }
     function hideThinking() {
         clearInterval(thinkingMsgTimer);
-        if (thinkingEl) {
-            thinkingEl.classList.remove('mark-show');
-            thinkingEl.style.display = 'none';
-        }
-        // Restore caption visibility (showThinking hides it)
-        if (liveCaption) {
-            liveCaption.style.opacity = '';
-            liveCaption.style.visibility = '';
+        // Remove thinking bubble from chat
+        if (chatArea) {
+            const bubble = chatArea.querySelector('.mark-msg-thinking');
+            if (bubble) bubble.remove();
         }
     }
 
@@ -1158,28 +1220,47 @@
     let hideCaptionTimer = null;
 
     function showCaption(text, typewriter) {
-        if (!liveCaption || !text) return;
+        if (!text) return;
         if (typewriter === undefined) typewriter = true;
         clearInterval(typewriterTimer);
         clearTimeout(hideCaptionTimer);
 
-        // Force show — override ALL CSS, no transitions, instant visibility
-        liveCaption.style.cssText = 'opacity:1 !important; visibility:visible !important; display:block !important; pointer-events:auto !important; transition:none !important;';
+        // Determine if this is a user message or bot message
+        // typewriter=false means user message (set by processTextInput)
+        const isUser = typewriter === false;
 
         console.log('[Mark] Caption SHOW:', text.substring(0, 60) + '...');
 
-        if (!typewriter || text.length < 20) {
-            liveCaption.textContent = text;
-            return;
+        // Remove any thinking bubble
+        if (chatArea) {
+            const thinkBubble = chatArea.querySelector('.mark-msg-thinking');
+            if (thinkBubble) thinkBubble.remove();
         }
-        const words = text.split(' ');
-        let shown = 0;
-        liveCaption.textContent = '';
-        typewriterTimer = setInterval(() => {
-            shown++;
-            liveCaption.textContent = words.slice(0, shown).join(' ');
-            if (shown >= words.length) clearInterval(typewriterTimer);
-        }, 60);
+
+        // Add message to chat area as a bubble
+        if (chatArea) {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'mark-msg ' + (isUser ? 'mark-msg-user' : 'mark-msg-bot');
+
+            if (!isUser && typewriter && text.length >= 20) {
+                // Typewriter effect for bot messages
+                msgEl.textContent = '';
+                chatArea.appendChild(msgEl);
+                chatArea.scrollTop = chatArea.scrollHeight;
+                const words = text.split(' ');
+                let shown = 0;
+                typewriterTimer = setInterval(() => {
+                    shown++;
+                    msgEl.textContent = words.slice(0, shown).join(' ');
+                    chatArea.scrollTop = chatArea.scrollHeight;
+                    if (shown >= words.length) clearInterval(typewriterTimer);
+                }, 60);
+            } else {
+                msgEl.textContent = text;
+                chatArea.appendChild(msgEl);
+                chatArea.scrollTop = chatArea.scrollHeight;
+            }
+        }
     }
 
     function hideCaption() {
@@ -1204,9 +1285,10 @@
             <input type="email" class="mark-lead-input" placeholder="Your email" autocomplete="email" />
             <button class="mark-lead-submit" type="button">Send</button>
         `;
-        // Insert below caption
-        if (liveCaption && liveCaption.parentNode) {
-            liveCaption.parentNode.insertBefore(formEl, liveCaption.nextSibling);
+        // Insert into chat area
+        if (chatArea) {
+            chatArea.appendChild(formEl);
+            chatArea.scrollTop = chatArea.scrollHeight;
         }
         const input = formEl.querySelector('.mark-lead-input');
         const btn = formEl.querySelector('.mark-lead-submit');
@@ -1262,9 +1344,9 @@
             isRecording = true;
             micBtn.classList.add('mark-listening');
             trackEvent('voice_used');
-            micHint.textContent = 'Release to send';
+            micHint.textContent = 'Recording... release to send'; micHint.classList.add('mark-show');
         } catch {
-            micHint.textContent = MARK_MSGS.micDenied;
+            micHint.textContent = MARK_MSGS.micDenied; micHint.classList.add('mark-show'); setTimeout(() => micHint.classList.remove('mark-show'), 3000);
         }
     }
 
@@ -1279,7 +1361,7 @@
 
         isRecording = false;
         micBtn.classList.remove('mark-listening');
-        micHint.textContent = 'Processing...';
+        micHint.textContent = 'Processing...'; micHint.classList.add('mark-show');
         window.markAnimator.play('idle');
         try { mediaRecorder.stop(); } catch(_){}
     }
@@ -1299,7 +1381,10 @@
         showCaption(text, false);
 
         const name = tryExtractName(text);
-        if (name) saveMemory({ name });
+        if (name) {
+            saveMemory({ name });
+            showNameCelebration(name);
+        }
 
         const userAnim = window.markSituationDetector.detect(text, 'user');
         if (userAnim && userAnim !== 'speak') window.markAnimator.play(userAnim);
@@ -1312,7 +1397,7 @@
             hideThinking();
             showCaption("Something went wrong, could you try again?", true);
         }
-        micHint.textContent = 'Hold to talk';
+        micHint.classList.remove('mark-show');
     }
 
     // ============================================================
@@ -1338,8 +1423,8 @@
                 const data = await res.json();
                 const text = data.text ? data.text.trim() : '';
 
-                if (!text) { hideThinking(); micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
-                if (isEcho(text)) { hideThinking(); micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
+                if (!text) { hideThinking(); micHint.classList.remove('mark-show'); resetIdleTimer(); return; }
+                if (isEcho(text)) { hideThinking(); micHint.classList.remove('mark-show'); resetIdleTimer(); return; }
 
                 hideThinking();
                 await processTextInput(text);
@@ -1353,7 +1438,7 @@
         // Backend down — tell user to type (recording already happened, can't retroactively use SpeechRecognition)
         hideThinking();
         showCaption("My voice server is waking up — type your message below! ⌨️");
-        micHint.textContent = 'Hold to talk';
+        micHint.classList.remove('mark-show');
         resetIdleTimer();
     }
 
@@ -1367,7 +1452,7 @@
 
     function startBrowserRecognition() {
         if (!SpeechRecognition) {
-            micHint.textContent = "Browser doesn't support voice input";
+            micHint.textContent = "Browser doesn't support voice input"; micHint.classList.add('mark-show'); setTimeout(() => micHint.classList.remove('mark-show'), 3000);
             return;
         }
         cancelIdleTimer(); stopSpeaking();
@@ -1402,11 +1487,11 @@
             window.markAnimator.play('idle');
 
             const text = finalTranscript.trim();
-            if (!text) { micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
-            if (isEcho(text)) { micHint.textContent = 'Hold to talk'; resetIdleTimer(); return; }
+            if (!text) { micHint.classList.remove('mark-show'); resetIdleTimer(); return; }
+            if (isEcho(text)) { micHint.classList.remove('mark-show'); resetIdleTimer(); return; }
 
             await processTextInput(text);
-            micHint.textContent = 'Hold to talk';
+            micHint.classList.remove('mark-show');
         };
 
         browserRecognition.onerror = (e) => {
@@ -1415,9 +1500,9 @@
             micBtn.classList.remove('mark-listening');
             window.markAnimator.play('idle');
             if (e.error === 'not-allowed') {
-                micHint.textContent = MARK_MSGS.micDenied;
+                micHint.textContent = MARK_MSGS.micDenied; micHint.classList.add('mark-show'); setTimeout(() => micHint.classList.remove('mark-show'), 3000);
             } else {
-                micHint.textContent = 'Hold to talk';
+                micHint.classList.remove('mark-show');
             }
             resetIdleTimer();
         };
@@ -1425,7 +1510,7 @@
         browserRecognition.start();
         isRecording = true;
         micBtn.classList.add('mark-listening');
-        micHint.textContent = 'Listening... release to send';
+        micHint.textContent = 'Listening... release to send'; micHint.classList.add('mark-show');
     }
 
     function stopBrowserRecognition() {
