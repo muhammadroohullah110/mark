@@ -38,6 +38,8 @@ from database import (
     log_event, get_event_analytics, save_lead, get_leads, get_lead_count,
 )
 from admin_routes import router as admin_router, get_current_user
+from cache import ResponseCache
+from llm_router import LLMRouter
 
 load_dotenv()
 
@@ -51,6 +53,11 @@ logger = logging.getLogger("mark")
 
 # ── Default keys from .env (fallback when no tenant) ─────────
 DEFAULT_GROQ_KEY = os.getenv("GROQ_API_KEY", "")
+DEFAULT_OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
+FALLBACK_MODEL = os.getenv("FALLBACK_LLM_MODEL", "gpt-4o-mini")
+
+# ── Response Cache ──────────────────────────────────────────
+response_cache = ResponseCache(max_entries=2000, default_ttl=1800)
 
 # ── Multi-tenant RAG instances ───────────────────────────────
 _rag_instances: dict[str, MarkRAG] = {}
@@ -116,6 +123,7 @@ def _auto_reindex_loop():
                 for sid, rag_inst in _rag_instances.items():
                     if rag_inst.ready:
                         threading.Thread(target=rag_inst.reindex, daemon=True).start()
+                        response_cache.invalidate_store(sid)
                         time.sleep(2)
             logger.info("Auto-reindex triggered for all stores")
         except Exception as e:
@@ -227,6 +235,15 @@ def get_groq_client(tenant: dict | None) -> Groq:
     if not key:
         raise HTTPException(status_code=503, detail="AI not configured. Add Groq API key.")
     return Groq(api_key=key)
+
+
+def get_llm_router(tenant: dict | None) -> LLMRouter:
+    """Build an LLM router with fallback chain for this tenant."""
+    groq_key = (tenant or {}).get("groq_api_key") or DEFAULT_GROQ_KEY
+    openai_key = (tenant or {}).get("openai_api_key") or DEFAULT_OPENAI_KEY
+    if not groq_key and not openai_key:
+        raise HTTPException(status_code=503, detail="AI not configured. Add an API key.")
+    return LLMRouter(groq_key=groq_key, openai_key=openai_key, fallback_model=FALLBACK_MODEL)
 
 
 def get_rag(tenant: dict | None) -> MarkRAG | None:
@@ -780,7 +797,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     custom_rate = get_tenant_rate(tenant, "rate_chat")
     if not chat_limiter.is_allowed(ip, custom_max=custom_rate):
         raise HTTPException(status_code=429, detail="Too many requests.")
-    groq = get_groq_client(tenant)
+    router = get_llm_router(tenant)
     name = get_assistant_name(tenant)
     product_context = format_products_context(tenant)
 
@@ -833,27 +850,43 @@ async def chat_endpoint(request: Request, body: ChatRequest):
 
     messages_for_api.extend(cleaned)
 
+    # ── Cache check (skip for init/returning/streaming) ──
+    rag_snippet = ""
+    if len(messages_for_api) > 1 and messages_for_api[1].get("role") == "system":
+        rag_snippet = messages_for_api[1].get("content", "")[:200]
+    is_special = last_user_msg.startswith("[")
+    store_id_str = body.store_id or "default"
+
+    if not body.stream and not is_special:
+        cached = response_cache.get(store_id_str, last_user_msg, rag_snippet)
+        if cached:
+            logger.info(f"Cache HIT for store {store_id_str}")
+            log_conversation(ip, cleaned, body.user_language, cached, body.store_id)
+            return {"response": cached, "cached": True}
+
     # ── Streaming mode: send tokens as SSE for instant display ──
     if body.stream:
         def stream_generator():
             full_reply = []
             try:
-                stream_resp = groq.chat.completions.create(
-                    model=llm_model,
+                for token in router.stream(
                     messages=messages_for_api,
+                    model=llm_model,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    stream=True,
-                )
-                for chunk in stream_resp:
-                    delta = chunk.choices[0].delta
-                    if delta and delta.content:
-                        full_reply.append(delta.content)
-                        yield f"data: {json.dumps({'token': delta.content})}\n\n"
-                # Final event with complete response
+                ):
+                    full_reply.append(token)
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+
                 complete = ''.join(full_reply)
-                yield f"data: {json.dumps({'done': True, 'response': complete})}\n\n"
-                log_conversation(ip, cleaned, body.user_language, complete, body.store_id)
+                if complete:
+                    yield f"data: {json.dumps({'done': True, 'response': complete})}\n\n"
+                    log_conversation(ip, cleaned, body.user_language, complete, body.store_id)
+                    # Cache streamed response too (if not special)
+                    if not is_special and last_user_msg:
+                        response_cache.set(store_id_str, last_user_msg, rag_snippet, complete)
+                else:
+                    yield f"data: {json.dumps({'error': 'All AI providers unavailable'})}\n\n"
             except Exception as e:
                 logger.error(f"Stream error: {e}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -861,17 +894,23 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         return StreamingResponse(stream_generator(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-    # ── Non-streaming mode (fallback) ──
+    # ── Non-streaming mode (with router fallback) ──
     try:
-        response = groq.chat.completions.create(
-            model=llm_model,
+        reply = router.complete(
             messages=messages_for_api,
+            model=llm_model,
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        reply = response.choices[0].message.content
+        if not reply:
+            raise HTTPException(status_code=503, detail="All AI providers unavailable.")
         log_conversation(ip, cleaned, body.user_language, reply, body.store_id)
+        # Cache the response
+        if not is_special and last_user_msg:
+            response_cache.set(store_id_str, last_user_msg, rag_snippet, reply)
         return {"response": reply}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail="Chat failed.")
@@ -937,6 +976,12 @@ async def status_endpoint(x_store_id: Optional[str] = Header(None)):
         "assistant_name": STORE_CONFIG.get("assistant_name", "Mark"),
         "store_config": STORE_CONFIG,
     }
+
+
+@app.get("/api/cache-stats")
+async def cache_stats_endpoint(user: dict = Depends(get_current_user)):
+    """Cache performance stats — admin only."""
+    return response_cache.stats()
 
 
 @app.get("/api/tts/voices")
