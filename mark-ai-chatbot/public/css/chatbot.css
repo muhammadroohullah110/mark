@@ -64,29 +64,29 @@
     transition: width 0.7s, height 0.7s, transform 0.6s;
 }
 
-/* ── TALKING MODE: Robot moves to top-center, smaller ── */
+/* ── TALKING MODE: Big centered hero robot (restored), chat feed below ── */
 #mark-widget.mark-talking {
-    width: 180px !important; height: 180px !important;
-    left: 50% !important; top: 6% !important;
-    transform: translateX(-50%) !important;
+    width: 300px !important; height: 300px !important;
+    left: 50% !important; top: 32vh !important;
+    transform: translate(-50%, -50%) !important;
     cursor: default !important;
-    filter: drop-shadow(0 0 20px rgba(var(--mark-accent-rgb),0.5))
-            drop-shadow(0 0 40px rgba(var(--mark-accent-rgb),0.2));
+    filter: drop-shadow(0 0 30px rgba(var(--mark-accent-rgb),0.6))
+            drop-shadow(0 0 60px rgba(var(--mark-accent-rgb),0.3));
     transition: all 0.7s cubic-bezier(0.4,0,0.2,1);
 }
 
 @media (max-width:768px) {
     #mark-widget { width:90px; height:90px; }
-    #mark-widget.mark-talking { width:140px !important; height:140px !important; top:3% !important; }
+    #mark-widget.mark-talking { width:210px !important; height:210px !important; top:26vh !important; }
 }
 @media (min-width:769px) and (max-width:1024px) {
     #mark-widget { width:100px; height:100px; }
-    #mark-widget.mark-talking { width:160px !important; height:160px !important; top:4% !important; }
+    #mark-widget.mark-talking { width:260px !important; height:260px !important; top:29vh !important; }
 }
 
-/* ── ROBOT NAME LABEL (below robot in talk mode) ── */
+/* ── ROBOT NAME LABEL (below the hero robot) ── */
 #mark-robot-label {
-    position: fixed; top: calc(6% + 180px + 4px); left: 50%;
+    position: fixed; top: calc(32vh + 150px + 8px); left: 50%;
     transform: translateX(-50%);
     font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6);
     letter-spacing: 0.08em; text-transform: uppercase;
@@ -103,7 +103,10 @@
     50% { opacity: 0.4; }
 }
 @media(max-width:768px) {
-    #mark-robot-label { top: calc(3% + 140px + 2px); font-size: 11px; }
+    #mark-robot-label { top: calc(26vh + 105px + 6px); font-size: 11px; }
+}
+@media (min-width:769px) and (max-width:1024px) {
+    #mark-robot-label { top: calc(29vh + 130px + 8px); }
 }
 
 /* ── HINT BUBBLE ── */
@@ -152,10 +155,10 @@
 /* ── CHAT MESSAGE AREA — scrollable conversation ── */
 #mark-chat-area {
     position: fixed;
-    top: calc(6% + 180px + 32px);
+    top: calc(32vh + 150px + 36px);
     left: 50%; transform: translateX(-50%);
     width: 400px; max-width: 92vw;
-    bottom: 80px;
+    bottom: 84px;
     overflow-y: auto; overflow-x: hidden;
     z-index: 10002;
     padding: 8px 4px;
@@ -170,7 +173,10 @@
 #mark-chat-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 
 @media(max-width:768px) {
-    #mark-chat-area { top: calc(3% + 140px + 26px); width: 92vw; bottom: 70px; }
+    #mark-chat-area { top: calc(26vh + 105px + 28px); width: 92vw; bottom: 74px; }
+}
+@media (min-width:769px) and (max-width:1024px) {
+    #mark-chat-area { top: calc(29vh + 130px + 32px); }
 }
 
 /* ── CHAT BUBBLES ── */

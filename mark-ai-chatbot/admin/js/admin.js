@@ -806,8 +806,8 @@
 
         <!-- Tab Navigation -->
         <div style="border-bottom:1px solid rgba(194,199,202,0.3);margin-bottom:40px;display:flex;gap:0;overflow-x:auto;" id="store-tabs">
-            ${['settings','analytics','training','sales','voice','ai','conversations','embed'].map(tab => {
-                const labels = { settings:'Settings', analytics:'Analytics', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
+            ${['settings','analytics','learning','training','sales','voice','ai','conversations','embed'].map(tab => {
+                const labels = { settings:'Settings', analytics:'Analytics', learning:'Auto-Learning', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
                 const isActive = tab === activeTab;
                 return `<button data-tab="${tab}" style="${isActive ? T.tabBtnActive : T.tabBtn}"
                     onclick="markAdmin.switchTab('${tab}')"
@@ -863,6 +863,7 @@
         switch (tab) {
             case 'settings':      container.innerHTML = renderSettingsTab(s); break;
             case 'analytics':     container.innerHTML = renderAnalyticsTab(s); loadEventAnalytics(s); break;
+            case 'learning':      container.innerHTML = renderLearningTab(s); loadPlaybook(s); break;
             case 'training':      container.innerHTML = renderTrainingTab(s); initTrainingTab(s); break;
             case 'sales':         container.innerHTML = renderSalesTab(s); break;
             case 'voice':         container.innerHTML = renderVoiceTab(s); break;
@@ -994,16 +995,16 @@
     async function saveStoreSettings() {
         const storeName = $('#s-store-name').value.trim();
         const websiteUrl = $('#s-website-url').value.trim();
-        const idleTimeout = parseInt($('#s-idle-timeout').value);
-        const maxCrawl = parseInt($('#s-max-crawl').value);
+        // Clamp numeric fields instead of hard-aborting the whole save —
+        // changing widget size should never be blocked by the idle/crawl inputs.
+        const idleTimeout = Math.max(15, Math.min(600, parseInt($('#s-idle-timeout').value) || 300));
+        const maxCrawl = Math.max(10, Math.min(500, parseInt($('#s-max-crawl').value) || 120));
 
         // Validation
         if (!storeName) { toast('Store name is required.', 'error'); return; }
         if (websiteUrl && !websiteUrl.startsWith('http://') && !websiteUrl.startsWith('https://')) {
             toast('Website URL must start with http:// or https://', 'error'); return;
         }
-        if (isNaN(idleTimeout) || idleTimeout < 15) { toast('Idle timeout must be at least 15 seconds.', 'error'); return; }
-        if (isNaN(maxCrawl) || maxCrawl < 10 || maxCrawl > 500) { toast('Max crawl pages must be between 10 and 500.', 'error'); return; }
 
         const data = {
             store_name: storeName, website_url: websiteUrl,
@@ -1457,6 +1458,294 @@
                 },
             },
         });
+    }
+
+    /* ================================================================
+       TAB: AUTO-LEARNING (MAIE — Mark Adaptive Intelligence Engine)
+       Glass box into what Mark has learned from real conversations.
+       ================================================================ */
+    const PERSONA_META = {
+        price_hunter:  { label: 'Price Hunter',   icon: 'sell',            color: '#16a34a' },
+        researcher:    { label: 'Researcher',     icon: 'fact_check',      color: '#4f6169' },
+        impulse_buyer: { label: 'Impulse Buyer',  icon: 'bolt',           color: '#d97706' },
+        skeptic:       { label: 'Skeptic',        icon: 'gpp_maybe',       color: '#9333ea' },
+        gift_buyer:    { label: 'Gift Buyer',     icon: 'redeem',          color: '#db2777' },
+        browser:       { label: 'Casual Browser', icon: 'visibility',      color: '#0891b2' },
+    };
+
+    // Shared token-auth fetch to the backend (same pattern as analytics).
+    async function maieFetch(s, path, opts) {
+        if (!globalSettings || !globalSettings.api_token) {
+            try { globalSettings = await api('GET', 'settings'); } catch (e) {}
+        }
+        const settings = globalSettings || {};
+        const backendUrl = settings.backend_url || 'https://mark-udfz.onrender.com';
+        const token = settings.api_token || '';
+        const remoteStoreId = settings.remote_store_id || s.store_id;
+        const o = opts || {};
+        o.headers = Object.assign({ 'X-Store-Token': token, 'Content-Type': 'application/json' }, o.headers || {});
+        const resp = await fetch(backendUrl + '/api/stores/' + remoteStoreId + path, o);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+    }
+
+    function renderLearningTab(s) {
+        return `
+        <div style="margin-bottom:32px;">
+            <h3 style="${T.headline}font-size:24px;font-weight:400;margin:0 0 8px;">
+                <span class="material-symbols-outlined" style="font-size:24px;vertical-align:middle;margin-right:8px;color:#954921;">neurology</span>
+                Auto-Learning
+            </h3>
+            <p style="color:#42484a;font-size:14px;margin:0;max-width:680px;">
+                Mark studies real (anonymized) conversations on your store and learns who your buyers are
+                and how to sell to them — automatically. This is a glass box: everything Mark learns is shown
+                below, and you stay in control.
+            </p>
+        </div>
+
+        <!-- Controls -->
+        <div style="${T.glass}padding:28px;margin-bottom:24px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:240px;">
+                    <div id="learn-toggle-row" style="display:flex;flex-direction:column;gap:18px;">
+                        <label style="display:flex;align-items:center;gap:12px;cursor:pointer;">
+                            <input type="checkbox" id="learn-enabled" onchange="markAdmin.toggleLearning('auto_learning_enabled', this.checked)" style="width:18px;height:18px;accent-color:#954921;cursor:pointer;">
+                            <span>
+                                <span style="font-weight:600;color:#1a1c1c;font-size:15px;">Enable auto-learning</span>
+                                <span style="display:block;color:#73787a;font-size:13px;">Capture conversation patterns and improve Mark over time.</span>
+                            </span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:12px;cursor:pointer;">
+                            <input type="checkbox" id="learn-autoapprove" onchange="markAdmin.toggleLearning('learning_autoapprove', this.checked)" style="width:18px;height:18px;accent-color:#954921;cursor:pointer;">
+                            <span>
+                                <span style="font-weight:600;color:#1a1c1c;font-size:15px;">Auto-apply new playbooks</span>
+                                <span style="display:block;color:#73787a;font-size:13px;">Apply each new playbook automatically. Turn off to review before activating.</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <button id="learn-train-btn" style="${T.btnPrimary}" onclick="markAdmin.trainPlaybook()">
+                        <span class="material-symbols-outlined" style="font-size:18px;">model_training</span>
+                        Train Now
+                    </button>
+                    <div style="color:#73787a;font-size:12px;margin-top:8px;">Distills new conversations into a fresh playbook.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status strip -->
+        <div id="learn-status" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:32px;">
+            ${renderMiniStat('Signals Collected', '--', 'database')}
+            ${renderMiniStat('Pending Distill', '--', 'pending')}
+            ${renderMiniStat('Playbook Version', '--', 'menu_book')}
+            ${renderMiniStat('Last Trained', '--', 'schedule')}
+        </div>
+
+        <!-- Playbook body -->
+        <div id="learn-playbook"></div>`;
+    }
+
+    function renderLearningEmpty(pending, minNeeded) {
+        const need = Math.max(0, (minNeeded || 12) - (pending || 0));
+        return `
+        <div style="${T.glassLight}padding:48px 32px;text-align:center;">
+            <span class="material-symbols-outlined" style="font-size:48px;color:#fc9b6c;">school</span>
+            <h4 style="${T.headline}font-size:18px;font-weight:600;margin:16px 0 8px;">No playbook yet</h4>
+            <p style="color:#42484a;font-size:14px;margin:0 auto;max-width:460px;">
+                Mark needs at least <strong>${minNeeded || 12}</strong> meaningful conversations before it can
+                distill a playbook. ${need > 0 ? `About <strong>${need}</strong> more to go.` : 'Enough data — hit <strong>Train Now</strong>!'}
+            </p>
+        </div>`;
+    }
+
+    function renderPersonaCard(p) {
+        const meta = PERSONA_META[p.key] || { label: p.label || p.key, icon: 'person', color: '#954921' };
+        const phrases = (p.winning_phrases || []).map(x =>
+            `<span style="display:inline-block;background:rgba(22,163,74,0.1);color:#15803d;font-size:12px;padding:3px 10px;border-radius:12px;margin:2px 4px 2px 0;">${esc(x)}</span>`).join('');
+        const avoid = (p.avoid || []).map(x =>
+            `<span style="display:inline-block;background:rgba(186,26,26,0.08);color:#ba1a1a;font-size:12px;padding:3px 10px;border-radius:12px;margin:2px 4px 2px 0;">${esc(x)}</span>`).join('');
+        return `
+        <div style="${T.glassLight}padding:24px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                <span class="material-symbols-outlined" style="font-size:26px;color:${meta.color};">${meta.icon}</span>
+                <span style="font-weight:700;font-size:16px;color:#1a1c1c;">${esc(meta.label)}</span>
+            </div>
+            ${p.psychology ? `<p style="margin:0 0 12px;font-size:13px;color:#42484a;font-style:italic;">${esc(p.psychology)}</p>` : ''}
+            ${p.how_to_talk ? `<div style="margin-bottom:8px;font-size:13px;"><strong style="color:#4f6169;">Talk:</strong> <span style="color:#42484a;">${esc(p.how_to_talk)}</span></div>` : ''}
+            ${p.how_to_sell ? `<div style="margin-bottom:12px;font-size:13px;"><strong style="color:#4f6169;">Sell:</strong> <span style="color:#42484a;">${esc(p.how_to_sell)}</span></div>` : ''}
+            ${phrases ? `<div style="margin-bottom:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#73787a;margin-bottom:4px;">Phrasing that works</div>${phrases}</div>` : ''}
+            ${avoid ? `<div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#73787a;margin-bottom:4px;">Avoid</div>${avoid}</div>` : ''}
+        </div>`;
+    }
+
+    // "Who shops on your store" — live persona distribution + win-rate per type.
+    // This is the headline 'what Mark learned' insight for the owner.
+    function renderPersonaDistribution(dist) {
+        if (!dist || !dist.length) return '';
+        const grand = dist.reduce((a, d) => a + (d.total || 0), 0);
+        if (!grand) return '';
+        const rows = dist.map(d => {
+            const meta = PERSONA_META[d.persona] || { label: d.persona, icon: 'person', color: '#954921' };
+            const share = Math.round((d.total / grand) * 100);
+            const win = Math.round((d.win_rate || 0) * 100);
+            return `
+            <div style="margin-bottom:18px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <span style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#1a1c1c;">
+                        <span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};">${meta.icon}</span>
+                        ${esc(meta.label)}
+                    </span>
+                    <span style="font-size:13px;color:#73787a;">${share}% of buyers · <strong style="color:#15803d;">${win}% win</strong> · ${formatNum(d.total)} chats</span>
+                </div>
+                <div style="height:8px;background:rgba(0,0,0,0.05);border-radius:4px;overflow:hidden;">
+                    <div style="height:100%;width:${share}%;background:linear-gradient(90deg,${meta.color},${meta.color}aa);border-radius:4px;transition:width .6s;"></div>
+                </div>
+            </div>`;
+        }).join('');
+        return `
+        <div style="${T.glass}padding:28px;margin-bottom:24px;">
+            <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0 0 6px;">
+                <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#954921;">diversity_3</span>
+                Who shops on your store
+            </h4>
+            <p style="color:#73787a;font-size:13px;margin:0 0 20px;">Buyer-type mix Mark detected from ${formatNum(grand)} real conversations, with how often each type converts.</p>
+            ${rows}
+        </div>`;
+    }
+
+    function renderPlaybookHistory(history, activeVersion) {
+        if (!history || history.length < 2) return '';
+        const items = history.slice(0, 8).map(h => {
+            const isActive = h.version === activeVersion;
+            const when = h.generated_at ? new Date(h.generated_at * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+            return `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.04);">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-size:11px;font-weight:700;
+                    background:${isActive ? 'rgba(21,128,61,0.12)' : 'rgba(0,0,0,0.05)'};color:${isActive ? '#15803d' : '#73787a'};">v${h.version}</span>
+                <span style="flex:1;font-size:13px;color:#42484a;">${h.sample_size ? formatNum(h.sample_size) + ' conversations' : 'playbook update'}</span>
+                <span style="font-size:12px;color:#73787a;">${when}${isActive ? ' · <strong style="color:#15803d;">active</strong>' : ''}</span>
+            </div>`;
+        }).join('');
+        return `
+        <div style="${T.glassLight}padding:24px;margin-top:24px;">
+            <h4 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 12px;">
+                <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#954921;">history</span>
+                How Mark improved over time
+            </h4>
+            ${items}
+        </div>`;
+    }
+
+    function renderPlaybook(data) {
+        const pb = data.active;
+        if (!pb) return renderLearningEmpty(data.signals_pending, data.min_signals_to_train);
+
+        const personas = (pb.personas || []).map(renderPersonaCard).join('');
+        const winning = (pb.winning_tactics || []).map(t =>
+            `<li style="margin-bottom:8px;color:#15803d;font-size:14px;">${esc(t)}</li>`).join('');
+        const losing = (pb.losing_patterns || []).map(t =>
+            `<li style="margin-bottom:8px;color:#ba1a1a;font-size:14px;">${esc(t)}</li>`).join('');
+
+        return `
+        ${pb.summary ? `
+        <div style="${T.glass}padding:28px;margin-bottom:24px;border-left:4px solid #954921;">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#73787a;margin-bottom:8px;">What Mark learned about your buyers</div>
+            <p style="margin:0;font-size:15px;line-height:1.6;color:#1a1c1c;">${esc(pb.summary)}</p>
+        </div>` : ''}
+
+        ${renderPersonaDistribution(data.persona_distribution)}
+
+        ${personas ? `
+        <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0 0 16px;">
+            <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#954921;">groups</span>
+            Buyer Personas <span style="font-size:13px;color:#73787a;font-weight:400;">(detected on your store)</span>
+        </h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:32px;">${personas}</div>` : ''}
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+            ${winning ? `<div style="${T.glassLight}padding:24px;">
+                <h4 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 14px;color:#15803d;">
+                    <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;">trending_up</span>What's working
+                </h4>
+                <ul style="margin:0;padding-left:20px;">${winning}</ul>
+            </div>` : ''}
+            ${losing ? `<div style="${T.glassLight}padding:24px;">
+                <h4 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 14px;color:#ba1a1a;">
+                    <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;">trending_down</span>What loses sales
+                </h4>
+                <ul style="margin:0;padding-left:20px;">${losing}</ul>
+            </div>` : ''}
+        </div>
+
+        ${renderPlaybookHistory(data.history, pb.version)}`;
+    }
+
+    async function loadPlaybook(s) {
+        try {
+            const data = await maieFetch(s, '/playbook');
+
+            // Toggles
+            const enEl = document.getElementById('learn-enabled');
+            const apEl = document.getElementById('learn-autoapprove');
+            if (enEl) enEl.checked = !!data.auto_learning_enabled;
+            if (apEl) apEl.checked = !!data.learning_autoapprove;
+
+            // Status cards
+            const lastRun = data.learning_last_run
+                ? new Date(data.learning_last_run * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                : 'Never';
+            const version = data.active ? ('v' + data.active.version) : '--';
+            const vals = [data.signals_total || 0, data.signals_pending || 0, version, lastRun];
+            const cards = document.querySelectorAll('#learn-status > div');
+            cards.forEach((card, i) => {
+                const numEl = card.querySelector('div:last-child');
+                if (numEl && vals[i] !== undefined) numEl.textContent = (typeof vals[i] === 'number') ? formatNum(vals[i]) : vals[i];
+            });
+
+            // Playbook body
+            const body = document.getElementById('learn-playbook');
+            if (body) body.innerHTML = renderPlaybook(data);
+        } catch (e) {
+            console.warn('Playbook load error:', e);
+            const body = document.getElementById('learn-playbook');
+            if (body) body.innerHTML = `<p style="color:#73787a;font-size:13px;font-style:italic;">
+                <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">info</span>
+                Learning data unavailable — backend may be starting up. Try again in a moment.</p>`;
+        }
+    }
+
+    async function trainPlaybook() {
+        const btn = document.getElementById('learn-train-btn');
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">hourglass_top</span> Training…'; }
+        try {
+            const res = await maieFetch(currentStore, '/train', { method: 'POST' });
+            if (res.trained) {
+                toast('Playbook trained! Now on v' + res.version + ' (' + res.sample_size + ' conversations).', 'success');
+                loadPlaybook(currentStore);
+            } else {
+                const reason = (res.reason || '').startsWith('not_enough_signals')
+                    ? 'Not enough conversations yet — keep chatting and try again later.'
+                    : ('Training skipped: ' + (res.reason || 'unknown'));
+                toast(reason, 'info');
+            }
+        } catch (e) {
+            toast('Training failed — backend may be waking up. Try again shortly.', 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:18px;">model_training</span> Train Now'; }
+        }
+    }
+
+    async function toggleLearning(field, value) {
+        try {
+            const body = {}; body[field] = !!value;
+            await maieFetch(currentStore, '/learning-settings', { method: 'POST', body: JSON.stringify(body) });
+            toast(field === 'auto_learning_enabled'
+                ? (value ? 'Auto-learning enabled.' : 'Auto-learning paused.')
+                : (value ? 'New playbooks will auto-apply.' : 'New playbooks need your approval.'), 'success');
+        } catch (e) {
+            toast('Could not save setting.', 'error');
+        }
     }
 
     /* ================================================================
@@ -2055,6 +2344,7 @@
         completeSetup, showPreview,
         startTour, endTour,
         updateSizePreview,
+        trainPlaybook, toggleLearning,
     };
 
     /* ================================================================

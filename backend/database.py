@@ -146,6 +146,50 @@ def init_db():
                 created_at REAL DEFAULT (strftime('%s','now'))
             );
             CREATE INDEX IF NOT EXISTS idx_leads_store ON leads(store_id);
+
+            -- ============================================================
+            -- MAIE: Mark Adaptive Intelligence Engine
+            -- Closed learning loop — Mark learns per-store sales psychology
+            -- from real conversations (no LLM fine-tuning; prompt evolution).
+            -- ============================================================
+
+            -- One row per meaningful visitor session. Raw material the
+            -- "Teacher" job distills into playbooks. PII is stripped before storage.
+            CREATE TABLE IF NOT EXISTS learning_signals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id TEXT NOT NULL REFERENCES stores(store_id),
+                visitor_hash TEXT NOT NULL,
+                language TEXT DEFAULT 'en',
+                persona TEXT DEFAULT '',
+                sentiment TEXT DEFAULT '',
+                outcome TEXT DEFAULT 'neutral',     -- converted | engaged | bounced | neutral
+                quality_score REAL DEFAULT 0,        -- 0..1, set by the filter/scorer
+                exchange_count INTEGER DEFAULT 0,
+                transcript TEXT DEFAULT '',          -- PII-stripped condensed transcript
+                processed INTEGER DEFAULT 0,         -- 0 = not yet distilled into a playbook
+                created_at REAL DEFAULT (strftime('%s','now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_signals_store ON learning_signals(store_id);
+            CREATE INDEX IF NOT EXISTS idx_signals_processed ON learning_signals(processed);
+            CREATE INDEX IF NOT EXISTS idx_signals_created ON learning_signals(created_at);
+
+            -- The evolving, versioned per-store playbook. Glass box — owner can
+            -- read/edit. Only one active version per store at a time.
+            CREATE TABLE IF NOT EXISTS store_playbooks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id TEXT NOT NULL REFERENCES stores(store_id),
+                version INTEGER NOT NULL DEFAULT 1,
+                personas TEXT DEFAULT '[]',          -- JSON: [{key,label,psychology,how_to_talk,how_to_sell,winning_phrases,avoid}]
+                winning_tactics TEXT DEFAULT '[]',   -- JSON array of strings
+                losing_patterns TEXT DEFAULT '[]',   -- JSON array of strings
+                summary TEXT DEFAULT '',
+                sample_size INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                approved INTEGER DEFAULT 1,           -- owner approval gate
+                generated_at REAL DEFAULT (strftime('%s','now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_playbook_store ON store_playbooks(store_id);
+            CREATE INDEX IF NOT EXISTS idx_playbook_active ON store_playbooks(store_id, is_active);
         """)
 
         # Migration: add sales columns to existing stores table
@@ -161,8 +205,16 @@ def init_db():
             "sales_followup_enabled": "INTEGER DEFAULT 0",
             "sales_max_suggestions": "INTEGER DEFAULT 3",
         }
-        # Also add api_token and webhook_url if missing
-        all_migrations = {**sales_columns, "api_token": "TEXT DEFAULT ''", "webhook_url": "TEXT DEFAULT ''"}
+        # Also add api_token, webhook_url, and MAIE learning columns if missing
+        all_migrations = {
+            **sales_columns,
+            "api_token": "TEXT DEFAULT ''",
+            "webhook_url": "TEXT DEFAULT ''",
+            # MAIE: auto-learning controls
+            "auto_learning_enabled": "INTEGER DEFAULT 1",   # master on/off per store
+            "learning_autoapprove": "INTEGER DEFAULT 1",    # apply new playbooks without manual approval
+            "learning_last_run": "REAL DEFAULT 0",          # last Teacher-job timestamp
+        }
         existing = {row[1] for row in db.execute("PRAGMA table_info(stores)").fetchall()}
         for col, typedef in all_migrations.items():
             if col not in existing:
@@ -242,6 +294,7 @@ STORE_FIELDS = {
     "sales_objection_handling", "sales_cross_sell", "sales_urgency_triggers",
     "sales_tone", "sales_followup_enabled", "sales_max_suggestions",
     "brand_description", "priority_products", "seasonal_products",
+    "auto_learning_enabled", "learning_autoapprove", "learning_last_run",
 }
 
 
@@ -467,6 +520,219 @@ def get_lead_count(store_id: str) -> int:
         return db.execute(
             "SELECT COUNT(*) as cnt FROM leads WHERE store_id = ?", (store_id,)
         ).fetchone()["cnt"]
+
+
+# ── MAIE: Learning Signals ──────────────────────────────────
+
+def record_learning_signal(store_id: str, visitor_hash: str, language: str,
+                           outcome: str, quality_score: float, exchange_count: int,
+                           transcript: str, persona: str = "", sentiment: str = "") -> bool:
+    """Store one distilled, PII-stripped session signal for later distillation.
+    Never throws — learning must never break the live chat path."""
+    try:
+        with get_db() as db:
+            db.execute(
+                """INSERT INTO learning_signals
+                   (store_id, visitor_hash, language, persona, sentiment,
+                    outcome, quality_score, exchange_count, transcript)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (store_id, visitor_hash, language, persona, sentiment,
+                 outcome, quality_score, exchange_count, transcript[:4000])
+            )
+        return True
+    except Exception as e:
+        logger.warning(f"Learning signal error: {e}")
+        return False
+
+
+def clear_recent_unprocessed_signal(store_id: str, visitor_hash: str,
+                                    within_seconds: int = 7200) -> None:
+    """Drop a visitor's recent un-distilled signal so an ongoing session
+    is represented by ONE evolving row instead of one row per turn."""
+    cutoff = time.time() - within_seconds
+    try:
+        with get_db() as db:
+            db.execute(
+                """DELETE FROM learning_signals
+                   WHERE store_id = ? AND visitor_hash = ? AND processed = 0 AND created_at >= ?""",
+                (store_id, visitor_hash, cutoff)
+            )
+    except Exception as e:
+        logger.warning(f"clear_recent_unprocessed_signal error: {e}")
+
+
+def get_unprocessed_signals(store_id: str, limit: int = 200,
+                            min_quality: float = 0.0) -> list:
+    """Fetch signals not yet folded into a playbook, highest quality first."""
+    with get_db() as db:
+        rows = db.execute(
+            """SELECT * FROM learning_signals
+               WHERE store_id = ? AND processed = 0 AND quality_score >= ?
+               ORDER BY quality_score DESC, created_at DESC LIMIT ?""",
+            (store_id, min_quality, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_signals_processed(signal_ids: list) -> None:
+    if not signal_ids:
+        return
+    with get_db() as db:
+        placeholders = ",".join("?" * len(signal_ids))
+        db.execute(
+            f"UPDATE learning_signals SET processed = 1 WHERE id IN ({placeholders})",
+            list(signal_ids)
+        )
+
+
+def get_signal_count(store_id: str, only_unprocessed: bool = False) -> int:
+    q = "SELECT COUNT(*) as cnt FROM learning_signals WHERE store_id = ?"
+    if only_unprocessed:
+        q += " AND processed = 0"
+    with get_db() as db:
+        return db.execute(q, (store_id,)).fetchone()["cnt"]
+
+
+def get_persona_distribution(store_id: str) -> list:
+    """Who actually shops here: per-persona share, win-rate and engagement,
+    computed from captured learning signals. Powers the owner-facing
+    'What Mark Learned' insight. Returns highest-volume persona first."""
+    with get_db() as db:
+        rows = db.execute(
+            """SELECT persona,
+                      COUNT(*) AS total,
+                      SUM(CASE WHEN outcome = 'converted' THEN 1 ELSE 0 END) AS converted,
+                      SUM(CASE WHEN outcome IN ('converted','engaged') THEN 1 ELSE 0 END) AS engaged,
+                      AVG(quality_score) AS avg_quality
+               FROM learning_signals
+               WHERE store_id = ? AND persona IS NOT NULL AND persona != ''
+               GROUP BY persona
+               ORDER BY total DESC""",
+            (store_id,)
+        ).fetchall()
+    result = []
+    for r in rows:
+        total = r["total"] or 0
+        converted = r["converted"] or 0
+        engaged = r["engaged"] or 0
+        result.append({
+            "persona": r["persona"],
+            "total": total,
+            "converted": converted,
+            "win_rate": round(converted / total, 3) if total else 0.0,
+            "engage_rate": round(engaged / total, 3) if total else 0.0,
+            "avg_quality": round(r["avg_quality"] or 0.0, 3),
+        })
+    return result
+
+
+def prune_old_signals(store_id: str, keep_days: int = 90) -> int:
+    """Delete processed signals older than keep_days to bound storage."""
+    cutoff = time.time() - keep_days * 86400
+    with get_db() as db:
+        cur = db.execute(
+            "DELETE FROM learning_signals WHERE store_id = ? AND processed = 1 AND created_at < ?",
+            (store_id, cutoff)
+        )
+        return cur.rowcount
+
+
+# ── MAIE: Store Playbooks ───────────────────────────────────
+
+def save_playbook(store_id: str, personas: list, winning_tactics: list,
+                  losing_patterns: list, summary: str, sample_size: int,
+                  approved: bool = True) -> int:
+    """Insert a new playbook version and make it the active one (if approved).
+    Returns the new version number."""
+    with get_db() as db:
+        prev = db.execute(
+            "SELECT MAX(version) as v FROM store_playbooks WHERE store_id = ?",
+            (store_id,)
+        ).fetchone()
+        version = (prev["v"] or 0) + 1
+        # Only the newly approved playbook should be active.
+        if approved:
+            db.execute(
+                "UPDATE store_playbooks SET is_active = 0 WHERE store_id = ?",
+                (store_id,)
+            )
+        db.execute(
+            """INSERT INTO store_playbooks
+               (store_id, version, personas, winning_tactics, losing_patterns,
+                summary, sample_size, is_active, approved)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (store_id, version,
+             json.dumps(personas, ensure_ascii=False),
+             json.dumps(winning_tactics, ensure_ascii=False),
+             json.dumps(losing_patterns, ensure_ascii=False),
+             summary[:4000], sample_size,
+             1 if approved else 0, 1 if approved else 0)
+        )
+        return version
+
+
+def _hydrate_playbook(row: dict) -> dict:
+    """Parse JSON columns into Python objects."""
+    def _load(s, default):
+        try:
+            return json.loads(s) if s else default
+        except Exception:
+            return default
+    row["personas"] = _load(row.get("personas"), [])
+    row["winning_tactics"] = _load(row.get("winning_tactics"), [])
+    row["losing_patterns"] = _load(row.get("losing_patterns"), [])
+    return row
+
+
+def get_active_playbook(store_id: str) -> dict | None:
+    with get_db() as db:
+        row = db.execute(
+            """SELECT * FROM store_playbooks
+               WHERE store_id = ? AND is_active = 1 AND approved = 1
+               ORDER BY version DESC LIMIT 1""",
+            (store_id,)
+        ).fetchone()
+        return _hydrate_playbook(dict(row)) if row else None
+
+
+def get_playbook_history(store_id: str, limit: int = 20) -> list:
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT * FROM store_playbooks WHERE store_id = ? ORDER BY version DESC LIMIT ?",
+            (store_id, limit)
+        ).fetchall()
+        return [_hydrate_playbook(dict(r)) for r in rows]
+
+
+def update_playbook(playbook_id: int, store_id: str, **fields) -> bool:
+    """Owner edit/approve of a playbook. Whitelisted fields only."""
+    allowed = {"personas", "winning_tactics", "losing_patterns", "summary",
+               "is_active", "approved"}
+    safe = {}
+    for k, v in fields.items():
+        if k not in allowed:
+            continue
+        if k in ("personas", "winning_tactics", "losing_patterns") and not isinstance(v, str):
+            v = json.dumps(v, ensure_ascii=False)
+        safe[k] = v
+    if not safe:
+        return False
+    with get_db() as db:
+        # If activating this one, deactivate siblings first.
+        if safe.get("is_active"):
+            db.execute("UPDATE store_playbooks SET is_active = 0 WHERE store_id = ?", (store_id,))
+        sets = ", ".join(f"{k} = ?" for k in safe)
+        vals = list(safe.values()) + [playbook_id, store_id]
+        db.execute(
+            f"UPDATE store_playbooks SET {sets} WHERE id = ? AND store_id = ?", vals
+        )
+    return True
+
+
+def set_learning_last_run(store_id: str) -> None:
+    with get_db() as db:
+        db.execute("UPDATE stores SET learning_last_run = ? WHERE store_id = ?",
+                   (time.time(), store_id))
 
 
 # ── Initialize on import ────────────────────────────────────

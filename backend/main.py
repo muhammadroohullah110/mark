@@ -23,7 +23,7 @@ import edge_tts
 
 from config import (
     CLIENT_WEBSITE_URL, MAX_CRAWL_PAGES,
-    ALLOWED_ORIGINS,
+    ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS,
     MAX_AUDIO_MB, MAX_MESSAGE_LENGTH,
     RATE_TRANSCRIBE, RATE_CHAT, RATE_RAG, RATE_TTS,
     EDGE_TTS_VOICES, DEFAULT_EDGE_VOICE, EDGE_TTS_RATE, EDGE_TTS_PITCH,
@@ -36,10 +36,13 @@ from database import (
     get_store, get_store_by_token, get_store_by_url, get_all_active_stores,
     log_conversation_db, init_db, create_store, update_store,
     log_event, get_event_analytics, save_lead, get_leads, get_lead_count,
+    get_active_playbook, get_playbook_history, get_signal_count, update_playbook,
+    get_persona_distribution,
 )
 from admin_routes import router as admin_router, get_current_user
 from cache import ResponseCache
 from llm_router import LLMRouter
+import learning_engine as maie
 
 load_dotenv()
 
@@ -77,7 +80,7 @@ app = FastAPI(docs_url=None, redoc_url=None)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=["POST", "GET", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Store-ID", "X-Store-Token"],
 )
@@ -160,12 +163,43 @@ def _cleanup_loop():
             logger.error(f"Cleanup error: {e}")
 
 
+# ── MAIE: periodic Teacher distillation ─────────────────────
+def _learning_loop():
+    """Every few hours, distill new conversation signals into each store's
+    playbook. Runs off the request path; failures never affect live chat."""
+    INTERVAL = 6 * 60 * 60      # 6 hours
+    time.sleep(300)             # let the server settle before first run
+    while True:
+        try:
+            stores = get_all_active_stores()
+            for store in stores:
+                if not store.get("auto_learning_enabled", 1):
+                    continue
+                sid = store["store_id"]
+                pending = get_signal_count(sid, only_unprocessed=True)
+                if pending < maie.MIN_SIGNALS_TO_TRAIN:
+                    continue
+                try:
+                    router = get_llm_router(store)
+                except HTTPException:
+                    continue  # no AI key for this store
+                model = store.get("llm_model") or "llama-3.3-70b-versatile"
+                auto_approve = bool(store.get("learning_autoapprove", 1))
+                result = maie.run_teacher(sid, router, model=model, auto_approve=auto_approve)
+                logger.info(f"MAIE loop [{sid}]: {result}")
+                time.sleep(5)   # stagger LLM calls
+        except Exception as e:
+            logger.error(f"Learning loop error: {e}")
+        time.sleep(INTERVAL)
+
+
 @app.on_event("startup")
 async def startup_event():
     init_db()
     threading.Thread(target=_prewarm_all_stores, daemon=True).start()
     threading.Thread(target=_auto_reindex_loop, daemon=True).start()
     threading.Thread(target=_cleanup_loop, daemon=True).start()
+    threading.Thread(target=_learning_loop, daemon=True).start()
 
 
 # ── Rate Limiter ─────────────────────────────────────────────
@@ -319,6 +353,33 @@ def log_conversation(ip: str, messages: list, language: str, response_text: str,
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
     except Exception:
         pass
+
+
+# ── MAIE: capture a learning signal off the request path ───
+def capture_learning_async(tenant: dict | None, ip: str, cleaned: list,
+                           reply: str, language: str):
+    """Fire-and-forget: record one PII-stripped session signal for the
+    learning loop. Runs in a daemon thread so it never delays the response."""
+    if not tenant or not tenant.get("auto_learning_enabled", 1):
+        return
+    store_id = tenant.get("store_id")
+    if not store_id:
+        return
+
+    def _work():
+        try:
+            ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:12]
+            convo = list(cleaned) + [{"role": "assistant", "content": reply}]
+            maie.capture_session_signal(
+                store_id=store_id,
+                visitor_hash=ip_hash,
+                language=language or "en",
+                messages=convo,
+            )
+        except Exception as e:
+            logger.warning(f"capture_learning_async error: {e}")
+
+    threading.Thread(target=_work, daemon=True).start()
 
 
 # ── Data Models ───────────────────────────────────────────────
@@ -864,6 +925,21 @@ async def chat_endpoint(request: Request, body: ChatRequest):
 
     messages_for_api.extend(cleaned)
 
+    # ── MAIE: inject learned per-store sales intelligence ──
+    # Detect this visitor's buyer persona and, if the store has a trained
+    # playbook, fold the matching strategy into Mark's system prompt.
+    # Pure-Python + one cached DB read — negligible latency.
+    detected_persona = maie.DEFAULT_PERSONA
+    if tenant and tenant.get("auto_learning_enabled", 1) and body.store_id:
+        try:
+            detected_persona = maie.detect_persona(cleaned)
+            playbook = get_active_playbook(body.store_id)
+            block = maie.build_playbook_prompt_block(playbook, detected_persona)
+            if block:
+                messages_for_api[0]["content"] += "\n" + block
+        except Exception as e:
+            logger.warning(f"MAIE inject skipped: {e}")
+
     # ── Cache check (skip for init/returning/streaming) ──
     rag_snippet = ""
     if len(messages_for_api) > 1 and messages_for_api[1].get("role") == "system":
@@ -872,7 +948,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     store_id_str = body.store_id or "default"
 
     if not body.stream and not is_special:
-        cached = response_cache.get(store_id_str, last_user_msg, rag_snippet)
+        cached = response_cache.get(store_id_str, last_user_msg, rag_snippet, persona=detected_persona)
         if cached:
             logger.info(f"Cache HIT for store {store_id_str}")
             log_conversation(ip, cleaned, body.user_language, cached, body.store_id)
@@ -896,9 +972,10 @@ async def chat_endpoint(request: Request, body: ChatRequest):
                 if complete:
                     yield f"data: {json.dumps({'done': True, 'response': complete})}\n\n"
                     log_conversation(ip, cleaned, body.user_language, complete, body.store_id)
+                    capture_learning_async(tenant, ip, cleaned, complete, body.user_language)
                     # Cache streamed response too (if not special)
                     if not is_special and last_user_msg:
-                        response_cache.set(store_id_str, last_user_msg, rag_snippet, complete)
+                        response_cache.set(store_id_str, last_user_msg, rag_snippet, complete, persona=detected_persona)
                 else:
                     yield f"data: {json.dumps({'error': 'All AI providers unavailable'})}\n\n"
             except Exception as e:
@@ -919,9 +996,10 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         if not reply:
             raise HTTPException(status_code=503, detail="All AI providers unavailable.")
         log_conversation(ip, cleaned, body.user_language, reply, body.store_id)
+        capture_learning_async(tenant, ip, cleaned, reply, body.user_language)
         # Cache the response
         if not is_special and last_user_msg:
-            response_cache.set(store_id_str, last_user_msg, rag_snippet, reply)
+            response_cache.set(store_id_str, last_user_msg, rag_snippet, reply, persona=detected_persona)
         return {"response": reply}
     except HTTPException:
         raise
@@ -1123,6 +1201,100 @@ async def get_store_event_analytics(store_id: str, days: int = 30, user=Depends(
     data = get_event_analytics(store_id, min(days, 90))
     data["lead_count"] = get_lead_count(store_id)
     return data
+
+
+# ── MAIE: Adaptive Learning (playbook) endpoints ─────────────
+
+def _maie_guard(store_id: str, user: dict) -> dict:
+    """Resolve the store and enforce token/owner access. Returns the tenant."""
+    if user.get("store_id") and user["store_id"] != store_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    tenant = get_store(store_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return tenant
+
+
+@app.get("/api/stores/{store_id}/playbook")
+async def get_store_playbook(store_id: str, user=Depends(verify_store_token_or_user)):
+    """Glass box: the store's learned playbook + learning status."""
+    tenant = _maie_guard(store_id, user)
+    active = get_active_playbook(store_id)
+    return {
+        "active": active,
+        "history": get_playbook_history(store_id, limit=15),
+        "persona_distribution": get_persona_distribution(store_id),
+        "signals_total": get_signal_count(store_id),
+        "signals_pending": get_signal_count(store_id, only_unprocessed=True),
+        "min_signals_to_train": maie.MIN_SIGNALS_TO_TRAIN,
+        "auto_learning_enabled": bool(tenant.get("auto_learning_enabled", 1)),
+        "learning_autoapprove": bool(tenant.get("learning_autoapprove", 1)),
+        "learning_last_run": tenant.get("learning_last_run", 0),
+    }
+
+
+@app.post("/api/stores/{store_id}/train")
+async def train_store_playbook(store_id: str, user=Depends(verify_store_token_or_user)):
+    """Manually trigger the Teacher distillation job for this store."""
+    tenant = _maie_guard(store_id, user)
+    try:
+        router = get_llm_router(tenant)
+    except HTTPException:
+        raise HTTPException(status_code=503, detail="No AI key configured for training.")
+    model = tenant.get("llm_model") or "llama-3.3-70b-versatile"
+    auto_approve = bool(tenant.get("learning_autoapprove", 1))
+    result = maie.run_teacher(store_id, router, model=model, auto_approve=auto_approve)
+    return result
+
+
+class PlaybookEditRequest(BaseModel):
+    personas: Optional[list] = None
+    winning_tactics: Optional[list] = None
+    losing_patterns: Optional[list] = None
+    summary: Optional[str] = None
+    is_active: Optional[bool] = None
+    approved: Optional[bool] = None
+
+
+@app.put("/api/stores/{store_id}/playbook/{playbook_id}")
+async def edit_store_playbook(store_id: str, playbook_id: int,
+                              body: PlaybookEditRequest,
+                              user=Depends(verify_store_token_or_user)):
+    """Owner edit / approve / activate a specific playbook version."""
+    _maie_guard(store_id, user)
+    fields = {}
+    for k in ("personas", "winning_tactics", "losing_patterns", "summary"):
+        v = getattr(body, k)
+        if v is not None:
+            fields[k] = v
+    if body.is_active is not None:
+        fields["is_active"] = 1 if body.is_active else 0
+    if body.approved is not None:
+        fields["approved"] = 1 if body.approved else 0
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    ok = update_playbook(playbook_id, store_id, **fields)
+    return {"ok": ok}
+
+
+class LearningSettingsRequest(BaseModel):
+    auto_learning_enabled: Optional[bool] = None
+    learning_autoapprove: Optional[bool] = None
+
+
+@app.post("/api/stores/{store_id}/learning-settings")
+async def set_learning_settings(store_id: str, body: LearningSettingsRequest,
+                                user=Depends(verify_store_token_or_user)):
+    """Enable/disable auto-learning and auto-approval for this store."""
+    _maie_guard(store_id, user)
+    updates = {}
+    if body.auto_learning_enabled is not None:
+        updates["auto_learning_enabled"] = 1 if body.auto_learning_enabled else 0
+    if body.learning_autoapprove is not None:
+        updates["learning_autoapprove"] = 1 if body.learning_autoapprove else 0
+    if updates:
+        update_store(store_id, **updates)
+    return {"ok": True, **updates}
 
 
 # ── Lead Capture ─────────────────────────────────────────────

@@ -13,12 +13,26 @@ CLIENT_WEBSITE_URL = os.environ.get("CLIENT_WEBSITE_URL", "")
 MAX_CRAWL_PAGES = int(os.environ.get("MAX_CRAWL_PAGES", "120"))
 
 # ── CORS — restrict to actual origins in production ─────────
+# The chat widget is embedded on arbitrary customer storefronts, so the public
+# API must accept cross-origin requests. Auth is header-based (Bearer JWT +
+# X-Store-Token), never cookies — so we deliberately keep credentials OFF when
+# using the "*" wildcard, because "*" + allow_credentials=True is invalid per
+# the CORS spec and is silently rejected by browsers.
 _cors_env = os.environ.get("ALLOWED_ORIGINS", "")
 if _cors_env:
     ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()]
+    CORS_ALLOW_CREDENTIALS = True
 else:
-    # Fallback: allow all for local dev, but warn
+    # No allowlist configured → wildcard (required for embeddable widget),
+    # credentials disabled to stay spec-compliant. Set ALLOWED_ORIGINS in
+    # production to lock the admin surface to your own dashboard domain.
     ALLOWED_ORIGINS = ["*"]
+    CORS_ALLOW_CREDENTIALS = False
+    import logging as _logging
+    _logging.getLogger("mark.config").warning(
+        "ALLOWED_ORIGINS not set — CORS is open to all origins (credentials off). "
+        "Set ALLOWED_ORIGINS in production to restrict the admin API."
+    )
 
 # ── Security Limits ──────────────────────────────────────────
 MAX_AUDIO_MB = int(os.environ.get("MAX_AUDIO_MB", "10"))

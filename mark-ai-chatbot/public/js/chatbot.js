@@ -1562,6 +1562,7 @@
                 if (res.ok && res.headers.get('content-type')?.includes('text/event-stream')) {
                     hideThinking();
                     let fullReply = '';
+                    let streamBubble = null;   // single live bubble — updated in place, never re-appended
                     const reader = res.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
@@ -1580,8 +1581,18 @@
                                 const evt = JSON.parse(line.slice(6));
                                 if (evt.token) {
                                     fullReply += evt.token;
-                                    // Show caption live as tokens arrive
-                                    showCaption(fullReply, false);
+                                    // Update ONE live bubble in place (do NOT append a new bubble per token)
+                                    if (!streamBubble && chatArea) {
+                                        const tb = chatArea.querySelector('.mark-msg-thinking');
+                                        if (tb) tb.remove();
+                                        streamBubble = document.createElement('div');
+                                        streamBubble.className = 'mark-msg mark-msg-bot';
+                                        chatArea.appendChild(streamBubble);
+                                    }
+                                    if (streamBubble) {
+                                        streamBubble.textContent = fullReply;
+                                        chatArea.scrollTop = chatArea.scrollHeight;
+                                    }
                                 }
                                 if (evt.done && evt.response) {
                                     fullReply = evt.response;
