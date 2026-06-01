@@ -8,6 +8,13 @@ import os
 # ── Backend URL (for embed code generation) ─────────────────
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://mark-udfz.onrender.com")
 
+# ── Database ─────────────────────────────────────────────────
+# Set DATABASE_URL (postgres://...) in production for a persistent,
+# managed PostgreSQL (e.g. Render Starter Postgres). When unset, the
+# backend falls back to a local SQLite file (dev / zero-config).
+# database.py reads this env var directly; exposed here for visibility.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
 # ── Website URL (set via env var or admin panel per-store) ───
 CLIENT_WEBSITE_URL = os.environ.get("CLIENT_WEBSITE_URL", "")
 MAX_CRAWL_PAGES = int(os.environ.get("MAX_CRAWL_PAGES", "120"))

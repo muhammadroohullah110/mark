@@ -1,8 +1,13 @@
 # ============================================================
 # MARK DATABASE — Multi-tenant Store Management
-# SQLite-based — zero external dependencies
+# Dialect-agnostic data layer:
+#   • Production : PostgreSQL  (set env DATABASE_URL=postgres://...)
+#   • Local/dev  : SQLite      (default, zero-config)
+# The ENTIRE database surface is encapsulated in this module — no other
+# file runs raw SQL — so switching the backend is fully transparent.
 # ============================================================
 
+import os
 import sqlite3
 import uuid
 import hashlib
@@ -14,212 +19,295 @@ from contextlib import contextmanager
 
 logger = logging.getLogger("mark.db")
 
-DB_PATH = Path(__file__).parent / "mark.db"
+# ── Dialect detection ───────────────────────────────────────
+_DB_URL = os.environ.get("DATABASE_URL", "").strip()
+IS_PG = _DB_URL.startswith(("postgres://", "postgresql://"))
+
+DB_PATH = Path(__file__).parent / "mark.db"   # SQLite mode only
+
+
+if IS_PG:
+    import psycopg2
+    import psycopg2.extras
+    import psycopg2.pool
+
+    # Dialect-agnostic integrity-error class (used by create_admin etc.)
+    IntegrityError = psycopg2.IntegrityError
+
+    # Day-bucket expression for epoch-seconds columns (analytics charts).
+    _DAY_EXPR = "to_char(to_timestamp({col}), 'YYYY-MM-DD')"
+
+    # Connection pool — Render Postgres has a modest connection cap, and we
+    # check one connection out per get_db() block (mirrors SQLite's per-call
+    # connection, but pooled so we don't pay TCP+TLS setup every query).
+    try:
+        _PG_POOL = psycopg2.pool.ThreadedConnectionPool(
+            minconn=1,
+            maxconn=int(os.environ.get("DB_POOL_MAX", "10")),
+            dsn=_DB_URL,
+        )
+        logger.info("PostgreSQL connection pool initialised (maxconn=%s)",
+                    os.environ.get("DB_POOL_MAX", "10"))
+    except Exception as e:
+        logger.error("Could not initialise PostgreSQL pool: %s", e)
+        raise
+
+    def _translate(sql: str) -> str:
+        """SQLite uses '?' placeholders; psycopg2 uses '%s'. None of our
+        runtime parametrised queries contain a literal '%', so a direct
+        swap is safe (DDL with '%' goes through executescript, not here)."""
+        return sql.replace("?", "%s")
+
+    class _Conn:
+        """Thin adapter so the rest of this module keeps calling
+        conn.execute(sql, params) → cursor, exactly like sqlite3.
+        Rows come back as dicts (RealDictRow), supporting both
+        row["col"] access and dict(row)."""
+
+        def __init__(self, raw):
+            self._raw = raw
+
+        def execute(self, sql, params=()):
+            cur = self._raw.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute(_translate(sql), params)
+            return cur
+
+        def executescript(self, script):
+            cur = self._raw.cursor()
+            cur.execute(script)
+            cur.close()
+
+        def commit(self):
+            self._raw.commit()
+
+        def rollback(self):
+            self._raw.rollback()
+else:
+    IntegrityError = sqlite3.IntegrityError
+    _DAY_EXPR = "date({col}, 'unixepoch')"
 
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(str(DB_PATH), timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    """Yield a connection exposing .execute(sql, params) → cursor
+    (fetchone/fetchall/rowcount) with dict-style rows. Commits on success,
+    rolls back on error. Identical contract in SQLite and PostgreSQL mode."""
+    if IS_PG:
+        raw = _PG_POOL.getconn()
+        try:
+            yield _Conn(raw)
+            raw.commit()
+        except Exception:
+            raw.rollback()
+            raise
+        finally:
+            _PG_POOL.putconn(raw)
+    else:
+        conn = sqlite3.connect(str(DB_PATH), timeout=10)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+# ── Schema (one logical schema, two dialects) ───────────────
+# Differences between dialects:
+#   • autoincrement PK : SQLite "INTEGER PRIMARY KEY AUTOINCREMENT"
+#                        Postgres "BIGSERIAL PRIMARY KEY"
+#   • epoch default    : SQLite "REAL DEFAULT (strftime('%s','now'))"
+#                        Postgres "DOUBLE PRECISION DEFAULT extract(epoch from now())"
+#   • float type       : SQLite "REAL" → Postgres "DOUBLE PRECISION"
+# Booleans stay INTEGER (0/1) in both so all "is_active = 1" comparisons hold.
+
+def _build_schema(pg: bool) -> str:
+    pk = "BIGSERIAL PRIMARY KEY" if pg else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    ts = ("DOUBLE PRECISION DEFAULT extract(epoch from now())" if pg
+          else "REAL DEFAULT (strftime('%s','now'))")
+    flt = "DOUBLE PRECISION" if pg else "REAL"
+    return f"""
+        CREATE TABLE IF NOT EXISTS admin_users (
+            id {pk},
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at {ts}
+        );
+
+        CREATE TABLE IF NOT EXISTS stores (
+            store_id TEXT PRIMARY KEY,
+            store_name TEXT NOT NULL DEFAULT 'My Store',
+            website_url TEXT NOT NULL,
+            assistant_name TEXT NOT NULL DEFAULT 'Mark',
+            personality TEXT NOT NULL DEFAULT 'friendly',
+            greeting_style TEXT NOT NULL DEFAULT 'casual',
+            primary_language TEXT NOT NULL DEFAULT 'en',
+            supported_languages TEXT NOT NULL DEFAULT '["en","ur"]',
+            max_crawl_pages INTEGER NOT NULL DEFAULT 120,
+            idle_timeout INTEGER NOT NULL DEFAULT 10,
+            walking_enabled INTEGER NOT NULL DEFAULT 1,
+            sound_effects INTEGER NOT NULL DEFAULT 1,
+
+            tts_voice TEXT DEFAULT 'en-US-GuyNeural',
+            tts_voice_urdu TEXT DEFAULT 'ur-PK-AsadNeural',
+            tts_rate TEXT DEFAULT '+0%',
+            tts_pitch TEXT DEFAULT '+0Hz',
+
+            groq_api_key TEXT DEFAULT '',
+            llm_model TEXT DEFAULT 'llama-3.3-70b-versatile',
+            max_tokens INTEGER DEFAULT 150,
+            temperature {flt} DEFAULT 0.72,
+
+            max_audio_mb INTEGER DEFAULT 10,
+            max_message_length INTEGER DEFAULT 2000,
+            rate_transcribe INTEGER DEFAULT 15,
+            rate_chat INTEGER DEFAULT 30,
+            rate_rag INTEGER DEFAULT 40,
+            rate_tts INTEGER DEFAULT 20,
+
+            custom_system_prompt TEXT DEFAULT '',
+
+            sales_mode TEXT DEFAULT 'helpful',
+            sales_greeting TEXT DEFAULT '',
+            sales_cta_text TEXT DEFAULT '',
+            sales_cta_url TEXT DEFAULT '',
+            sales_objection_handling TEXT DEFAULT 'graceful',
+            sales_cross_sell TEXT DEFAULT '',
+            sales_urgency_triggers TEXT DEFAULT '',
+            sales_tone TEXT DEFAULT 'friendly',
+            sales_followup_enabled INTEGER DEFAULT 0,
+            sales_max_suggestions INTEGER DEFAULT 3,
+
+            brand_description TEXT DEFAULT '',
+            priority_products TEXT DEFAULT '',
+            seasonal_products TEXT DEFAULT '',
+
+            api_token TEXT DEFAULT '',
+
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at {ts},
+            updated_at {ts},
+
+            owner_id INTEGER DEFAULT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS conversations (
+            id {pk},
+            store_id TEXT NOT NULL REFERENCES stores(store_id),
+            visitor_hash TEXT NOT NULL,
+            language TEXT DEFAULT 'en',
+            exchange_count INTEGER DEFAULT 0,
+            last_user_msg TEXT DEFAULT '',
+            mark_response TEXT DEFAULT '',
+            created_at {ts}
+        );
+        CREATE INDEX IF NOT EXISTS idx_conv_store ON conversations(store_id);
+        CREATE INDEX IF NOT EXISTS idx_conv_created ON conversations(created_at);
+
+        CREATE TABLE IF NOT EXISTS analytics_events (
+            id {pk},
+            store_id TEXT NOT NULL REFERENCES stores(store_id),
+            event_type TEXT NOT NULL,
+            visitor_hash TEXT NOT NULL,
+            metadata TEXT DEFAULT '{{}}',
+            created_at {ts}
+        );
+        CREATE INDEX IF NOT EXISTS idx_events_store ON analytics_events(store_id);
+        CREATE INDEX IF NOT EXISTS idx_events_type ON analytics_events(event_type);
+        CREATE INDEX IF NOT EXISTS idx_events_created ON analytics_events(created_at);
+
+        CREATE TABLE IF NOT EXISTS leads (
+            id {pk},
+            store_id TEXT NOT NULL REFERENCES stores(store_id),
+            email TEXT NOT NULL,
+            name TEXT DEFAULT '',
+            visitor_hash TEXT NOT NULL,
+            context TEXT DEFAULT '',
+            created_at {ts}
+        );
+        CREATE INDEX IF NOT EXISTS idx_leads_store ON leads(store_id);
+
+        -- MAIE: per-session learning signal (PII-stripped). Raw material the
+        -- Teacher job distills into playbooks.
+        CREATE TABLE IF NOT EXISTS learning_signals (
+            id {pk},
+            store_id TEXT NOT NULL REFERENCES stores(store_id),
+            visitor_hash TEXT NOT NULL,
+            language TEXT DEFAULT 'en',
+            persona TEXT DEFAULT '',
+            sentiment TEXT DEFAULT '',
+            outcome TEXT DEFAULT 'neutral',
+            quality_score {flt} DEFAULT 0,
+            exchange_count INTEGER DEFAULT 0,
+            transcript TEXT DEFAULT '',
+            processed INTEGER DEFAULT 0,
+            created_at {ts}
+        );
+        CREATE INDEX IF NOT EXISTS idx_signals_store ON learning_signals(store_id);
+        CREATE INDEX IF NOT EXISTS idx_signals_processed ON learning_signals(processed);
+        CREATE INDEX IF NOT EXISTS idx_signals_created ON learning_signals(created_at);
+
+        -- MAIE: evolving, versioned per-store playbook (glass box).
+        CREATE TABLE IF NOT EXISTS store_playbooks (
+            id {pk},
+            store_id TEXT NOT NULL REFERENCES stores(store_id),
+            version INTEGER NOT NULL DEFAULT 1,
+            personas TEXT DEFAULT '[]',
+            winning_tactics TEXT DEFAULT '[]',
+            losing_patterns TEXT DEFAULT '[]',
+            summary TEXT DEFAULT '',
+            sample_size INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            approved INTEGER DEFAULT 1,
+            generated_at {ts}
+        );
+        CREATE INDEX IF NOT EXISTS idx_playbook_store ON store_playbooks(store_id);
+        CREATE INDEX IF NOT EXISTS idx_playbook_active ON store_playbooks(store_id, is_active);
+    """
+
+
+# Columns added to existing `stores` rows after first release.
+_STORE_MIGRATIONS = {
+    "sales_mode": "TEXT DEFAULT 'helpful'",
+    "sales_greeting": "TEXT DEFAULT ''",
+    "sales_cta_text": "TEXT DEFAULT ''",
+    "sales_cta_url": "TEXT DEFAULT ''",
+    "sales_objection_handling": "TEXT DEFAULT 'graceful'",
+    "sales_cross_sell": "TEXT DEFAULT ''",
+    "sales_urgency_triggers": "TEXT DEFAULT ''",
+    "sales_tone": "TEXT DEFAULT 'friendly'",
+    "sales_followup_enabled": "INTEGER DEFAULT 0",
+    "sales_max_suggestions": "INTEGER DEFAULT 3",
+    "api_token": "TEXT DEFAULT ''",
+    "webhook_url": "TEXT DEFAULT ''",
+    # MAIE auto-learning controls
+    "auto_learning_enabled": "INTEGER DEFAULT 1",
+    "learning_autoapprove": "INTEGER DEFAULT 1",
+    "learning_last_run": "REAL DEFAULT 0",
+}
 
 
 def init_db():
-    """Create tables if they don't exist."""
+    """Create tables (if missing) and apply additive column migrations.
+    Dialect-aware: works against PostgreSQL or SQLite identically."""
     with get_db() as db:
-        db.executescript("""
-            CREATE TABLE IF NOT EXISTS admin_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at REAL DEFAULT (strftime('%s','now'))
-            );
+        db.executescript(_build_schema(IS_PG))
 
-            CREATE TABLE IF NOT EXISTS stores (
-                store_id TEXT PRIMARY KEY,
-                store_name TEXT NOT NULL DEFAULT 'My Store',
-                website_url TEXT NOT NULL,
-                assistant_name TEXT NOT NULL DEFAULT 'Mark',
-                personality TEXT NOT NULL DEFAULT 'friendly',
-                greeting_style TEXT NOT NULL DEFAULT 'casual',
-                primary_language TEXT NOT NULL DEFAULT 'en',
-                supported_languages TEXT NOT NULL DEFAULT '["en","ur"]',
-                max_crawl_pages INTEGER NOT NULL DEFAULT 120,
-                idle_timeout INTEGER NOT NULL DEFAULT 10,
-                walking_enabled INTEGER NOT NULL DEFAULT 1,
-                sound_effects INTEGER NOT NULL DEFAULT 1,
-
-                -- Voice settings (Edge TTS — free, no API key needed)
-                tts_voice TEXT DEFAULT 'en-US-GuyNeural',
-                tts_voice_urdu TEXT DEFAULT 'ur-PK-AsadNeural',
-                tts_rate TEXT DEFAULT '+0%',
-                tts_pitch TEXT DEFAULT '+0Hz',
-
-                -- Groq settings
-                groq_api_key TEXT DEFAULT '',
-                llm_model TEXT DEFAULT 'llama-3.3-70b-versatile',
-                max_tokens INTEGER DEFAULT 150,
-                temperature REAL DEFAULT 0.72,
-
-                -- Limits
-                max_audio_mb INTEGER DEFAULT 10,
-                max_message_length INTEGER DEFAULT 2000,
-                rate_transcribe INTEGER DEFAULT 15,
-                rate_chat INTEGER DEFAULT 30,
-                rate_rag INTEGER DEFAULT 40,
-                rate_tts INTEGER DEFAULT 20,
-
-                -- System prompt override (optional — blank = use default)
-                custom_system_prompt TEXT DEFAULT '',
-
-                -- Sales intelligence
-                sales_mode TEXT DEFAULT 'helpful',
-                sales_greeting TEXT DEFAULT '',
-                sales_cta_text TEXT DEFAULT '',
-                sales_cta_url TEXT DEFAULT '',
-                sales_objection_handling TEXT DEFAULT 'graceful',
-                sales_cross_sell TEXT DEFAULT '',
-                sales_urgency_triggers TEXT DEFAULT '',
-                sales_tone TEXT DEFAULT 'friendly',
-                sales_followup_enabled INTEGER DEFAULT 0,
-                sales_max_suggestions INTEGER DEFAULT 3,
-
-                -- Mark Training data (brand knowledge)
-                brand_description TEXT DEFAULT '',
-                priority_products TEXT DEFAULT '',
-                seasonal_products TEXT DEFAULT '',
-
-                -- Auto-registration token (WP plugin auth)
-                api_token TEXT DEFAULT '',
-
-                -- Status
-                is_active INTEGER NOT NULL DEFAULT 1,
-                created_at REAL DEFAULT (strftime('%s','now')),
-                updated_at REAL DEFAULT (strftime('%s','now')),
-
-                -- Owner (NULL for auto-registered WP stores)
-                owner_id INTEGER DEFAULT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                store_id TEXT NOT NULL REFERENCES stores(store_id),
-                visitor_hash TEXT NOT NULL,
-                language TEXT DEFAULT 'en',
-                exchange_count INTEGER DEFAULT 0,
-                last_user_msg TEXT DEFAULT '',
-                mark_response TEXT DEFAULT '',
-                created_at REAL DEFAULT (strftime('%s','now'))
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_conv_store ON conversations(store_id);
-            CREATE INDEX IF NOT EXISTS idx_conv_created ON conversations(created_at);
-
-            CREATE TABLE IF NOT EXISTS analytics_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                store_id TEXT NOT NULL REFERENCES stores(store_id),
-                event_type TEXT NOT NULL,
-                visitor_hash TEXT NOT NULL,
-                metadata TEXT DEFAULT '{}',
-                created_at REAL DEFAULT (strftime('%s','now'))
-            );
-            CREATE INDEX IF NOT EXISTS idx_events_store ON analytics_events(store_id);
-            CREATE INDEX IF NOT EXISTS idx_events_type ON analytics_events(event_type);
-            CREATE INDEX IF NOT EXISTS idx_events_created ON analytics_events(created_at);
-
-            CREATE TABLE IF NOT EXISTS leads (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                store_id TEXT NOT NULL REFERENCES stores(store_id),
-                email TEXT NOT NULL,
-                name TEXT DEFAULT '',
-                visitor_hash TEXT NOT NULL,
-                context TEXT DEFAULT '',
-                created_at REAL DEFAULT (strftime('%s','now'))
-            );
-            CREATE INDEX IF NOT EXISTS idx_leads_store ON leads(store_id);
-
-            -- ============================================================
-            -- MAIE: Mark Adaptive Intelligence Engine
-            -- Closed learning loop — Mark learns per-store sales psychology
-            -- from real conversations (no LLM fine-tuning; prompt evolution).
-            -- ============================================================
-
-            -- One row per meaningful visitor session. Raw material the
-            -- "Teacher" job distills into playbooks. PII is stripped before storage.
-            CREATE TABLE IF NOT EXISTS learning_signals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                store_id TEXT NOT NULL REFERENCES stores(store_id),
-                visitor_hash TEXT NOT NULL,
-                language TEXT DEFAULT 'en',
-                persona TEXT DEFAULT '',
-                sentiment TEXT DEFAULT '',
-                outcome TEXT DEFAULT 'neutral',     -- converted | engaged | bounced | neutral
-                quality_score REAL DEFAULT 0,        -- 0..1, set by the filter/scorer
-                exchange_count INTEGER DEFAULT 0,
-                transcript TEXT DEFAULT '',          -- PII-stripped condensed transcript
-                processed INTEGER DEFAULT 0,         -- 0 = not yet distilled into a playbook
-                created_at REAL DEFAULT (strftime('%s','now'))
-            );
-            CREATE INDEX IF NOT EXISTS idx_signals_store ON learning_signals(store_id);
-            CREATE INDEX IF NOT EXISTS idx_signals_processed ON learning_signals(processed);
-            CREATE INDEX IF NOT EXISTS idx_signals_created ON learning_signals(created_at);
-
-            -- The evolving, versioned per-store playbook. Glass box — owner can
-            -- read/edit. Only one active version per store at a time.
-            CREATE TABLE IF NOT EXISTS store_playbooks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                store_id TEXT NOT NULL REFERENCES stores(store_id),
-                version INTEGER NOT NULL DEFAULT 1,
-                personas TEXT DEFAULT '[]',          -- JSON: [{key,label,psychology,how_to_talk,how_to_sell,winning_phrases,avoid}]
-                winning_tactics TEXT DEFAULT '[]',   -- JSON array of strings
-                losing_patterns TEXT DEFAULT '[]',   -- JSON array of strings
-                summary TEXT DEFAULT '',
-                sample_size INTEGER DEFAULT 0,
-                is_active INTEGER DEFAULT 1,
-                approved INTEGER DEFAULT 1,           -- owner approval gate
-                generated_at REAL DEFAULT (strftime('%s','now'))
-            );
-            CREATE INDEX IF NOT EXISTS idx_playbook_store ON store_playbooks(store_id);
-            CREATE INDEX IF NOT EXISTS idx_playbook_active ON store_playbooks(store_id, is_active);
-        """)
-
-        # Migration: add sales columns to existing stores table
-        sales_columns = {
-            "sales_mode": "TEXT DEFAULT 'helpful'",
-            "sales_greeting": "TEXT DEFAULT ''",
-            "sales_cta_text": "TEXT DEFAULT ''",
-            "sales_cta_url": "TEXT DEFAULT ''",
-            "sales_objection_handling": "TEXT DEFAULT 'graceful'",
-            "sales_cross_sell": "TEXT DEFAULT ''",
-            "sales_urgency_triggers": "TEXT DEFAULT ''",
-            "sales_tone": "TEXT DEFAULT 'friendly'",
-            "sales_followup_enabled": "INTEGER DEFAULT 0",
-            "sales_max_suggestions": "INTEGER DEFAULT 3",
-        }
-        # Also add api_token, webhook_url, and MAIE learning columns if missing
-        all_migrations = {
-            **sales_columns,
-            "api_token": "TEXT DEFAULT ''",
-            "webhook_url": "TEXT DEFAULT ''",
-            # MAIE: auto-learning controls
-            "auto_learning_enabled": "INTEGER DEFAULT 1",   # master on/off per store
-            "learning_autoapprove": "INTEGER DEFAULT 1",    # apply new playbooks without manual approval
-            "learning_last_run": "REAL DEFAULT 0",          # last Teacher-job timestamp
-        }
-        existing = {row[1] for row in db.execute("PRAGMA table_info(stores)").fetchall()}
-        for col, typedef in all_migrations.items():
-            if col not in existing:
-                db.execute(f"ALTER TABLE stores ADD COLUMN {col} {typedef}")
-                logger.info(f"Migrated stores table: added {col}")
+        if IS_PG:
+            # Postgres supports ADD COLUMN IF NOT EXISTS — idempotent + atomic.
+            for col, typedef in _STORE_MIGRATIONS.items():
+                db.execute(f"ALTER TABLE stores ADD COLUMN IF NOT EXISTS {col} {typedef}")
+        else:
+            existing = {row[1] for row in db.execute("PRAGMA table_info(stores)").fetchall()}
+            for col, typedef in _STORE_MIGRATIONS.items():
+                if col not in existing:
+                    db.execute(f"ALTER TABLE stores ADD COLUMN {col} {typedef}")
+                    logger.info("Migrated stores table: added %s", col)
 
 
 def hash_password(password: str) -> str:
@@ -250,7 +338,7 @@ def create_admin(username: str, password: str) -> bool:
                 (username, hash_password(password))
             )
         return True
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         return False
 
 
@@ -469,8 +557,9 @@ def get_event_analytics(store_id: str, days: int = 30) -> dict:
 
         # Daily breakdown (last 14 days for charts)
         daily_since = time.time() - 14 * 86400
+        day_expr = _DAY_EXPR.format(col="created_at")
         daily_rows = db.execute(
-            """SELECT date(created_at, 'unixepoch') as day, event_type, COUNT(*) as cnt
+            f"""SELECT {day_expr} as day, event_type, COUNT(*) as cnt
                FROM analytics_events WHERE store_id = ? AND created_at >= ?
                GROUP BY day, event_type ORDER BY day""",
             (store_id, daily_since)
