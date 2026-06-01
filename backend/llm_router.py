@@ -7,13 +7,22 @@
 import os
 import logging
 import time
+import hashlib
 from typing import Optional, Generator
 
 logger = logging.getLogger("mark.llm")
 
-# Provider availability tracking
-_provider_failures: dict[str, list] = {}  # provider -> [timestamps of recent failures]
+# Provider availability tracking — keyed by provider + API-KEY fingerprint, so a
+# breaker trips only for the specific credential that's failing. (Previously
+# keyed by provider name alone, which meant one tenant's bad key disabled that
+# provider for EVERY store. Stores sharing a key correctly share a breaker.)
+_provider_failures: dict[str, list] = {}  # "provider:keyfp" -> [failure timestamps]
 _FAILURE_WINDOW = 300  # 5 min — after this, retry the provider
+
+
+def _key_fp(key: str) -> str:
+    """Short, non-reversible fingerprint of an API key for breaker bucketing."""
+    return hashlib.sha256((key or "").encode()).hexdigest()[:10] if key else "none"
 
 
 class LLMRouter:
@@ -33,6 +42,12 @@ class LLMRouter:
         self._groq_client = None
         self._openai_client = None
         self.fallback_model = fallback_model
+
+        # Per-credential breaker buckets — isolate failures by API key.
+        self._bkey = {
+            "groq": f"groq:{_key_fp(groq_key)}",
+            "openai": f"openai:{_key_fp(openai_key)}",
+        }
 
         # Primary: Groq
         if groq_key:
@@ -55,20 +70,20 @@ class LLMRouter:
         logger.info(f"LLM Router initialized with providers: {self.providers}")
 
     def _is_provider_healthy(self, provider: str) -> bool:
-        """Check if provider has had too many recent failures."""
-        failures = _provider_failures.get(provider, [])
+        """Check if THIS credential has had too many recent failures."""
+        bkey = self._bkey.get(provider, provider)
+        failures = _provider_failures.get(bkey, [])
         now = time.time()
         recent = [t for t in failures if now - t < _FAILURE_WINDOW]
-        _provider_failures[provider] = recent
+        _provider_failures[bkey] = recent
         return len(recent) < 3  # 3 failures in 5 min = unhealthy
 
     def _record_failure(self, provider: str):
-        if provider not in _provider_failures:
-            _provider_failures[provider] = []
-        _provider_failures[provider].append(time.time())
+        bkey = self._bkey.get(provider, provider)
+        _provider_failures.setdefault(bkey, []).append(time.time())
 
     def _record_success(self, provider: str):
-        _provider_failures[provider] = []  # clear failures on success
+        _provider_failures[self._bkey.get(provider, provider)] = []  # clear on success
 
     def complete(self, messages: list, model: str = "llama-3.3-70b-versatile",
                  max_tokens: int = 200, temperature: float = 0.7) -> Optional[str]:
@@ -168,7 +183,7 @@ class LLMRouter:
         return {
             provider: {
                 "available": self._is_provider_healthy(provider),
-                "recent_failures": len([t for t in _provider_failures.get(provider, []) if now - t < _FAILURE_WINDOW]),
+                "recent_failures": len([t for t in _provider_failures.get(self._bkey.get(provider, provider), []) if now - t < _FAILURE_WINDOW]),
             }
             for provider in self.providers
         }

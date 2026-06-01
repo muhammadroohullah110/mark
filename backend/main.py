@@ -1008,18 +1008,31 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         raise HTTPException(status_code=500, detail="Chat failed.")
 
 
+def _sync_store_id(user: dict, x_store_id: Optional[str]) -> str:
+    """Resolve the target store for a WP→backend sync call.
+    Prefer the store bound to the X-Store-Token; fall back to an explicit
+    X-Store-ID only for an authenticated admin-JWT caller. Raises 403
+    otherwise — closes the cross-tenant write hole (anyone could previously
+    overwrite any store by guessing its store_id)."""
+    if user.get("store_id"):
+        return user["store_id"]
+    if x_store_id and resolve_tenant(x_store_id):
+        return x_store_id
+    raise HTTPException(status_code=403, detail="Store authentication required.")
+
+
 @app.post("/api/sync-voice")
-async def sync_voice(body: SyncVoiceRequest, x_store_id: Optional[str] = Header(None)):
-    """Sync voice settings from WP admin to backend store record."""
-    tenant = resolve_tenant(x_store_id)
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Store not found")
+async def sync_voice(body: SyncVoiceRequest,
+                     x_store_id: Optional[str] = Header(None),
+                     user=Depends(verify_store_token_or_user)):
+    """Sync voice settings from WP admin to backend store record (auth required)."""
+    store_id = _sync_store_id(user, x_store_id)
     updates = {}
     if body.tts_voice: updates["tts_voice"] = body.tts_voice
     if body.tts_rate: updates["tts_rate"] = body.tts_rate
     if body.tts_pitch: updates["tts_pitch"] = body.tts_pitch
     if updates:
-        update_store(tenant["store_id"], updates)
+        update_store(store_id, **updates)
     return {"status": "ok", "updated": list(updates.keys())}
 
 
@@ -1029,19 +1042,19 @@ class SyncTrainingRequest(BaseModel):
     seasonal_products: Optional[str] = None
 
 @app.post("/api/sync-training")
-async def sync_training(body: SyncTrainingRequest, x_store_id: Optional[str] = Header(None)):
-    """Sync training data from WP admin to backend store record."""
-    tenant = resolve_tenant(x_store_id)
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Store not found")
+async def sync_training(body: SyncTrainingRequest,
+                        x_store_id: Optional[str] = Header(None),
+                        user=Depends(verify_store_token_or_user)):
+    """Sync training data from WP admin to backend store record (auth required)."""
+    store_id = _sync_store_id(user, x_store_id)
     updates = {}
     if body.brand_description is not None: updates["brand_description"] = body.brand_description[:5000]
     if body.priority_products is not None: updates["priority_products"] = body.priority_products[:2000]
     if body.seasonal_products is not None: updates["seasonal_products"] = body.seasonal_products[:2000]
     if updates:
-        update_store(tenant["store_id"], updates)
+        update_store(store_id, **updates)
         # Invalidate cache since training data changed
-        response_cache.invalidate_store(tenant["store_id"])
+        response_cache.invalidate_store(store_id)
     return {"status": "ok", "updated": list(updates.keys())}
 
 

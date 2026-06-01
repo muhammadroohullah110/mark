@@ -1176,20 +1176,21 @@
             currentStore.priority_products = priorityProducts;
             currentStore.seasonal_products = seasonalProducts;
 
-            // Also sync to backend
+            // Also sync to backend (token-authenticated)
             const remoteId = globalSettings.remote_store_id;
+            const token = globalSettings.api_token;
             const backendUrl = globalSettings.backend_url || 'https://mark-udfz.onrender.com';
-            if (remoteId) {
+            if (remoteId && token) {
                 fetch(backendUrl + '/api/sync-training', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId },
+                    headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId, 'X-Store-Token': token },
                     body: JSON.stringify({ brand_description: brandInfo, priority_products: priorityProducts, seasonal_products: seasonalProducts })
                 }).catch(() => {});
             }
 
-            showToast('Training data saved! Mark is now smarter about your brand.');
+            toast('Training data saved! Mark is now smarter about your brand.', 'success');
         } catch (e) {
-            showToast('Failed to save training data.', 'error');
+            toast('Failed to save training data.', 'error');
         }
     }
 
@@ -1919,13 +1920,14 @@
         try {
             await api('PUT', 'stores/' + currentStore.store_id, data);
             currentStore = { ...currentStore, ...data };
-            // Sync voice settings to backend so TTS uses the new voice immediately
+            // Sync voice settings to backend so TTS uses the new voice immediately (token-authenticated)
             const remoteId = globalSettings.remote_store_id;
-            if (remoteId) {
-                const backendUrl = (markAI || {}).backendUrl || 'https://mark-udfz.onrender.com';
+            const token = globalSettings.api_token;
+            if (remoteId && token) {
+                const backendUrl = globalSettings.backend_url || (markAI || {}).backendUrl || 'https://mark-udfz.onrender.com';
                 fetch(backendUrl + '/api/sync-voice', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId },
+                    headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId, 'X-Store-Token': token },
                     body: JSON.stringify({ tts_voice: data.tts_voice, tts_rate: data.tts_rate, tts_pitch: data.tts_pitch })
                 }).catch(() => {});
             }

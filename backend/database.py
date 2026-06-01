@@ -377,7 +377,7 @@ STORE_FIELDS = {
     "groq_api_key", "llm_model", "max_tokens", "temperature",
     "max_audio_mb", "max_message_length", "rate_transcribe", "rate_chat",
     "rate_rag", "rate_tts", "custom_system_prompt", "is_active", "updated_at",
-    "api_token",
+    "api_token", "webhook_url",
     "sales_mode", "sales_greeting", "sales_cta_text", "sales_cta_url",
     "sales_objection_handling", "sales_cross_sell", "sales_urgency_triggers",
     "sales_tone", "sales_followup_enabled", "sales_max_suggestions",
@@ -463,8 +463,13 @@ def update_store(store_id: str, **kwargs) -> bool:
 
 
 def delete_store(store_id: str) -> bool:
+    """Delete a store and ALL its child rows. Children must go first — the
+    child tables FK-reference stores(store_id) with no ON DELETE CASCADE, so
+    deleting the store while children exist would raise a FK violation."""
     with get_db() as db:
-        db.execute("DELETE FROM conversations WHERE store_id = ?", (store_id,))
+        for tbl in ("conversations", "analytics_events", "leads",
+                    "learning_signals", "store_playbooks"):
+            db.execute(f"DELETE FROM {tbl} WHERE store_id = ?", (store_id,))
         db.execute("DELETE FROM stores WHERE store_id = ?", (store_id,))
     return True
 
