@@ -1228,6 +1228,27 @@
     let typewriterTimer = null;
     let hideCaptionTimer = null;
 
+    // Render text into an element, turning URLs into real clickable links.
+    // Built with text nodes + <a> elements (never innerHTML) so it's XSS-safe.
+    const URL_IN_TEXT = /(https?:\/\/[^\s<>()]+)/g;
+    function appendLinkified(el, text) {
+        el.textContent = '';
+        let last = 0, m;
+        URL_IN_TEXT.lastIndex = 0;
+        while ((m = URL_IN_TEXT.exec(text)) !== null) {
+            if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
+            const a = document.createElement('a');
+            a.href = m[0];
+            a.textContent = m[0].replace(/^https?:\/\//, '').replace(/\/$/, '');
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.className = 'mark-link';
+            el.appendChild(a);
+            last = m.index + m[0].length;
+        }
+        if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+    }
+
     function showCaption(text, typewriter) {
         if (!text) return;
         if (typewriter === undefined) typewriter = true;
@@ -1262,10 +1283,14 @@
                     shown++;
                     msgEl.textContent = words.slice(0, shown).join(' ');
                     chatArea.scrollTop = chatArea.scrollHeight;
-                    if (shown >= words.length) clearInterval(typewriterTimer);
+                    if (shown >= words.length) {
+                        clearInterval(typewriterTimer);
+                        appendLinkified(msgEl, text);   // make any URLs clickable
+                    }
                 }, 60);
             } else {
-                msgEl.textContent = text;
+                if (isUser) msgEl.textContent = text;
+                else appendLinkified(msgEl, text);
                 chatArea.appendChild(msgEl);
                 chatArea.scrollTop = chatArea.scrollHeight;
             }
@@ -1619,7 +1644,10 @@
                         exchangeCount++;
                         if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
                         saveSessionHistory();
-                        showCaption(reply, true);
+                        // Finalize the SINGLE live bubble in place (linkified) —
+                        // do NOT append another bubble (that was the duplicate).
+                        if (streamBubble) appendLinkified(streamBubble, reply);
+                        else showCaption(reply, true);
                         speak(reply);
                         maybeShowLeadForm(reply);
                         return;
@@ -1714,6 +1742,15 @@
 
         closeBtn.addEventListener('click', returnToWidget);
         // Backdrop click does NOT close — only the X button closes Mark
+
+        // Track clicks on links Mark surfaces in chat → high-intent signal
+        // (feeds analytics + marks the session converted for MAIE learning).
+        if (chatArea) {
+            chatArea.addEventListener('click', (e) => {
+                const a = e.target.closest ? e.target.closest('a.mark-link') : null;
+                if (a) trackEvent('link_clicked', { url: (a.getAttribute('href') || '').slice(0, 120) });
+            });
+        }
 
         micBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); startRecording(); });
         micBtn.addEventListener('pointerup',   (e) => { e.preventDefault(); stopRecording(); });

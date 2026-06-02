@@ -1152,11 +1152,11 @@
                 headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId },
                 body: JSON.stringify({ store_id: remoteId })
             });
-            showToast('Product sync started! RAG is re-crawling your website. This may take a minute.');
+            toast('Product sync started! RAG is re-crawling your website. This may take a minute.', 'success');
             // Refresh after a few seconds
             setTimeout(() => { if (currentStore) initTrainingTab(currentStore); }, 8000);
         } catch (e) {
-            showToast('Sync failed. Check your backend connection.', 'error');
+            toast('Sync failed. Check your backend connection.', 'error');
         }
         if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">sync</span> Sync Products'; }
     }

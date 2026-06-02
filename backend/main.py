@@ -37,7 +37,7 @@ from database import (
     log_conversation_db, init_db, create_store, update_store,
     log_event, get_event_analytics, save_lead, get_leads, get_lead_count,
     get_active_playbook, get_playbook_history, get_signal_count, update_playbook,
-    get_persona_distribution,
+    get_persona_distribution, mark_latest_signal_converted,
 )
 from admin_routes import router as admin_router, get_current_user
 from cache import ResponseCache
@@ -1192,6 +1192,9 @@ class TrackEventRequest(BaseModel):
 
 track_limiter = RateLimiter(60)  # 60 events/min per IP
 
+# Events that signal real purchase intent → counted as a conversion for MAIE.
+CONVERSION_EVENTS = {"cta_clicked", "link_clicked", "lead_submitted", "add_to_cart"}
+
 @app.post("/api/track")
 async def track_event(request: Request, body: TrackEventRequest):
     """Fire-and-forget analytics event. Always returns 200."""
@@ -1202,6 +1205,14 @@ async def track_event(request: Request, body: TrackEventRequest):
     v_hash = body.visitor_hash or hashlib.sha256(ip.encode()).hexdigest()[:12]
     if sid:
         log_event(sid, body.event_type, v_hash, body.metadata)
+        # High-intent events count as a conversion for MAIE learning. Mark the
+        # visitor's latest session by IP hash (the space the capture path uses).
+        if body.event_type in CONVERSION_EVENTS:
+            ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:12]
+            try:
+                mark_latest_signal_converted(sid, ip_hash)
+            except Exception:
+                pass
     return {"ok": True}
 
 

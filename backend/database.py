@@ -560,14 +560,14 @@ def get_event_analytics(store_id: str, days: int = 30) -> dict:
         ).fetchall()
         totals = {r["event_type"]: r["cnt"] for r in type_rows}
 
-        # Daily breakdown (last 14 days for charts)
-        daily_since = time.time() - 14 * 86400
+        # Daily breakdown over the SAME requested window (was hardcoded to 14d,
+        # silently capping the 30d chart the dashboard asks for).
         day_expr = _DAY_EXPR.format(col="created_at")
         daily_rows = db.execute(
             f"""SELECT {day_expr} as day, event_type, COUNT(*) as cnt
                FROM analytics_events WHERE store_id = ? AND created_at >= ?
                GROUP BY day, event_type ORDER BY day""",
-            (store_id, daily_since)
+            (store_id, since)
         ).fetchall()
         daily = {}
         for r in daily_rows:
@@ -646,13 +646,44 @@ def clear_recent_unprocessed_signal(store_id: str, visitor_hash: str,
     cutoff = time.time() - within_seconds
     try:
         with get_db() as db:
+            # Never delete a session already marked 'converted' — a later chat
+            # turn must not wipe a recorded conversion.
             db.execute(
                 """DELETE FROM learning_signals
-                   WHERE store_id = ? AND visitor_hash = ? AND processed = 0 AND created_at >= ?""",
+                   WHERE store_id = ? AND visitor_hash = ? AND processed = 0
+                     AND outcome != 'converted' AND created_at >= ?""",
                 (store_id, visitor_hash, cutoff)
             )
     except Exception as e:
         logger.warning(f"clear_recent_unprocessed_signal error: {e}")
+
+
+def mark_latest_signal_converted(store_id: str, visitor_hash: str,
+                                 within_seconds: int = 7200) -> bool:
+    """Mark this visitor's most recent un-distilled session as a conversion.
+    Fired when a high-intent event (link/CTA click, lead) arrives, so MAIE's
+    win-rate reflects real outcomes. Keyed by the SAME server-side IP hash the
+    capture path uses (client event hashes are a different space)."""
+    cutoff = time.time() - within_seconds
+    try:
+        with get_db() as db:
+            row = db.execute(
+                """SELECT id FROM learning_signals
+                   WHERE store_id = ? AND visitor_hash = ? AND processed = 0
+                     AND created_at >= ?
+                   ORDER BY created_at DESC LIMIT 1""",
+                (store_id, visitor_hash, cutoff)
+            ).fetchone()
+            if not row:
+                return False
+            db.execute(
+                "UPDATE learning_signals SET outcome = 'converted', quality_score = 1.0 WHERE id = ?",
+                (row["id"],)
+            )
+        return True
+    except Exception as e:
+        logger.warning(f"mark_latest_signal_converted error: {e}")
+        return False
 
 
 def get_unprocessed_signals(store_id: str, limit: int = 200,
