@@ -69,9 +69,11 @@ class Mark_AI_Activator {
             primary_language varchar(10) NOT NULL DEFAULT 'en',
             supported_languages text NOT NULL,
             max_crawl_pages int(11) NOT NULL DEFAULT 120,
-            idle_timeout int(11) NOT NULL DEFAULT 10,
+            idle_timeout int(11) NOT NULL DEFAULT 15,
             walking_enabled tinyint(1) NOT NULL DEFAULT 1,
             sound_effects tinyint(1) NOT NULL DEFAULT 1,
+            widget_scale_desktop tinyint(2) NOT NULL DEFAULT 5,
+            widget_scale_mobile tinyint(2) NOT NULL DEFAULT 5,
             tts_voice varchar(100) DEFAULT 'en-US-GuyNeural',
             tts_rate varchar(20) DEFAULT '+0%',
             tts_pitch varchar(20) DEFAULT '+0Hz',
@@ -125,7 +127,7 @@ class Mark_AI_Activator {
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta($sql);
 
-        update_option('mark_ai_db_version', '1.1.0');
+        update_option('mark_ai_db_version', MARK_AI_VERSION);
     }
 
     /**

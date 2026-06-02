@@ -66,7 +66,10 @@
 
     // Robot — 3D model loaded from CDN (keeps plugin under 10MB for WordPress)
     const MODEL_CDN         = CFG.modelCdnUrl || (PLUGIN_URL + 'public/model/');
-    const ROBOT_URL         = MODEL_CDN + 'robot.glb';
+    // Version the model URL so a new robot.glb (or plugin update) busts both the
+    // browser HTTP cache and our Cache-API bucket instead of pinning the old model.
+    const MODEL_VERSION     = CFG.pluginVersion || '1';
+    const ROBOT_URL         = MODEL_CDN + 'robot.glb?v=' + encodeURIComponent(MODEL_VERSION);
 
     // Admin-configurable size (scale 1-10, default 5)
     const SCALE_DESK = Math.max(1, Math.min(10, parseInt(CFG.scaleDesktop) || 5));
@@ -522,7 +525,13 @@
 
         // Try loading from browser Cache API first (instant on repeat visits)
         if ('caches' in window) {
-            caches.open('mark-ai-model-v2').then(cache => {
+            const MODEL_CACHE = 'mark-ai-model-' + MODEL_VERSION;
+            // Purge stale model caches from older plugin versions so the new
+            // robot isn't shadowed by an old cached copy.
+            caches.keys().then(keys => keys.forEach(k => {
+                if (k.indexOf('mark-ai-model-') === 0 && k !== MODEL_CACHE) caches.delete(k);
+            })).catch(() => {});
+            caches.open(MODEL_CACHE).then(cache => {
                 cache.match(ROBOT_URL).then(cachedResponse => {
                     if (cachedResponse) {
                         console.log('[Mark] 🚀 Loading robot from cache (instant)');

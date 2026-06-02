@@ -197,6 +197,7 @@ class Mark_AI_Widget {
             'idleTimeout'      => $idle_timeout,
             'scaleDesktop'     => max( 1, min( 10, intval( $active_store['widget_scale_desktop'] ?? 5 ) ) ),
             'scaleMobile'      => max( 1, min( 10, intval( $active_store['widget_scale_mobile']  ?? 5 ) ) ),
+            'pluginVersion'    => MARK_AI_VERSION,
         ]);
     }
 
