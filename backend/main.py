@@ -469,11 +469,45 @@ def fetch_products(url: str = None) -> list:
 if PRODUCTS_URL:
     fetch_products()
 
+def _normalize_products(raw: list) -> list:
+    """Map WooCommerce Store-API product objects to the flat shape Mark uses.
+    The Store API (/wc/store/v1/products) is PUBLIC — no consumer key needed —
+    unlike /wc/v3/products which 401s, which is why the catalog was always empty."""
+    import re as _re
+    import html as _html
+    out = []
+    for p in (raw or []):
+        prices = p.get("prices") or {}
+        price_disp = ""
+        try:
+            if prices.get("price") is not None:
+                minor = int(prices.get("currency_minor_unit", 2) or 2)
+                val = int(prices.get("price", "0")) / (10 ** minor)
+                price_disp = f"{prices.get('currency_prefix','')}{val:.2f}{prices.get('currency_suffix','')}".strip()
+        except Exception:
+            price_disp = str(prices.get("price", "") or "")
+        desc = _html.unescape(_re.sub(r"<[^>]+>", "", (p.get("short_description") or p.get("description") or "")))
+        out.append({
+            "name": p.get("name", ""),
+            "price": price_disp,
+            "description": desc.strip()[:160],
+            "stock_status": "instock" if p.get("is_in_stock", True) else "outofstock",
+            "permalink": p.get("permalink", ""),
+        })
+    return out
+
+
 def _fetch_tenant_products_background(tenant: dict):
-    """Background thread: fetch products for a tenant and update cache."""
+    """Background thread: fetch a tenant's catalog from the PUBLIC Store API."""
     sid = tenant["store_id"]
-    url = f"{tenant['website_url'].rstrip('/')}/wp-json/wc/v3/products"
-    products = fetch_products(url)
+    base = tenant["website_url"].rstrip("/")
+    products = []
+    try:
+        r = http_requests.get(f"{base}/wp-json/wc/store/v1/products?per_page=100", timeout=12)
+        if r.ok:
+            products = _normalize_products(r.json())
+    except Exception as e:
+        logger.warning(f"Store API products fetch failed for {sid}: {e}")
     _tenant_products[sid] = {"products": products, "fetched_at": time.time()}
 
 def get_products(tenant: dict | None) -> list:
@@ -501,9 +535,11 @@ def get_products(tenant: dict | None) -> list:
 def format_products_context(tenant: dict | None = None) -> str:
     products = get_products(tenant)
     if not products:
-        return "No product data available currently. Tell the user you are still loading and to ask again shortly."
-    context = "LIVE PRODUCT CATALOG — USE ONLY THESE, NEVER INVENT:\n"
-    for p in products:
+        # No hedge instruction — an empty catalog must NOT tell Mark to say
+        # "still loading". RAG/brand context carries the turn instead.
+        return ""
+    context = "LIVE PRODUCT CATALOG — answer from these, never invent. Format: NAME | PRICE | DESC | STOCK | URL\n"
+    for p in products[:60]:   # cap to bound prompt size
         name  = p.get('name', 'Unknown')
         price = p.get('price', 'N/A')
         desc  = p.get('description', '')
@@ -582,22 +618,21 @@ Humor: {p['humor']}
 </personality>
 
 <conversation_intelligence>
-INTENT DETECTION — Before responding, identify what the visitor wants:
-- GREETING: They're saying hi → Be warm, ask their name on first visit.
-- INFORMATION: They want to know something → Answer from catalog/RAG knowledge.
-- NAVIGATION: They want to go somewhere → Say "Want me to take you there?"
-- HELP: They're confused → Be patient, ask clarifying questions.
-- PURCHASE: They want to buy → Guide them based on catalog data.
+INTENT — identify what the visitor wants, then ACT decisively (don't just offer):
+- GREETING: Warm welcome; ask their name on the first visit.
+- INFORMATION: Answer directly from the catalog/RAG below using whatever data you have.
+- NAVIGATION: Name the relevant section/products AND give the actual URL from the catalog/RAG. Show it — don't merely ask "want me to take you there?".
+- AFFIRMATION: If your previous turn offered to show/do something and the visitor now replies "yes", "sure", "ok", "go ahead", "haan", "karo" (or similar): DELIVER IMMEDIATELY — name 2–4 specific products and paste the clickable URL. NEVER re-ask an offer the visitor already accepted, and never repeat the same offer twice.
+- HELP: Be patient; ask ONE clarifying question.
+- PURCHASE: Name specific products with price and link from the catalog.
 
-MEMORY: If the visitor told you their name earlier in the conversation, use it naturally — like a friend would. Never ask for their name twice.
+DELIVERY RULE (critical): The step AFTER offering is to actually deliver. If the visitor agrees, re-offering instead of showing the products is a failure.
 
-CONVERSATION FLOW:
-- First exchange: Warm greeting, ask how you can help.
-- Discovery: Ask ONE focused question to understand their need.
-- Recommendation: Suggest from catalog/RAG data ONLY.
-- If user declines twice, stop suggesting. Just be helpful.
+ANTI-HEDGE: You are fully operational. Speak confidently with whatever catalog/RAG/brand data is present. NEVER say "still loading", "loading my catalog", or "ask me again in a bit". Only if you genuinely have ZERO store data this turn, say it ONCE, briefly ("I'm just finishing setup — what are you looking for?") and never repeat it.
 
-LANGUAGE ADAPTATION: Match the visitor's language. If they write in Urdu/Hindi, respond in Urdu/Hindi. If English, respond in English. Switch seamlessly without asking.
+MEMORY: Use the visitor's name once you learn it. Never ask twice.
+FLOW: First exchange warm + ask their need; then ONE focused question; recommend from catalog/RAG ONLY; if the user declines twice, stop suggesting.
+LANGUAGE: Match the visitor's language (Urdu/Hindi/English) seamlessly, without asking.
 </conversation_intelligence>
 
 <knowledge_rules>
@@ -887,8 +922,9 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     else:
         system_instruction = build_system_prompt(tenant, name, product_context)
 
-    # Append brief brand context from RAG (if available)
-    if rag_instance and rag_instance.ready:
+    # Append brief brand context from RAG — use whatever has been crawled so far
+    # (don't gate on full 'ready', which resets on cold start → false "loading").
+    if rag_instance and (rag_instance.ready or getattr(rag_instance, "pages", None)):
         brand_context = rag_instance.get_brand_context()
         if brand_context:
             system_instruction += f"\n== STORE INFO ==\n{brand_context}\n"
@@ -897,13 +933,14 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     max_tokens = (tenant or {}).get("max_tokens") or 150
     temperature = (tenant or {}).get("temperature") or 0.72
 
-    # Keep only last 6 messages (less tokens = faster response)
+    # Keep the recent window (8 turns — enough to retain a just-made offer so an
+    # "yes" can be acted on, still lean for latency).
     filtered = [m for m in body.messages if m.role != "system"]
     messages_for_api = [{"role": "system", "content": system_instruction}]
 
     cleaned = []
     last_user_msg = ""
-    for m in filtered[-6:]:
+    for m in filtered[-8:]:
         d = m.dict()
         if d["role"] == "user" and d["content"].strip() == "__INIT__":
             d["content"] = "[New visitor. Greet warmly, ask their name.]"
@@ -914,9 +951,26 @@ async def chat_endpoint(request: Request, body: ChatRequest):
             last_user_msg = d["content"]
         cleaned.append(d)
 
-    # Per-query RAG (top 2 results — fast and focused)
-    if rag_instance and rag_instance.ready and last_user_msg and not last_user_msg.startswith("["):
-        rag_context = rag_instance.search_for_chat(last_user_msg, top_k=2)
+    # Affirmation handling: a bare "yes/ok/sure/haan" retrieves nothing on its own
+    # and makes the model re-offer instead of delivering. Run RAG on the PREVIOUS
+    # topic, and never serve an affirmation from cache.
+    _AFFIRM = {"yes", "yeah", "yep", "yup", "sure", "ok", "okay", "yes please",
+               "go ahead", "do it", "please", "haan", "han", "g", "ji", "jee",
+               "theek", "theek hai", "sahi", "ok mark", "karo", "kardo", "kar do",
+               "dikhao", "show me", "yes mark"}
+    norm_last = last_user_msg.strip().lower().strip("!.?, ")
+    is_affirmation = bool(norm_last) and norm_last in _AFFIRM
+    rag_query = last_user_msg
+    if is_affirmation:
+        prior_user = [c["content"] for c in cleaned
+                      if c["role"] == "user" and not c["content"].startswith("[")]
+        if len(prior_user) >= 2:
+            rag_query = prior_user[-2]
+
+    # Per-query RAG (top 3 — focused). Use whatever has been crawled.
+    if rag_instance and (rag_instance.ready or getattr(rag_instance, "pages", None)) \
+            and rag_query and not rag_query.startswith("["):
+        rag_context = rag_instance.search_for_chat(rag_query, top_k=3)
         if rag_context:
             messages_for_api.append({
                 "role": "system",
@@ -944,7 +998,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     rag_snippet = ""
     if len(messages_for_api) > 1 and messages_for_api[1].get("role") == "system":
         rag_snippet = messages_for_api[1].get("content", "")[:200]
-    is_special = last_user_msg.startswith("[")
+    is_special = last_user_msg.startswith("[") or is_affirmation
     store_id_str = body.store_id or "default"
 
     if not body.stream and not is_special:
@@ -1185,7 +1239,7 @@ class TrackEventRequest(BaseModel):
 
     @validator("event_type")
     def valid_event(cls, v):
-        allowed = {"widget_open", "chat_start", "chat_message", "voice_used", "link_clicked", "cta_clicked", "lead_submitted"}
+        allowed = {"widget_open", "chat_start", "chat_message", "voice_used", "link_clicked", "cta_clicked", "lead_submitted", "add_to_cart"}
         if v not in allowed:
             raise ValueError(f"Invalid event type: {v}")
         return v
