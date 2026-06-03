@@ -218,19 +218,26 @@
     // ================================================================
 
     function redirectToPage(url, title) {
-        // Security: only allow same-origin or matching domain URLs
+        // Security: only navigate to SAME-ORIGIN URLs. The target comes from
+        // RAG/LLM output, so an attacker who seeds the index could otherwise
+        // open-redirect visitors off-site. Enforce origin (not just protocol).
+        let safeUrl;
         try {
             const parsed = new URL(url, window.location.origin);
             if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
                 console.warn('[Mark Brain] Blocked non-HTTP redirect:', url);
                 return;
             }
+            if (parsed.origin !== window.location.origin) {
+                console.warn('[Mark Brain] Blocked off-origin redirect:', url);
+                return;
+            }
+            safeUrl = parsed.href;
         } catch (e) {
             console.warn('[Mark Brain] Invalid URL:', url);
             return;
         }
 
-        console.log('[Mark Brain] 🚀 Redirecting to:', title, url);
         const feedback = 'Taking you to ' + title + '!';
 
         // Show caption immediately
@@ -244,7 +251,7 @@
 
         // Navigate after brief delay so user sees/hears feedback
         setTimeout(() => {
-            window.location.href = url;
+            window.location.href = safeUrl;
         }, 1800);
     }
 

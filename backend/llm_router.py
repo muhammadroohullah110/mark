@@ -8,6 +8,7 @@ import os
 import logging
 import time
 import hashlib
+import threading
 from typing import Optional, Generator
 
 logger = logging.getLogger("mark.llm")
@@ -17,6 +18,7 @@ logger = logging.getLogger("mark.llm")
 # keyed by provider name alone, which meant one tenant's bad key disabled that
 # provider for EVERY store. Stores sharing a key correctly share a breaker.)
 _provider_failures: dict[str, list] = {}  # "provider:keyfp" -> [failure timestamps]
+_failures_lock = threading.Lock()         # guards _provider_failures across request threads
 _FAILURE_WINDOW = 300  # 5 min — after this, retry the provider
 
 
@@ -72,18 +74,20 @@ class LLMRouter:
     def _is_provider_healthy(self, provider: str) -> bool:
         """Check if THIS credential has had too many recent failures."""
         bkey = self._bkey.get(provider, provider)
-        failures = _provider_failures.get(bkey, [])
         now = time.time()
-        recent = [t for t in failures if now - t < _FAILURE_WINDOW]
-        _provider_failures[bkey] = recent
-        return len(recent) < 3  # 3 failures in 5 min = unhealthy
+        with _failures_lock:
+            recent = [t for t in _provider_failures.get(bkey, []) if now - t < _FAILURE_WINDOW]
+            _provider_failures[bkey] = recent
+            return len(recent) < 3  # 3 failures in 5 min = unhealthy
 
     def _record_failure(self, provider: str):
         bkey = self._bkey.get(provider, provider)
-        _provider_failures.setdefault(bkey, []).append(time.time())
+        with _failures_lock:
+            _provider_failures.setdefault(bkey, []).append(time.time())
 
     def _record_success(self, provider: str):
-        _provider_failures[self._bkey.get(provider, provider)] = []  # clear on success
+        with _failures_lock:
+            _provider_failures[self._bkey.get(provider, provider)] = []  # clear on success
 
     def complete(self, messages: list, model: str = "llama-3.3-70b-versatile",
                  max_tokens: int = 200, temperature: float = 0.7) -> Optional[str]:

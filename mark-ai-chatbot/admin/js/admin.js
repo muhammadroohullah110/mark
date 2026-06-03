@@ -1145,12 +1145,19 @@
         if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;animation:spin 1s linear infinite;">sync</span> Syncing...'; }
 
         const remoteId = globalSettings.remote_store_id;
+        const token = globalSettings.api_token;
         const backendUrl = globalSettings.backend_url || 'https://mark-udfz.onrender.com';
+        if (!remoteId || !token) {
+            toast('Connect to backend first (Remote Store ID + token in Settings).', 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">sync</span> Sync Products'; }
+            return;
+        }
         try {
-            await fetch(backendUrl + '/api/rag/crawl', {
+            // Correct authenticated endpoint is /api/rag-crawl (needs website_url + token).
+            await fetch(backendUrl + '/api/rag-crawl', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId },
-                body: JSON.stringify({ store_id: remoteId })
+                headers: { 'Content-Type': 'application/json', 'X-Store-Token': token },
+                body: JSON.stringify({ store_id: remoteId, website_url: (currentStore && currentStore.website_url) || '' })
             });
             toast('Product sync started! RAG is re-crawling your website. This may take a minute.', 'success');
             // Refresh after a few seconds

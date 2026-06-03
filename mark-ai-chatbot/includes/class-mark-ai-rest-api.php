@@ -322,6 +322,15 @@ class Mark_AI_Rest_API {
             return new WP_REST_Response(['message' => 'Store not found'], 404);
         }
 
+        // Never return the raw Groq key in the response — mask it (the AI Config
+        // tab shows the masked value; a real key is only sent on save).
+        if (!empty($store['groq_api_key'])) {
+            $key = $store['groq_api_key'];
+            $store['groq_api_key_masked'] = strlen($key) > 12
+                ? substr($key, 0, 8) . '...' . substr($key, -4) : '***';
+            $store['groq_api_key'] = '';
+        }
+
         return new WP_REST_Response(['store' => $store], 200);
     }
 

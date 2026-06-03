@@ -145,12 +145,13 @@ def _cleanup_loop():
 
             # Also cleanup stale product caches
             now = time.time()
-            stale_products = [
-                sid for sid, cache in _tenant_products.items()
-                if now - cache.get("fetched_at", 0) > 3600  # 1 hour
-            ]
-            for sid in stale_products:
-                del _tenant_products[sid]
+            with _products_lock:
+                stale_products = [
+                    sid for sid, cache in _tenant_products.items()
+                    if now - cache.get("fetched_at", 0) > 3600  # 1 hour
+                ]
+                for sid in stale_products:
+                    _tenant_products.pop(sid, None)
 
             # Log memory stats
             with _rag_lock:
@@ -239,8 +240,15 @@ rag_limiter        = RateLimiter(RATE_RAG)
 tts_limiter        = RateLimiter(RATE_TTS)
 
 def get_ip(request: Request) -> str:
+    # Render (and standard reverse proxies) APPEND the real client IP to the
+    # RIGHT of X-Forwarded-For. Using the leftmost value (which the client can
+    # set freely) let anyone spoof their IP and bypass every rate limiter.
     forwarded = request.headers.get("X-Forwarded-For")
-    return forwarded.split(",")[0].strip() if forwarded else request.client.host
+    if forwarded:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+    return request.client.host if request.client else "unknown"
 
 
 def get_tenant_rate(tenant: dict | None, field: str) -> int | None:
@@ -449,6 +457,7 @@ _products_last_fetched = 0
 
 # Per-tenant product caches (bounded)
 _tenant_products: dict[str, dict] = {}
+_products_lock = threading.Lock()   # guards _tenant_products across daemon threads
 
 def fetch_products(url: str = None) -> list:
     global cached_products, _products_last_fetched
@@ -508,7 +517,8 @@ def _fetch_tenant_products_background(tenant: dict):
             products = _normalize_products(r.json())
     except Exception as e:
         logger.warning(f"Store API products fetch failed for {sid}: {e}")
-    _tenant_products[sid] = {"products": products, "fetched_at": time.time()}
+    with _products_lock:
+        _tenant_products[sid] = {"products": products, "fetched_at": time.time()}
 
 def get_products(tenant: dict | None) -> list:
     if not tenant:
@@ -517,15 +527,14 @@ def get_products(tenant: dict | None) -> list:
         return cached_products
 
     sid = tenant["store_id"]
-    cache = _tenant_products.get(sid, {})
-    if cache and time.time() - cache.get("fetched_at", 0) < 300:
-        return cache.get("products", [])
-
-    # Bound product caches
-    if len(_tenant_products) >= MAX_PRODUCT_CACHES and sid not in _tenant_products:
-        # Evict oldest cache
-        oldest_sid = min(_tenant_products, key=lambda s: _tenant_products[s].get("fetched_at", 0))
-        del _tenant_products[oldest_sid]
+    with _products_lock:
+        cache = _tenant_products.get(sid, {})
+        if cache and time.time() - cache.get("fetched_at", 0) < 300:
+            return cache.get("products", [])
+        # Bound product caches — evict oldest under the same lock.
+        if len(_tenant_products) >= MAX_PRODUCT_CACHES and sid not in _tenant_products:
+            oldest_sid = min(_tenant_products, key=lambda s: _tenant_products[s].get("fetched_at", 0))
+            _tenant_products.pop(oldest_sid, None)
 
     # Non-blocking: fetch in background thread, return stale cache (or empty list)
     # This prevents blocking the async event loop with synchronous requests.get()
@@ -1273,9 +1282,7 @@ async def track_event(request: Request, body: TrackEventRequest):
 @app.get("/api/stores/{store_id}/event-analytics")
 async def get_store_event_analytics(store_id: str, days: int = 30, user=Depends(verify_store_token_or_user)):
     """Admin or token-auth: aggregated event analytics for a store."""
-    # Verify token user can only access their own store
-    if user.get("store_id") and user["store_id"] != store_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    _enforce_store_access(store_id, user)
     data = get_event_analytics(store_id, min(days, 90))
     data["lead_count"] = get_lead_count(store_id)
     return data
@@ -1283,14 +1290,27 @@ async def get_store_event_analytics(store_id: str, days: int = 30, user=Depends(
 
 # ── MAIE: Adaptive Learning (playbook) endpoints ─────────────
 
-def _maie_guard(store_id: str, user: dict) -> dict:
-    """Resolve the store and enforce token/owner access. Returns the tenant."""
-    if user.get("store_id") and user["store_id"] != store_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+def _enforce_store_access(store_id: str, user: dict) -> dict:
+    """Authorize access to a specific store's data and return the tenant.
+    - Token callers (X-Store-Token) are bound to their own store_id.
+    - Admin-JWT callers (no store_id) must OWN the store (owner_id == user_id).
+    Previously the admin-JWT branch was unchecked, so any admin could read/
+    train ANY tenant's data by passing an arbitrary store_id."""
     tenant = get_store(store_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Store not found")
+    if user.get("store_id"):
+        if user["store_id"] != store_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        if tenant.get("owner_id") != user.get("user_id"):
+            raise HTTPException(status_code=403, detail="Access denied")
     return tenant
+
+
+def _maie_guard(store_id: str, user: dict) -> dict:
+    """Resolve the store and enforce token/owner access. Returns the tenant."""
+    return _enforce_store_access(store_id, user)
 
 
 @app.get("/api/stores/{store_id}/playbook")
@@ -1415,7 +1435,8 @@ async def capture_lead(request: Request, body: LeadRequest):
 
 @app.get("/api/stores/{store_id}/leads")
 async def get_store_leads(store_id: str, limit: int = 50, offset: int = 0, user=Depends(get_current_user)):
-    """Admin-only: list captured leads."""
+    """Admin-only: list captured leads (owner-scoped)."""
+    _enforce_store_access(store_id, user)
     leads = get_leads(store_id, min(limit, 200), offset)
     total = get_lead_count(store_id)
     return {"leads": leads, "total": total}
