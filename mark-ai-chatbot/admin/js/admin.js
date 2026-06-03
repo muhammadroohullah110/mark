@@ -2221,6 +2221,10 @@
                         <input type="text" id="g-greeting-sound" value="${esc(s.greeting_sound_text || 'Ayie!')}" maxlength="30" style="${T.input}" placeholder="Ayie!" />
                         <p style="font-size:11px;color:#73787a;margin:4px 0 0;">What Mark says when clicked</p>
                     </div>
+                    <div><label style="${T.label}">Name Celebration Text</label>
+                        <input type="text" id="g-celebrate-text" value="${esc(s.name_celebrate_text || 'Welcome')}" maxlength="30" style="${T.input}" placeholder="Welcome" />
+                        <p style="font-size:11px;color:#73787a;margin:4px 0 0;">Shown above the visitor's name on first introduction</p>
+                    </div>
                     <div><label style="${T.label}">Auto-Hide Delay</label>
                         <input type="number" id="g-idle-timeout" value="${s.idle_timeout || 60}" min="15" max="600" style="${T.input}" />
                         <p style="font-size:11px;color:#73787a;margin:4px 0 0;">Seconds before Mark closes chat (15-600)</p>
@@ -2250,6 +2254,7 @@
             auto_greet: $('#g-auto-greet').value,
             widget_accent_color: /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : '#954921',
             greeting_sound_text: ($('#g-greeting-sound') || {}).value?.trim() || 'Ayie!',
+            name_celebrate_text: ($('#g-celebrate-text') || {}).value?.trim() || 'Welcome',
             idle_timeout: Math.max(15, Math.min(600, parseInt(($('#g-idle-timeout') || {}).value) || 60)),
         };
         try { await api('POST', 'settings', data); toast('Global settings saved!', 'success'); } catch (e) { toast(e.message, 'error'); }

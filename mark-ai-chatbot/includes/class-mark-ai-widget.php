@@ -194,6 +194,7 @@ class Mark_AI_Widget {
             'backendUrl'  => MARK_AI_BACKEND,
             'accentColor'      => sanitize_hex_color( $settings['widget_accent_color'] ?? '' ) ?: '#954921',
             'greetingSoundText' => sanitize_text_field( $settings['greeting_sound_text'] ?? 'Ayie!' ),
+            'celebrateText'     => sanitize_text_field( $settings['name_celebrate_text'] ?? 'Welcome' ),
             'idleTimeout'      => $idle_timeout,
             'scaleDesktop'     => max( 1, min( 10, intval( $active_store['widget_scale_desktop'] ?? 5 ) ) ),
             'scaleMobile'      => max( 1, min( 10, intval( $active_store['widget_scale_mobile']  ?? 5 ) ) ),

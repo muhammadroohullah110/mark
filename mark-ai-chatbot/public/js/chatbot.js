@@ -122,8 +122,22 @@
     let conversationHistory = [];
     const SESSION_ID = 'mark_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
+    // Durable per-browser visitor id (survives page loads/navigation) so memory
+    // and analytics stitch the same visitor across pages.
+    function getVisitorId() {
+        try {
+            let v = localStorage.getItem('mark_visitor_id');
+            if (!v) {
+                v = 'mv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+                localStorage.setItem('mark_visitor_id', v);
+            }
+            return v;
+        } catch { return SESSION_ID; }
+    }
+
     // ── Analytics — fire-and-forget event tracking ──
-    const VISITOR_HASH = SESSION_ID; // unique per session
+    let awaitingName = false;            // true right after Mark asks the visitor's name
+    const VISITOR_HASH = getVisitorId(); // durable across page loads
     function trackEvent(eventType, metadata) {
         try {
             fetch(BACKEND + '/api/track', {
@@ -135,29 +149,31 @@
         } catch(e) {} // never fail
     }
 
-    // ── Session Persistence — survive close/reopen within same page session ──
+    // ── Session Persistence — survive reopen AND page navigation ──
+    // Uses localStorage (not sessionStorage) so recent context follows the
+    // visitor across page redirects within the TTL window.
     const SESSION_HISTORY_KEY = 'mark_session_history';
     const SESSION_TIMESTAMP_KEY = 'mark_session_ts';
     const SESSION_MEMORY_TTL = 10 * 60 * 1000; // 10 minutes — after this, fresh greeting
 
     function saveSessionHistory() {
         try {
-            sessionStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(conversationHistory.slice(-16)));
-            sessionStorage.setItem(SESSION_TIMESTAMP_KEY, String(Date.now()));
+            localStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(conversationHistory.slice(-16)));
+            localStorage.setItem(SESSION_TIMESTAMP_KEY, String(Date.now()));
         } catch {}
     }
 
     function loadSessionHistory() {
         try {
-            const ts = parseInt(sessionStorage.getItem(SESSION_TIMESTAMP_KEY) || '0');
+            const ts = parseInt(localStorage.getItem(SESSION_TIMESTAMP_KEY) || '0');
             if (Date.now() - ts > SESSION_MEMORY_TTL) return []; // expired
-            const data = JSON.parse(sessionStorage.getItem(SESSION_HISTORY_KEY) || '[]');
+            const data = JSON.parse(localStorage.getItem(SESSION_HISTORY_KEY) || '[]');
             return Array.isArray(data) ? data : [];
         } catch { return []; }
     }
 
     function hasRecentConversation() {
-        const ts = parseInt(sessionStorage.getItem(SESSION_TIMESTAMP_KEY) || '0');
+        const ts = parseInt(localStorage.getItem(SESSION_TIMESTAMP_KEY) || '0');
         return (Date.now() - ts) < SESSION_MEMORY_TTL && loadSessionHistory().length > 0;
     }
 
@@ -336,6 +352,16 @@
         return null;
     }
 
+    // Did Mark's most recent line ask the visitor for their name?
+    function lastAssistantAskedName() {
+        for (let i = conversationHistory.length - 1; i >= 0; i--) {
+            if (conversationHistory[i].role === 'assistant') {
+                return /\b(your name|may i (?:have|know|ask)|who(?:'?s| is) this|naam)\b/i.test(conversationHistory[i].content || '');
+            }
+        }
+        return false;
+    }
+
     // ============================================================
     // NAME CELEBRATION — elite welcome moment
     // ============================================================
@@ -364,10 +390,12 @@
                 '"></div>';
         }
 
+        const esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+        const celebText = esc(CFG.celebrateText || 'Welcome');
         celebrationEl.innerHTML =
             particlesHTML +
-            '<div class="mark-celeb-welcome">Welcome</div>' +
-            '<div class="mark-celeb-name">' + name + '</div>' +
+            '<div class="mark-celeb-welcome">' + celebText + '</div>' +
+            '<div class="mark-celeb-name">' + esc(name) + '</div>' +
             '<div class="mark-celeb-line"></div>';
         celebrationEl.classList.add('mark-show');
 
@@ -735,8 +763,10 @@
         // Fewer hops = fewer silent failures.
         const mem = loadMemory();
         if (mem.name) {
+            awaitingName = false;
             sendGreeting('returning', mem.name, 'en');
         } else {
+            awaitingName = true;   // the init greeting asks for their name
             sendGreeting('init');
         }
     }
@@ -1367,8 +1397,16 @@
     async function processTextInput(text) {
         showCaption(text, false);
 
-        const name = tryExtractName(text);
+        let name = tryExtractName(text);
+        // Bare-name fallback: when Mark just asked the name, a one-word reply
+        // ("Sara") is the answer even though it has no "my name is" lead-in.
+        if (!name && (awaitingName || lastAssistantAskedName()) && /^[a-z]{2,15}$/i.test(text.trim())) {
+            const low = text.trim().toLowerCase();
+            const skip = ['hello','hi','hey','yes','no','ok','okay','sure','thanks','thank','help','please','what','who','nope','yeah'];
+            if (!skip.includes(low)) name = low.charAt(0).toUpperCase() + low.slice(1);
+        }
         if (name) {
+            awaitingName = false;
             saveMemory({ name });
             showNameCelebration(name);
         }

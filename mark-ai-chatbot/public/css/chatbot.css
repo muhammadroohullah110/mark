@@ -64,10 +64,10 @@
     transition: width 0.7s, height 0.7s, transform 0.6s;
 }
 
-/* ── TALKING MODE: compact robot up top, single caption pill below ── */
+/* ── TALKING MODE: robot centered (mid-screen), caption + big mic below ── */
 #mark-widget.mark-talking {
     width: 210px !important; height: 210px !important;
-    left: 50% !important; top: 20vh !important;
+    left: 50% !important; top: 38vh !important;
     transform: translate(-50%, -50%) !important;
     cursor: default !important;
     filter: drop-shadow(0 0 22px rgba(var(--mark-accent-rgb),0.45))
@@ -77,16 +77,16 @@
 
 @media (max-width:768px) {
     #mark-widget { width:90px; height:90px; }
-    #mark-widget.mark-talking { width:150px !important; height:150px !important; top:16vh !important; }
+    #mark-widget.mark-talking { width:150px !important; height:150px !important; top:32vh !important; }
 }
 @media (min-width:769px) and (max-width:1024px) {
     #mark-widget { width:100px; height:100px; }
-    #mark-widget.mark-talking { width:180px !important; height:180px !important; top:18vh !important; }
+    #mark-widget.mark-talking { width:180px !important; height:180px !important; top:35vh !important; }
 }
 
 /* ── ROBOT NAME LABEL (below the hero robot) ── */
 #mark-robot-label {
-    position: fixed; top: calc(20vh + 105px + 6px); left: 50%;
+    position: fixed; top: calc(38vh + 105px + 6px); left: 50%;
     transform: translateX(-50%);
     font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6);
     letter-spacing: 0.08em; text-transform: uppercase;
@@ -103,10 +103,10 @@
     50% { opacity: 0.4; }
 }
 @media(max-width:768px) {
-    #mark-robot-label { top: calc(16vh + 75px + 4px); font-size: 11px; }
+    #mark-robot-label { top: calc(32vh + 75px + 4px); font-size: 11px; }
 }
 @media (min-width:769px) and (max-width:1024px) {
-    #mark-robot-label { top: calc(18vh + 90px + 6px); }
+    #mark-robot-label { top: calc(35vh + 90px + 6px); }
 }
 
 /* ── HINT BUBBLE ── */
@@ -276,36 +276,32 @@
 }
 #mark-text-input::placeholder { color: rgba(255,255,255,0.3); }
 
-/* Mic button — small, inside the input bar */
+/* Mic button — LARGE, centered, floating above the input bar (voice-first) */
 #mark-mic-btn {
-    width: 38px; height: 38px; border-radius: 50%;
-    background: transparent;
-    border: 1px solid rgba(255,255,255,0.12);
-    color: rgba(255,255,255,0.5); cursor: pointer;
+    position: fixed;
+    bottom: 92px; left: 50%;
+    transform: translateX(-50%);
+    width: 64px; height: 64px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--mark-accent) 0%, var(--mark-accent-light) 100%);
+    border: none;
+    color: #fff; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     z-index: 10006;
+    box-shadow: 0 8px 28px rgba(var(--mark-accent-rgb),0.45);
     user-select: none; -webkit-user-select: none; touch-action: none;
-    transition: all 0.2s ease;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
     font-family: inherit;
-    flex-shrink: 0;
-    position: static;
-    transform: none;
 }
-#mark-mic-btn:hover {
-    background: rgba(var(--mark-accent-rgb),0.12);
-    border-color: rgba(var(--mark-accent-rgb),0.3);
-    color: rgba(var(--mark-accent-rgb),0.9);
-}
+#mark-mic-btn svg { width: 26px; height: 26px; }
+#mark-mic-btn:hover { transform: translateX(-50%) scale(1.06); box-shadow: 0 10px 34px rgba(var(--mark-accent-rgb),0.55); }
+#mark-mic-btn:active { transform: translateX(-50%) scale(0.95); }
 #mark-mic-btn.mark-listening {
-    background: rgba(239,68,68,0.15);
-    border-color: rgba(239,68,68,0.4);
-    color: #ef4444;
+    background: linear-gradient(135deg,#ef4444,#f87171);
     animation: markMicPulse 1.2s ease-in-out infinite;
-    transform: none;
 }
 @keyframes markMicPulse {
-    0%,100% { box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
-    50%     { box-shadow: 0 0 0 6px rgba(239,68,68,0.1); }
+    0%,100% { box-shadow: 0 0 0 4px rgba(239,68,68,0.25); }
+    50%     { box-shadow: 0 0 0 10px rgba(239,68,68,0.08); }
 }
 
 /* Send button — inside the input bar */
@@ -324,7 +320,8 @@
 
 @media(max-width:768px) {
     #mark-text-input-area { width: 92vw; bottom: 16px; padding: 3px 3px 3px 14px; }
-    #mark-mic-btn { width: 34px; height: 34px; }
+    #mark-mic-btn { width: 58px; height: 58px; bottom: 84px; }
+    #mark-mic-btn svg { width: 24px; height: 24px; }
     #mark-send-btn { width: 34px; height: 34px; font-size: 14px; }
     #mark-text-input { font-size: 15px; }
 }
@@ -346,10 +343,10 @@
 /* ── LIVE CAPTION — the single ephemeral speech pill (replaces in place) ── */
 #mark-live-caption {
     position: fixed;
-    top: calc(20vh + 105px + 34px);
+    bottom: 172px; top: auto;
     left: 50%; transform: translateX(-50%);
     width: 460px; max-width: 92vw;
-    max-height: 42vh; overflow-y: auto;
+    max-height: 30vh; overflow-y: auto;
     z-index: 10004;
     padding: 14px 20px;
     background: rgba(18,18,20,0.82);
@@ -367,10 +364,7 @@
 #mark-live-caption.mark-show { opacity: 1; }
 #mark-live-caption.mark-thinking { color: rgba(255,255,255,0.6); font-style: italic; }
 @media (max-width:768px) {
-    #mark-live-caption { top: calc(16vh + 75px + 26px); font-size: 14px; padding: 12px 16px; max-height: 40vh; }
-}
-@media (min-width:769px) and (max-width:1024px) {
-    #mark-live-caption { top: calc(18vh + 90px + 30px); }
+    #mark-live-caption { bottom: 156px; font-size: 14px; padding: 12px 16px; max-height: 28vh; }
 }
 
 /* ── THINKING INDICATOR — hidden, replaced by thinking bubble in chat ── */

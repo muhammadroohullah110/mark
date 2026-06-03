@@ -239,6 +239,7 @@ class Mark_AI_Rest_API {
             'tts_rate', 'tts_pitch', 'llm_model', 'max_tokens', 'temperature',
             'widget_enabled', 'widget_position', 'auto_greet', 'primary_language',
             'widget_accent_color', 'greeting_sound_text', 'idle_timeout',
+            'name_celebrate_text',
         ];
 
         foreach ($allowed as $key) {
