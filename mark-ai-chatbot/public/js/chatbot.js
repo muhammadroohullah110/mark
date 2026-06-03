@@ -776,34 +776,22 @@
     // THINKING
     // ============================================================
     function showThinking() {
-        // Add a thinking bubble to the chat area
-        if (chatArea) {
-            // Remove any existing thinking bubble first
-            const existing = chatArea.querySelector('.mark-msg-thinking');
-            if (existing) existing.remove();
-
-            const thinkBubble = document.createElement('div');
-            thinkBubble.className = 'mark-msg mark-msg-thinking';
-            thinkBubble.textContent = pickRandom(MARK_MSGS.thinking);
-            chatArea.appendChild(thinkBubble);
-            chatArea.scrollTop = chatArea.scrollHeight;
-
-            // Rotate thinking messages every 3 seconds
+        // Show the thinking state in the single caption pill (rotating copy).
+        if (liveCaption) {
+            liveCaption.classList.add('mark-show', 'mark-thinking');
+            liveCaption.style.opacity = '1';
+            liveCaption.textContent = pickRandom(MARK_MSGS.thinking);
             clearInterval(thinkingMsgTimer);
             thinkingMsgTimer = setInterval(() => {
-                const bubble = chatArea.querySelector('.mark-msg-thinking');
-                if (bubble) bubble.textContent = pickRandom(MARK_MSGS.thinking);
+                if (liveCaption) liveCaption.textContent = pickRandom(MARK_MSGS.thinking);
             }, 3000);
         }
         window.markAnimator.play('think');
     }
     function hideThinking() {
         clearInterval(thinkingMsgTimer);
-        // Remove thinking bubble from chat
-        if (chatArea) {
-            const bubble = chatArea.querySelector('.mark-msg-thinking');
-            if (bubble) bubble.remove();
-        }
+        if (liveCaption) liveCaption.classList.remove('mark-thinking');
+        // The reply replaces the caption text; nothing to remove.
     }
 
     // ============================================================
@@ -1250,51 +1238,16 @@
     }
 
     function showCaption(text, typewriter) {
-        if (!text) return;
+        if (!text || !liveCaption) return;
         if (typewriter === undefined) typewriter = true;
         clearInterval(typewriterTimer);
         clearTimeout(hideCaptionTimer);
-
-        // Determine if this is a user message or bot message
-        // typewriter=false means user message (set by processTextInput)
         const isUser = typewriter === false;
-
-        console.log('[Mark] Caption SHOW:', text.substring(0, 60) + '...');
-
-        // Remove any thinking bubble
-        if (chatArea) {
-            const thinkBubble = chatArea.querySelector('.mark-msg-thinking');
-            if (thinkBubble) thinkBubble.remove();
-        }
-
-        // Add message to chat area as a bubble
-        if (chatArea) {
-            const msgEl = document.createElement('div');
-            msgEl.className = 'mark-msg ' + (isUser ? 'mark-msg-user' : 'mark-msg-bot');
-
-            if (!isUser && typewriter && text.length >= 20) {
-                // Typewriter effect for bot messages
-                msgEl.textContent = '';
-                chatArea.appendChild(msgEl);
-                chatArea.scrollTop = chatArea.scrollHeight;
-                const words = text.split(' ');
-                let shown = 0;
-                typewriterTimer = setInterval(() => {
-                    shown++;
-                    msgEl.textContent = words.slice(0, shown).join(' ');
-                    chatArea.scrollTop = chatArea.scrollHeight;
-                    if (shown >= words.length) {
-                        clearInterval(typewriterTimer);
-                        appendLinkified(msgEl, text);   // make any URLs clickable
-                    }
-                }, 60);
-            } else {
-                if (isUser) msgEl.textContent = text;
-                else appendLinkified(msgEl, text);
-                chatArea.appendChild(msgEl);
-                chatArea.scrollTop = chatArea.scrollHeight;
-            }
-        }
+        // Single ephemeral caption pill — replaces in place, no stacked feed.
+        liveCaption.classList.add('mark-show');
+        liveCaption.style.opacity = '1';
+        if (isUser) liveCaption.textContent = text;      // brief echo of the visitor's line
+        else appendLinkified(liveCaption, text);          // Mark's line — links clickable
     }
 
     function hideCaption() {
@@ -1596,7 +1549,6 @@
                 if (res.ok && res.headers.get('content-type')?.includes('text/event-stream')) {
                     hideThinking();
                     let fullReply = '';
-                    let streamBubble = null;   // single live bubble — updated in place, never re-appended
                     const reader = res.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
@@ -1615,17 +1567,12 @@
                                 const evt = JSON.parse(line.slice(6));
                                 if (evt.token) {
                                     fullReply += evt.token;
-                                    // Update ONE live bubble in place (do NOT append a new bubble per token)
-                                    if (!streamBubble && chatArea) {
-                                        const tb = chatArea.querySelector('.mark-msg-thinking');
-                                        if (tb) tb.remove();
-                                        streamBubble = document.createElement('div');
-                                        streamBubble.className = 'mark-msg mark-msg-bot';
-                                        chatArea.appendChild(streamBubble);
-                                    }
-                                    if (streamBubble) {
-                                        streamBubble.textContent = fullReply;
-                                        chatArea.scrollTop = chatArea.scrollHeight;
+                                    // Stream into the single caption pill, replacing in place.
+                                    if (liveCaption) {
+                                        liveCaption.classList.remove('mark-thinking');
+                                        liveCaption.classList.add('mark-show');
+                                        liveCaption.style.opacity = '1';
+                                        liveCaption.textContent = fullReply;
                                     }
                                 }
                                 if (evt.done && evt.response) {
@@ -1644,9 +1591,8 @@
                         exchangeCount++;
                         if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
                         saveSessionHistory();
-                        // Finalize the SINGLE live bubble in place (linkified) —
-                        // do NOT append another bubble (that was the duplicate).
-                        if (streamBubble) appendLinkified(streamBubble, reply);
+                        // Finalize the caption in place, linkified.
+                        if (liveCaption) appendLinkified(liveCaption, reply);
                         else showCaption(reply, true);
                         speak(reply);
                         maybeShowLeadForm(reply);
