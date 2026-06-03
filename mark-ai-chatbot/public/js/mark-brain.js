@@ -7,6 +7,9 @@
 (function () {
     'use strict';
 
+    // Flip to true only when debugging — keeps the customer's console clean.
+    const MARK_DEBUG = false;
+
     // Config from WP (set by class-mark-ai-widget.php via wp_localize_script)
     const CFG = (typeof markAIConfig !== 'undefined') ? markAIConfig : {};
 
@@ -149,7 +152,7 @@
 
             // Backend still indexing
             if (data.status === 'indexing') {
-                console.log('[Mark Brain] RAG index still building...');
+                MARK_DEBUG && console.log('[Mark Brain] RAG index still building...');
                 return [];
             }
 
@@ -172,9 +175,9 @@
             return results;
         } catch (e) {
             if (e.name === 'AbortError') {
-                console.log('[Mark Brain] RAG search timed out');
+                MARK_DEBUG && console.log('[Mark Brain] RAG search timed out');
             } else {
-                console.log('[Mark Brain] RAG search failed:', e.message);
+                MARK_DEBUG && console.log('[Mark Brain] RAG search failed:', e.message);
             }
             return [];
         }
@@ -267,7 +270,7 @@
      */
     window.processUserMessage = async function (userMessage) {
         const intent = classifyIntent(userMessage);
-        console.log('[Mark Brain] Intent:', intent.type, '| Confidence:', intent.confidence);
+        MARK_DEBUG && console.log('[Mark Brain] Intent:', intent.type, '| Confidence:', intent.confidence);
 
         // ── Greetings: skip RAG, go straight to chat ──
         if (intent.type === 'greeting') {

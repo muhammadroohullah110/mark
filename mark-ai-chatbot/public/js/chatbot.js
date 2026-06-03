@@ -8,6 +8,9 @@
 (function () {
     'use strict';
 
+    // Flip to true only when debugging — keeps the customer's console clean.
+    const MARK_DEBUG = false;
+
     // ============================================================
     // CONFIG (markAIConfig set by mark-brain.js wp_localize_script)
     // ============================================================
@@ -93,7 +96,7 @@
     const W_CAM = { fov:50, x:0, y:0.5, z:3.4 };
     const T_CAM = { fov:50, x:0, y:0.7, z:4.0 };
 
-    console.log('[Mark] Device:', DEVICE.mobile ? 'Mobile' : DEVICE.tablet ? 'Tablet' : 'Desktop',
+    MARK_DEBUG && console.log('[Mark] Device:', DEVICE.mobile ? 'Mobile' : DEVICE.tablet ? 'Tablet' : 'Desktop',
                 '| DPR:', DEVICE.dpr, '| LowEnd:', DEVICE.lowEnd, '| Touch:', DEVICE.touch);
 
     // ============================================================
@@ -306,10 +309,10 @@
                 if (data.store_config.walking_enabled === false) walkingEnabled = false;
                 if (data.store_config.sound_effects === false) soundEffects = false;
             }
-            console.log('[Mark] Backend alive — TTS:', ttsAvailable, '| Walk:', walkingEnabled, '| Sound:', soundEffects);
+            MARK_DEBUG && console.log('[Mark] Backend alive — TTS:', ttsAvailable, '| Walk:', walkingEnabled, '| Sound:', soundEffects);
             checkVoiceStatus();
         } catch(e) {
-            console.log('[Mark] Backend check failed:', e.message, '(retry', backendRetries+1, '/', MAX_RETRIES, ')');
+            MARK_DEBUG && console.log('[Mark] Backend check failed:', e.message, '(retry', backendRetries+1, '/', MAX_RETRIES, ')');
             backendAlive = false;
             ttsAvailable = false;
             // Retry with exponential backoff (4s, 8s, 16s, 32s, 64s)
@@ -427,7 +430,7 @@
 
     function initFallback2D() {
         is2DMode = true;
-        console.log('[Mark] Using 2D fallback (WebGL unavailable)');
+        MARK_DEBUG && console.log('[Mark] Using 2D fallback (WebGL unavailable)');
 
         // Provide no-op animator so all markAnimator.play() calls are safe
         window.markAnimator = window.markAnimator || {};
@@ -562,7 +565,7 @@
             caches.open(MODEL_CACHE).then(cache => {
                 cache.match(ROBOT_URL).then(cachedResponse => {
                     if (cachedResponse) {
-                        console.log('[Mark] 🚀 Loading robot from cache (instant)');
+                        MARK_DEBUG && console.log('[Mark] 🚀 Loading robot from cache (instant)');
                         cachedResponse.arrayBuffer().then(buf => {
                             loader.parse(buf, '', onModelLoaded, onModelError);
                         }).catch(() => loadFromNetwork(cache));
@@ -579,7 +582,7 @@
         }
 
         function loadFromNetwork(cache) {
-            console.log('[Mark] 📡 Loading robot from network (first load)');
+            MARK_DEBUG && console.log('[Mark] 📡 Loading robot from network (first load)');
             fetch(ROBOT_URL).then(res => {
                 if (!res.ok) throw new Error('Model fetch failed');
                 const resClone = res.clone();
@@ -723,7 +726,7 @@
         markHint.style.display = 'none';
         trackEvent('widget_open');
 
-        console.log('[Mark] Entering talking mode — backendAlive:', backendAlive,
+        MARK_DEBUG && console.log('[Mark] Entering talking mode — backendAlive:', backendAlive,
                      'ttsAvailable:', ttsAvailable, 'audioUnlocked:', audioUnlocked);
 
         // ══ SAFETY NET: If global unlock hasn't fired yet (user's first
@@ -753,7 +756,7 @@
             const wb = lastMsg ? "I'm back! What else can I help with?" : "Hey again! 👋";
             showCaption(wb, false);
             speak(wb);
-            console.log('[Mark] Session restored —', conversationHistory.length, 'messages in memory');
+            MARK_DEBUG && console.log('[Mark] Session restored —', conversationHistory.length, 'messages in memory');
             return;
         }
 
@@ -905,7 +908,7 @@
     function unlockAudio() {
         if (audioUnlocked) return;
         audioUnlocked = true;
-        console.log('[Mark] 🔓 Unlocking audio APIs (global click detected)...');
+        MARK_DEBUG && console.log('[Mark] 🔓 Unlocking audio APIs (global click detected)...');
 
         // 1. Unlock speechSynthesis — speak a real (but silent) word
         //    Empty string '' does NOT count as speech on some browsers!
@@ -914,8 +917,8 @@
             const silent = new SpeechSynthesisUtterance('.');
             silent.volume = 0.01; // near-silent but not zero (zero = skip on some engines)
             silent.rate = 10;     // fastest possible = barely audible dot
-            silent.onend = () => console.log('[Mark] ✅ speechSynthesis confirmed unlocked');
-            silent.onerror = () => console.log('[Mark] ⚠️ speechSynthesis unlock failed');
+            silent.onend = () => MARK_DEBUG && console.log('[Mark] ✅ speechSynthesis confirmed unlocked');
+            silent.onerror = () => MARK_DEBUG && console.log('[Mark] ⚠️ speechSynthesis unlock failed');
             synth.speak(silent);
         }
 
@@ -928,10 +931,10 @@
             src.connect(audioCtx.destination);
             src.start(0);
             audioCtx.resume().then(() => {
-                console.log('[Mark] ✅ AudioContext unlocked (state:', audioCtx.state, ')');
+                MARK_DEBUG && console.log('[Mark] ✅ AudioContext unlocked (state:', audioCtx.state, ')');
             }).catch(() => {});
         } catch(e) {
-            console.log('[Mark] ⚠️ AudioContext unlock error:', e.message);
+            MARK_DEBUG && console.log('[Mark] ⚠️ AudioContext unlock error:', e.message);
         }
 
         // 3. Unlock HTML5 Audio element — play a silent data URI
@@ -939,7 +942,7 @@
             const silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
             silentAudio.volume = 0.01;
             silentAudio.play().then(() => {
-                console.log('[Mark] ✅ HTML5 Audio unlocked');
+                MARK_DEBUG && console.log('[Mark] ✅ HTML5 Audio unlocked');
             }).catch(() => {});
         } catch(_) {}
 
@@ -966,7 +969,7 @@
         document.addEventListener('click', handler, { capture: true, once: false, passive: true });
         document.addEventListener('touchstart', handler, { capture: true, once: false, passive: true });
         document.addEventListener('pointerdown', handler, { capture: true, once: false, passive: true });
-        console.log('[Mark] 🎧 Global audio unlock listener installed (waiting for first click anywhere)');
+        MARK_DEBUG && console.log('[Mark] 🎧 Global audio unlock listener installed (waiting for first click anywhere)');
     }
 
     /** Pre-load and cache voices (some browsers lazy-load) */
@@ -975,20 +978,20 @@
             cachedVoices = synth.getVoices();
             if (cachedVoices.length > 0) {
                 voicesReady = true;
-                console.log('[Mark] Voices loaded:', cachedVoices.length);
+                MARK_DEBUG && console.log('[Mark] Voices loaded:', cachedVoices.length);
             } else {
                 synth.onvoiceschanged = () => {
                     cachedVoices = synth.getVoices();
                     voicesReady = cachedVoices.length > 0;
                     synth.onvoiceschanged = null;
-                    console.log('[Mark] Voices loaded (async):', cachedVoices.length);
+                    MARK_DEBUG && console.log('[Mark] Voices loaded (async):', cachedVoices.length);
                 };
                 // Force a voice request after a delay (Firefox needs this)
                 setTimeout(() => {
                     if (!voicesReady && synth) {
                         cachedVoices = synth.getVoices();
                         voicesReady = cachedVoices.length > 0;
-                        if (voicesReady) console.log('[Mark] Voices loaded (retry):', cachedVoices.length);
+                        if (voicesReady) MARK_DEBUG && console.log('[Mark] Voices loaded (retry):', cachedVoices.length);
                     }
                 }, 1000);
             }
@@ -1008,7 +1011,7 @@
         } else {
             voiceStatus = 'off';
         }
-        console.log('[Mark] Voice status:', voiceStatus,
+        MARK_DEBUG && console.log('[Mark] Voice status:', voiceStatus,
                      '| synth:', hasSynth, '| voices:', hasVoices,
                      '| audioCtx:', hasAudioCtx,
                      '| backend:', backendAlive, '| tts:', ttsAvailable);
@@ -1055,7 +1058,7 @@
             const anim = window.markSituationDetector.detect(text, 'mark');
             if (anim) window.markAnimator.play(anim);
         } catch(e) {
-            console.log('[Mark] Animation detect error:', e.message);
+            MARK_DEBUG && console.log('[Mark] Animation detect error:', e.message);
         }
 
         const cleanText = sanitizeForTTS(text);
@@ -1068,18 +1071,18 @@
             return;
         }
 
-        console.log('[Mark] 🔊 speak() — audioUnlocked:', audioUnlocked,
+        MARK_DEBUG && console.log('[Mark] 🔊 speak() — audioUnlocked:', audioUnlocked,
                      '| backend:', backendAlive, '| tts:', ttsAvailable,
                      '| text:', cleanText.substring(0, 50));
 
         // TTS priority chain: Backend Edge TTS → Browser speechSynthesis → Caption-only
         if (ttsAvailable && backendAlive) {
             playBackendTTS(cleanText).catch((e) => {
-                console.log('[Mark] ⚠️ Backend TTS failed, trying browser:', e.message);
+                MARK_DEBUG && console.log('[Mark] ⚠️ Backend TTS failed, trying browser:', e.message);
                 playBrowserTTS(cleanText);
             });
         } else {
-            console.log('[Mark] Using browser TTS (backend:', backendAlive, ', tts:', ttsAvailable, ')');
+            MARK_DEBUG && console.log('[Mark] Using browser TTS (backend:', backendAlive, ', tts:', ttsAvailable, ')');
             playBrowserTTS(cleanText);
         }
     }
@@ -1103,19 +1106,19 @@
 
         const cleanup = () => { URL.revokeObjectURL(url); currentAudio = null; };
         currentAudio.onended = () => {
-            console.log('[Mark] ✅ Backend TTS playback completed');
+            MARK_DEBUG && console.log('[Mark] ✅ Backend TTS playback completed');
             cleanup(); onSpeechDone();
         };
         currentAudio.onerror = (e) => {
-            console.log('[Mark] ⚠️ Audio element error:', e?.type || 'unknown');
+            MARK_DEBUG && console.log('[Mark] ⚠️ Audio element error:', e?.type || 'unknown');
             cleanup(); playBrowserTTS(text);
         };
 
         try {
             await currentAudio.play();
-            console.log('[Mark] ▶️ Backend TTS playing...');
+            MARK_DEBUG && console.log('[Mark] ▶️ Backend TTS playing...');
         } catch(e) {
-            console.log('[Mark] ❌ Audio.play() blocked:', e.message, '— falling back to browser TTS');
+            MARK_DEBUG && console.log('[Mark] ❌ Audio.play() blocked:', e.message, '— falling back to browser TTS');
             cleanup();
             playBrowserTTS(text);
         }
@@ -1123,7 +1126,7 @@
 
     function playBrowserTTS(text) {
         if (!synth) {
-            console.log('[Mark] ❌ No speechSynthesis API — caption-only mode');
+            MARK_DEBUG && console.log('[Mark] ❌ No speechSynthesis API — caption-only mode');
             voiceStatus = 'off'; updateVoiceIndicator();
             onSpeechDone();
             return;
@@ -1143,9 +1146,9 @@
         const v = pickVoice();
         if (v) {
             u.voice = v; u.lang = v.lang;
-            console.log('[Mark] 🎙️ Browser TTS using voice:', v.name);
+            MARK_DEBUG && console.log('[Mark] 🎙️ Browser TTS using voice:', v.name);
         } else {
-            console.log('[Mark] ⚠️ No voice found, using default (voices available:', cachedVoices.length, ')');
+            MARK_DEBUG && console.log('[Mark] ⚠️ No voice found, using default (voices available:', cachedVoices.length, ')');
         }
 
         let spoken = false;
@@ -1153,21 +1156,21 @@
 
         u.onstart = () => {
             spoken = true;
-            console.log('[Mark] ▶️ Browser TTS started speaking');
+            MARK_DEBUG && console.log('[Mark] ▶️ Browser TTS started speaking');
         };
         u.onend = () => {
-            console.log('[Mark] ✅ Browser TTS finished');
+            MARK_DEBUG && console.log('[Mark] ✅ Browser TTS finished');
             clearInterval(keepAliveTimer);
             onSpeechDone();
         };
         u.onerror = (e) => {
-            console.log('[Mark] ❌ Browser TTS error:', e?.error || 'unknown');
+            MARK_DEBUG && console.log('[Mark] ❌ Browser TTS error:', e?.error || 'unknown');
             clearInterval(keepAliveTimer);
             onSpeechDone();
         };
 
         synth.speak(u);
-        console.log('[Mark] 🔊 synth.speak() called, pending:', synth.pending, 'speaking:', synth.speaking);
+        MARK_DEBUG && console.log('[Mark] 🔊 synth.speak() called, pending:', synth.pending, 'speaking:', synth.speaking);
 
         // Chrome 15-second bug fix — pause/resume keeps long synthesis alive
         if (text.length > 80) {
@@ -1181,7 +1184,7 @@
         // it was silently blocked. Show caption and continue.
         setTimeout(() => {
             if (!spoken && !synth.speaking) {
-                console.log('[Mark] ❌ Browser TTS silently blocked after 3s — caption-only mode');
+                MARK_DEBUG && console.log('[Mark] ❌ Browser TTS silently blocked after 3s — caption-only mode');
                 clearInterval(keepAliveTimer);
                 voiceStatus = 'off'; updateVoiceIndicator();
                 // Show "tap to enable voice" hint
@@ -1455,7 +1458,7 @@
                 await processTextInput(text);
                 return;
             } catch(e) {
-                console.log('[Mark] Backend transcription failed:', e.message);
+                MARK_DEBUG && console.log('[Mark] Backend transcription failed:', e.message);
                 // Fall through — will show voice unavailable message
             }
         }
@@ -1520,7 +1523,7 @@
         };
 
         browserRecognition.onerror = (e) => {
-            console.log('[Mark] Browser STT error:', e.error);
+            MARK_DEBUG && console.log('[Mark] Browser STT error:', e.error);
             isRecording = false;
             micBtn.classList.remove('mark-listening');
             window.markAnimator.play('idle');
@@ -1618,7 +1621,7 @@
                                     fullReply = evt.response;
                                 }
                                 if (evt.error) {
-                                    console.log('[Mark] Stream error:', evt.error);
+                                    MARK_DEBUG && console.log('[Mark] Stream error:', evt.error);
                                 }
                             } catch(_) {}
                         }
@@ -1657,7 +1660,7 @@
                     return;
                 }
             } catch(e) {
-                console.log('[Mark] Backend chat failed:', e.message);
+                MARK_DEBUG && console.log('[Mark] Backend chat failed:', e.message);
             }
         }
 
@@ -1791,7 +1794,7 @@
         //    primes the audio APIs. By the time user clicks Mark, audio works.
         installGlobalAudioUnlock();
 
-        console.log('[Mark] 🚀 Voice system initialized — waiting for first page interaction to unlock audio');
+        MARK_DEBUG && console.log('[Mark] 🚀 Voice system initialized — waiting for first page interaction to unlock audio');
     }
 
     if (document.readyState === 'loading') {

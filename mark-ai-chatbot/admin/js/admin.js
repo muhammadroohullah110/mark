@@ -810,8 +810,8 @@
 
         <!-- Tab Navigation -->
         <div style="border-bottom:1px solid rgba(194,199,202,0.3);margin-bottom:40px;display:flex;gap:0;overflow-x:auto;" id="store-tabs">
-            ${['settings','analytics','learning','training','sales','voice','ai','conversations','embed'].map(tab => {
-                const labels = { settings:'Settings', analytics:'Analytics', learning:'Auto-Learning', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations', embed:'Embed Code' };
+            ${['settings','analytics','learning','training','sales','voice','ai','conversations'].map(tab => {
+                const labels = { settings:'Settings', analytics:'Analytics', learning:'Auto-Learning', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations' };
                 const isActive = tab === activeTab;
                 return `<button data-tab="${tab}" style="${isActive ? T.tabBtnActive : T.tabBtn}"
                     onclick="markAdmin.switchTab('${tab}')"
@@ -873,7 +873,6 @@
             case 'voice':         container.innerHTML = renderVoiceTab(s); break;
             case 'ai':            container.innerHTML = renderAITab(s); break;
             case 'conversations': loadConversationsTab(s.store_id); break;
-            case 'embed':         loadEmbedTab(s.store_id); break;
         }
     }
 
@@ -2068,51 +2067,6 @@
         } catch (e) { container.innerHTML = `<p style="color:#73787a;text-align:center;padding:40px;">${esc(e.message)}</p>`; }
     }
 
-    /* ================================================================
-       TAB: EMBED CODE
-       ================================================================ */
-    async function loadEmbedTab(storeId) {
-        const container = $('#tab-content');
-        container.innerHTML = robotLoader('Loading embed code...');
-        try {
-            const data = await api('GET', 'stores/' + storeId + '/embed');
-            container.innerHTML = `
-            <div style="max-width:900px;">
-                <!-- WordPress auto-inject notice -->
-                <div style="padding:20px 24px;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.25);border-radius:12px;margin-bottom:32px;display:flex;align-items:flex-start;gap:12px;">
-                    <span class="material-symbols-outlined" style="font-size:22px;color:#16a34a;flex-shrink:0;margin-top:1px;">check_circle</span>
-                    <div>
-                        <strong style="font-size:14px;color:#16a34a;">WordPress: Auto-Enabled</strong>
-                        <p style="font-size:13px;color:#42484a;margin:4px 0 0;line-height:1.5;">
-                            The Mark AI widget is <strong>automatically loaded</strong> on your WordPress site. No manual embed needed!
-                            Just make sure "Widget Enabled" is set to <strong>Yes</strong> in <a href="#" onclick="event.preventDefault();markAdmin.navigate('settings')" style="color:#954921;font-weight:600;">Settings</a>.
-                        </p>
-                    </div>
-                </div>
-                <div style="margin-bottom:48px;">
-                    <h3 style="${T.headline}font-size:24px;margin:0 0 8px;">External Site Embed</h3>
-                    <p style="color:#73787a;font-size:14px;margin:0 0 20px;">Want Mark on a <strong>non-WordPress</strong> site? Paste this code before the closing &lt;/body&gt; tag.</p>
-                    <div style="position:relative;">
-                        <div style="position:absolute;top:12px;right:12px;z-index:2;">
-                            <button style="background:rgba(255,255,255,0.8);color:#4f6169;border:1px solid rgba(179,229,252,0.3);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="markAdmin.copyCode('embed-script-code')">
-                                <span class="material-symbols-outlined" style="font-size:14px;">content_copy</span> Copy
-                            </button>
-                        </div>
-                        <pre id="embed-script-code" style="background:#2f3131;border-radius:12px;padding:24px;color:#b6cad2;font-family:monospace;font-size:14px;line-height:1.6;overflow-x:auto;white-space:pre;margin:0;">${esc(data.embed_script)}</pre>
-                    </div>
-                </div>
-                <div style="${T.glass}padding:24px;">
-                    <h3 style="${T.headline}font-size:24px;margin:0 0 8px;">Store ID</h3>
-                    <p style="color:#73787a;font-size:14px;margin:0 0 20px;">Use this ID for API calls or custom integrations.</p>
-                    <div style="display:flex;align-items:center;gap:16px;">
-                        <input type="text" readonly value="${esc(storeId)}" style="background:#2f3131;border:none;color:#b6cad2;font-family:monospace;font-size:16px;padding:12px;flex:1;max-width:400px;outline:none;border-radius:8px;" />
-                        <button style="${T.btnSecondary}" onclick="markAdmin.copyText('${esc(storeId)}')"><span class="material-symbols-outlined" style="font-size:18px;">content_copy</span> Copy ID</button>
-                    </div>
-                </div>
-            </div>`;
-        } catch (e) { container.innerHTML = `<p style="color:#73787a;text-align:center;padding:40px;">${esc(e.message)}</p>`; }
-    }
-
     function copyCode(id) { const el = document.getElementById(id); if (!el) return; navigator.clipboard.writeText(el.textContent).then(() => toast('Copied!','success')).catch(() => { const ta = document.createElement('textarea'); ta.value = el.textContent; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Copied!','success'); }); }
     function copyText(text) { navigator.clipboard.writeText(text).then(() => toast('Copied!','success')).catch(() => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Copied!','success'); }); }
 
@@ -2328,7 +2282,7 @@
                     </div>
                     <div style="display:flex;align-items:flex-start;gap:12px;">
                         <span class="material-symbols-outlined" style="font-size:22px;color:#954921;flex-shrink:0;margin-top:1px;">storefront</span>
-                        <div><strong style="font-size:14px;">My Store</strong><br/><span style="font-size:13px;color:#42484a;">Robot name, personality, voice, sales skills, AI config, and embed code.</span></div>
+                        <div><strong style="font-size:14px;">My Store</strong><br/><span style="font-size:13px;color:#42484a;">Robot name, personality, voice, sales skills, and AI config.</span></div>
                     </div>
                     <div style="display:flex;align-items:flex-start;gap:12px;">
                         <span class="material-symbols-outlined" style="font-size:22px;color:#954921;flex-shrink:0;margin-top:1px;">chat</span>

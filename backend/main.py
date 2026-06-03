@@ -475,9 +475,6 @@ def fetch_products(url: str = None) -> list:
         logger.warning(f"Product fetch error: {e}")
         return []
 
-if PRODUCTS_URL:
-    fetch_products()
-
 def _normalize_products(raw: list) -> list:
     """Map WooCommerce Store-API product objects to the flat shape Mark uses.
     The Store API (/wc/store/v1/products) is PUBLIC — no consumer key needed —

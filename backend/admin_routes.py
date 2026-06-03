@@ -16,8 +16,6 @@ from database import (
     create_store, get_store, get_stores_by_owner, update_store, delete_store,
     get_analytics, hash_password,
 )
-from config import BACKEND_URL
-
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 # ── Simple token-based auth (no JWT dependency needed) ───────
@@ -259,36 +257,6 @@ def store_analytics(store_id: str, user: dict = Depends(get_current_user)):
 
     analytics = get_analytics(store_id)
     return analytics
-
-
-# ── Embed Code Generator ────────────────────────────────────
-
-@router.get("/stores/{store_id}/embed")
-def get_embed_code(store_id: str, user: dict = Depends(get_current_user)):
-    """Generate embed code for the store's website."""
-    store = get_store(store_id)
-    if not store or store["owner_id"] != user["user_id"]:
-        raise HTTPException(status_code=404, detail="Store not found")
-
-    backend_url = BACKEND_URL.rstrip('/')
-    embed_code = f"""<!-- Mark AI Shopping Companion -->
-<div id="mark-ai-widget" data-store-id="{store_id}"></div>
-<script>
-  var markAIConfig = {{ backendUrl: '{backend_url}', storeId: '{store_id}' }};
-</script>
-<script src="{backend_url}/static/chatbot.js"></script>
-<!-- End Mark AI -->"""
-
-    embed_iframe = f"""<!-- Mark AI Shopping Companion (iframe) -->
-<!-- Backend: {backend_url} -->
-<!-- Store ID: {store_id} | Assistant: {store.get('assistant_name', 'Mark')} -->"""
-
-    return {
-        "store_id": store_id,
-        "embed_script": embed_code,
-        "embed_iframe": embed_iframe,
-        "assistant_name": store.get("assistant_name", "Mark"),
-    }
 
 
 # ── Dashboard Summary ───────────────────────────────────────

@@ -86,13 +86,6 @@ class Mark_AI_Rest_API {
             'permission_callback' => [$this, 'admin_check'],
         ]);
 
-        // Embed Code
-        register_rest_route('mark-ai/v1', '/stores/(?P<store_id>[a-zA-Z0-9]+)/embed', [
-            'methods'             => 'GET',
-            'callback'            => [$this, 'get_embed_code'],
-            'permission_callback' => [$this, 'admin_check'],
-        ]);
-
         // Chart data for analytics
         register_rest_route('mark-ai/v1', '/chart-data', [
             'methods'             => 'GET',
@@ -445,32 +438,6 @@ class Mark_AI_Rest_API {
 
         $convos = Mark_AI_Database::get_conversations($store_id, $limit, $offset);
         return new WP_REST_Response(['conversations' => $convos], 200);
-    }
-
-    // ── Embed Code ─────────────────────────────────────
-
-    public function get_embed_code(WP_REST_Request $request) {
-        $store_id = sanitize_text_field( $request->get_param('store_id') );
-        $store    = Mark_AI_Database::get_store($store_id);
-
-        if (!$store || (int) $store['owner_id'] !== get_current_user_id()) {
-            return new WP_REST_Response(['message' => 'Store not found'], 404);
-        }
-
-        $embed_script = sprintf(
-            '<!-- Mark AI Shopping Companion -->
-<div id="mark-ai-widget" data-store-id="%s"></div>
-<script src="%spublic/js/chatbot.js"></script>
-<!-- End Mark AI -->',
-            esc_attr($store_id),
-            esc_url(MARK_AI_URL)
-        );
-
-        return new WP_REST_Response([
-            'store_id'       => $store_id,
-            'embed_script'   => $embed_script,
-            'assistant_name' => $store['assistant_name'],
-        ], 200);
     }
 
     // ── Chart Data (Analytics) ────────────────────────
