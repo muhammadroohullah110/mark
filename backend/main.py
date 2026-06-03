@@ -938,9 +938,12 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         if brand_context:
             system_instruction += f"\n== STORE INFO ==\n{brand_context}\n"
 
-    llm_model = (tenant or {}).get("llm_model") or "llama-3.3-70b-versatile"
-    max_tokens = (tenant or {}).get("max_tokens") or 150
-    temperature = (tenant or {}).get("temperature") or 0.72
+    # Explicit None checks — a deliberately-set 0 (e.g. temperature=0) must not
+    # be coalesced away to the default by a falsy `or`.
+    _t = (tenant or {})
+    llm_model = _t.get("llm_model") or "llama-3.3-70b-versatile"
+    max_tokens = _t.get("max_tokens") if _t.get("max_tokens") not in (None, "") else 150
+    temperature = _t.get("temperature") if _t.get("temperature") not in (None, "") else 0.72
 
     # Keep the recent window (8 turns — enough to retain a just-made offer so an
     # "yes" can be acted on, still lean for latency).

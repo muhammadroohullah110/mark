@@ -198,6 +198,10 @@
        ================================================================ */
     function navigate(page) {
         currentPage = page;
+        // Tear down any live charts before leaving a page — otherwise Chart.js
+        // instances on the previous page keep animation/resize listeners alive
+        // on detached canvases (leak when navigating repeatedly).
+        destroyCharts();
         switch (page) {
             case 'store':         loadStorePage(); break;
             case 'conversations': loadConversationsPage(); break;

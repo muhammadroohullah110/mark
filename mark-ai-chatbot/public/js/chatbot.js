@@ -1591,6 +1591,7 @@
                     const decoder = new TextDecoder();
                     let buffer = '';
 
+                    try {
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
@@ -1621,6 +1622,9 @@
                                 }
                             } catch(_) {}
                         }
+                    }
+                    } finally {
+                        try { reader.releaseLock(); } catch(_) {}
                     }
 
                     if (fullReply) {
@@ -1692,6 +1696,12 @@
         } catch(e) { /* both failed */ }
 
         hideThinking();
+        // Both paths failed with no reply — drop the dangling unanswered user
+        // turn so the NEXT request doesn't send two consecutive user messages
+        // (which many LLM APIs reject/mishandle).
+        if (conversationHistory.length && conversationHistory[conversationHistory.length - 1].role === 'user') {
+            conversationHistory.pop();
+        }
         showCaption(pickRandom(MARK_MSGS.connectionFail));
         resetIdleTimer();
     };

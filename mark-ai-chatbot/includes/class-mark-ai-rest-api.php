@@ -644,6 +644,21 @@ class Mark_AI_Rest_API {
             }
         }
 
+        // Anti-abuse: a store's own key may ONLY be used from that store's own
+        // site. If the request originates from a different host, drop the store
+        // key so nobody can drive another store's key by passing its store_id.
+        if ( ! empty( $api_key ) && ! empty( $website_url ) ) {
+            $origin    = $request->get_header( 'origin' ) ?: $request->get_header( 'referer' );
+            $req_host  = $origin ? wp_parse_url( $origin, PHP_URL_HOST ) : '';
+            $store_host = wp_parse_url( $website_url, PHP_URL_HOST );
+            if ( $req_host && $store_host
+                 && strcasecmp( $req_host, $store_host ) !== 0
+                 && strcasecmp( $req_host, 'www.' . $store_host ) !== 0
+                 && strcasecmp( 'www.' . $req_host, $store_host ) !== 0 ) {
+                $api_key = '';   // fall through to the global key below
+            }
+        }
+
         // Fallback to global key
         if (empty($api_key)) {
             $settings = get_option('mark_ai_settings', []);
