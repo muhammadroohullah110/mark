@@ -28,11 +28,17 @@ class Mark_AI_Admin {
             26
         );
 
-        // Submenus
-        add_submenu_page('mark-ai', 'Dashboard', 'Dashboard', 'manage_options', 'mark-ai', [$this, 'render_dashboard']);
-        add_submenu_page('mark-ai', 'My Store', 'My Store', 'manage_options', 'mark-ai-stores', [$this, 'render_stores']);
+        // Submenus — each store tab is now a first-class sidebar item.
+        add_submenu_page('mark-ai', 'Dashboard',     'Dashboard',     'manage_options', 'mark-ai',               [$this, 'render_dashboard']);
+        add_submenu_page('mark-ai', 'My Store',      'My Store',      'manage_options', 'mark-ai-stores',        [$this, 'render_stores']);
+        add_submenu_page('mark-ai', 'Analytics',     'Analytics',     'manage_options', 'mark-ai-analytics',     [$this, 'render_analytics']);
+        add_submenu_page('mark-ai', 'Auto-Learning', 'Auto-Learning', 'manage_options', 'mark-ai-learning',      [$this, 'render_learning']);
+        add_submenu_page('mark-ai', 'Mark Training', 'Mark Training', 'manage_options', 'mark-ai-training',      [$this, 'render_training']);
+        add_submenu_page('mark-ai', 'Sales Skills',  'Sales Skills',  'manage_options', 'mark-ai-sales',         [$this, 'render_sales']);
+        add_submenu_page('mark-ai', 'Voice',         'Voice',         'manage_options', 'mark-ai-voice',         [$this, 'render_voice']);
+        add_submenu_page('mark-ai', 'AI Config',     'AI Config',     'manage_options', 'mark-ai-ai',            [$this, 'render_ai']);
         add_submenu_page('mark-ai', 'Conversations', 'Conversations', 'manage_options', 'mark-ai-conversations', [$this, 'render_conversations']);
-        add_submenu_page('mark-ai', 'Settings', 'Settings', 'manage_options', 'mark-ai-settings', [$this, 'render_settings']);
+        add_submenu_page('mark-ai', 'Settings',      'Settings',      'manage_options', 'mark-ai-settings',      [$this, 'render_settings']);
     }
 
     /**
@@ -123,6 +129,13 @@ class Mark_AI_Admin {
     public function render_settings() {
         $this->render_app_shell('settings');
     }
+
+    public function render_analytics() { $this->render_app_shell('analytics'); }
+    public function render_learning()  { $this->render_app_shell('learning'); }
+    public function render_training()  { $this->render_app_shell('training'); }
+    public function render_sales()     { $this->render_app_shell('sales'); }
+    public function render_voice()     { $this->render_app_shell('voice'); }
+    public function render_ai()        { $this->render_app_shell('ai'); }
 
     /**
      * Render the SPA shell — JS handles everything.

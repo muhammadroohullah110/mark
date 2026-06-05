@@ -177,7 +177,18 @@
         const app = $('#mark-ai-app');
         if (!app) return;
 
-        const pageMap = { 'mark-ai': 'dashboard', 'mark-ai-stores': 'store', 'mark-ai-conversations': 'conversations', 'mark-ai-settings': 'settings' };
+        const pageMap = {
+            'mark-ai': 'dashboard',
+            'mark-ai-stores': 'store',
+            'mark-ai-analytics': 'analytics',
+            'mark-ai-learning': 'learning',
+            'mark-ai-training': 'training',
+            'mark-ai-sales': 'sales',
+            'mark-ai-voice': 'voice',
+            'mark-ai-ai': 'ai',
+            'mark-ai-conversations': 'conversations',
+            'mark-ai-settings': 'settings',
+        };
         currentPage = pageMap[PAGE] || 'dashboard';
 
         app.innerHTML = `
@@ -202,8 +213,11 @@
         // instances on the previous page keep animation/resize listeners alive
         // on detached canvases (leak when navigating repeatedly).
         destroyCharts();
+        // Store-scoped pages: each sidebar tab loads the store then renders one tab.
+        const STORE_TABS = ['settings', 'analytics', 'learning', 'training', 'sales', 'voice', 'ai'];
+        if (page === 'store') { activeTab = 'settings'; loadStorePage(); return; }
+        if (STORE_TABS.indexOf(page) !== -1) { activeTab = page; loadStorePage(); return; }
         switch (page) {
-            case 'store':         loadStorePage(); break;
             case 'conversations': loadConversationsPage(); break;
             case 'settings':      loadSettingsPage(); break;
             default:              loadDashboardPage(); break;
@@ -760,7 +774,7 @@
 
             const storeData = await api('GET', 'stores/' + store.store_id);
             currentStore = storeData.store || storeData;
-            activeTab = 'settings';
+            if (!activeTab) activeTab = 'settings';
             renderStoreDetail();
         } catch (e) {
             toast('Failed to load store: ' + e.message, 'error');
@@ -785,14 +799,18 @@
         const s = currentStore;
         const content = $('#mark-page-content');
 
+        const isSettings = (activeTab === 'settings');
+        const tabTitles = { settings:'Store Settings', analytics:'Analytics', learning:'Auto-Learning', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config' };
+
         content.innerHTML = `
         <!-- Store Header -->
-        <div style="margin-bottom:40px;">
-            <h2 style="${T.headline}font-size:48px;line-height:56px;letter-spacing:-0.02em;font-weight:300;margin:0 0 4px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="margin-bottom:32px;">
+            <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#73787a;margin-bottom:6px;">${esc(tabTitles[activeTab] || 'Store')}</div>
+            <h2 style="${T.headline}font-size:40px;line-height:48px;letter-spacing:-0.02em;font-weight:300;margin:0 0 4px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                 ${esc(s.store_name)}
                 ${renderBadge(s.is_active)}
             </h2>
-            <a style="font-size:16px;color:#42484a;text-decoration:none;display:inline-flex;align-items:center;gap:4px;"
+            <a style="font-size:15px;color:#42484a;text-decoration:none;display:inline-flex;align-items:center;gap:4px;"
                href="${esc(s.website_url)}" target="_blank"
                onmouseenter="this.style.color='#4f6169'" onmouseleave="this.style.color='#42484a'">
                 ${esc(s.website_url)}
@@ -800,40 +818,42 @@
             </a>
         </div>
 
-        <!-- Analytics Mini Cards -->
-        <div id="store-analytics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;margin-bottom:64px;">
+        ${isSettings ? `<div id="store-analytics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;margin-bottom:48px;">
             ${renderMiniStat('Total Chats', '--', 'forum')}
             ${renderMiniStat('Today', '--', 'today')}
             ${renderMiniStat('This Week', '--', 'date_range')}
             ${renderMiniStat('Unique Visitors', '--', 'person')}
-        </div>
-
-        <!-- Tab Navigation -->
-        <div style="border-bottom:1px solid rgba(194,199,202,0.3);margin-bottom:40px;display:flex;gap:0;overflow-x:auto;" id="store-tabs">
-            ${['settings','analytics','learning','training','sales','voice','ai','conversations'].map(tab => {
-                const labels = { settings:'Settings', analytics:'Analytics', learning:'Auto-Learning', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config', conversations:'Conversations' };
-                const isActive = tab === activeTab;
-                return `<button data-tab="${tab}" style="${isActive ? T.tabBtnActive : T.tabBtn}"
-                    onclick="markAdmin.switchTab('${tab}')"
-                    onmouseenter="if(!this.dataset.active)this.style.color='#4f6169'"
-                    onmouseleave="if(!this.dataset.active)this.style.color='#73787a'"
-                    ${isActive ? 'data-active="1"' : ''}>${labels[tab]}</button>`;
-            }).join('')}
-        </div>
+        </div>` : ''}
 
         <div id="tab-content"></div>
 
-        <!-- Danger Zone -->
-        <div style="margin-top:64px;padding:24px;border:1px solid rgba(186,26,26,0.2);border-radius:12px;background:rgba(255,218,214,0.1);">
+        ${isSettings ? `<div style="margin-top:64px;padding:24px;border:1px solid rgba(186,26,26,0.2);border-radius:12px;background:rgba(255,218,214,0.1);">
             <h3 style="${T.headline}font-size:20px;color:#ba1a1a;margin:0 0 8px;">Danger Zone</h3>
             <p style="color:#42484a;font-size:14px;margin:0 0 16px;">Permanently delete this store and all its data.</p>
             <button style="${T.btnDanger}" onclick="markAdmin.confirmDelete()">
                 <span class="material-symbols-outlined" style="font-size:18px;">delete_forever</span> Delete Store
             </button>
-        </div>`;
+        </div>` : ''}`;
 
-        loadStoreAnalytics(s.store_id);
-        switchTab(activeTab);
+        if (isSettings) loadStoreAnalytics(s.store_id);
+        renderTab(activeTab);
+    }
+
+    // Render one tab's content into #tab-content (sidebar drives which tab).
+    function renderTab(tab) {
+        const container = $('#tab-content');
+        if (!container) return;
+        const s = currentStore;
+        switch (tab) {
+            case 'settings':  container.innerHTML = renderSettingsTab(s); break;
+            case 'analytics': container.innerHTML = renderAnalyticsTab(s); loadEventAnalytics(s); break;
+            case 'learning':  container.innerHTML = renderLearningTab(s); loadPlaybook(s); break;
+            case 'training':  container.innerHTML = renderTrainingTab(s); initTrainingTab(s); break;
+            case 'sales':     container.innerHTML = renderSalesTab(s); break;
+            case 'voice':     container.innerHTML = renderVoiceTab(s); break;
+            case 'ai':        container.innerHTML = renderAITab(s); break;
+            default:          container.innerHTML = renderSettingsTab(s); break;
+        }
     }
 
     async function loadStoreAnalytics(storeId) {
@@ -855,25 +875,7 @@
        ================================================================ */
     function switchTab(tab) {
         activeTab = tab;
-        $$('#store-tabs button').forEach(btn => {
-            const isActive = btn.dataset.tab === tab;
-            btn.style.cssText = isActive ? T.tabBtnActive : T.tabBtn;
-            if (isActive) btn.dataset.active = '1'; else delete btn.dataset.active;
-        });
-
-        const container = $('#tab-content');
-        if (!container) return;
-        const s = currentStore;
-        switch (tab) {
-            case 'settings':      container.innerHTML = renderSettingsTab(s); break;
-            case 'analytics':     container.innerHTML = renderAnalyticsTab(s); loadEventAnalytics(s); break;
-            case 'learning':      container.innerHTML = renderLearningTab(s); loadPlaybook(s); break;
-            case 'training':      container.innerHTML = renderTrainingTab(s); initTrainingTab(s); break;
-            case 'sales':         container.innerHTML = renderSalesTab(s); break;
-            case 'voice':         container.innerHTML = renderVoiceTab(s); break;
-            case 'ai':            container.innerHTML = renderAITab(s); break;
-            case 'conversations': loadConversationsTab(s.store_id); break;
-        }
+        renderTab(tab);
     }
 
     /* ================================================================
@@ -1145,7 +1147,7 @@
 
     async function syncProducts() {
         const btn = document.getElementById('tt-sync-btn');
-        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;animation:spin 1s linear infinite;">sync</span> Syncing...'; }
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;animation:markSpin 1s linear infinite;">sync</span> Syncing...'; }
 
         const remoteId = globalSettings.remote_store_id;
         const token = globalSettings.api_token;
@@ -1951,7 +1953,7 @@
         const preview = $('#voice-preview'), previewContent = $('#voice-preview-content');
         if (preview && previewContent) {
             preview.style.display = 'block';
-            previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><div style="animation:markRobotBob 0.8s ease-in-out infinite;font-size:28px;">🤖</div><span style="font-size:14px;color:#42484a;">Generating voice...</span></div>`;
+            previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><span class="material-symbols-outlined" style="animation:markRobotBob 0.8s ease-in-out infinite;font-size:26px;color:#954921;">graphic_eq</span><span style="font-size:14px;color:#42484a;">Generating voice...</span></div>`;
         }
         const settings = markAI || {};
         const backendUrl = settings.backendUrl || 'https://mark-udfz.onrender.com';
@@ -2228,7 +2230,7 @@
     async function testConnection() {
         const btn = $('#test-conn-btn'), result = $('#conn-test-result');
         if (btn) btn.disabled = true;
-        if (result) result.innerHTML = `<span style="color:#4f6169;font-size:13px;display:flex;align-items:center;gap:8px;"><span style="display:inline-block;animation:markRobotBob 0.8s ease-in-out infinite;font-size:16px;">🤖</span> Testing connection...</span>`;
+        if (result) result.innerHTML = `<span style="color:#4f6169;font-size:13px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="display:inline-block;animation:markSpin 0.8s linear infinite;font-size:16px;color:#954921;">progress_activity</span> Testing connection...</span>`;
         try {
             const data = await api('POST', 'test-connection');
             if (data.connected) {
