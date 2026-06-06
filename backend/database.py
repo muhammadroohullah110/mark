@@ -268,6 +268,18 @@ def _build_schema(pg: bool) -> str:
         );
         CREATE INDEX IF NOT EXISTS idx_playbook_store ON store_playbooks(store_id);
         CREATE INDEX IF NOT EXISTS idx_playbook_active ON store_playbooks(store_id, is_active);
+
+        -- Persisted RAG index snapshot (page text + brand metadata, NOT sklearn
+        -- objects). Lets the crawl survive restarts/deploys: rehydrate instantly
+        -- instead of re-crawling, so the widget never reads as "still loading".
+        CREATE TABLE IF NOT EXISTS rag_snapshots (
+            store_id TEXT PRIMARY KEY REFERENCES stores(store_id),
+            pages TEXT DEFAULT '[]',
+            brand_info TEXT DEFAULT '{{}}',
+            categories TEXT DEFAULT '[]',
+            page_count INTEGER DEFAULT 0,
+            updated_at {ts}
+        );
     """
 
 
@@ -858,6 +870,62 @@ def set_learning_last_run(store_id: str) -> None:
     with get_db() as db:
         db.execute("UPDATE stores SET learning_last_run = ? WHERE store_id = ?",
                    (time.time(), store_id))
+
+
+# ── RAG index snapshots (survive restarts/deploys) ──────────
+
+def save_rag_snapshot(store_id: str, pages: list, brand_info: dict,
+                      categories: list) -> bool:
+    """Upsert a store's crawled index snapshot. Never throws."""
+    try:
+        pj = json.dumps(pages or [], ensure_ascii=False)
+        bj = json.dumps(brand_info or {}, ensure_ascii=False)
+        cj = json.dumps(categories or [], ensure_ascii=False)
+        cnt = len(pages or [])
+        now = time.time()
+        with get_db() as db:
+            if IS_PG:
+                db.execute(
+                    """INSERT INTO rag_snapshots
+                       (store_id, pages, brand_info, categories, page_count, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ON CONFLICT (store_id) DO UPDATE SET
+                         pages = EXCLUDED.pages, brand_info = EXCLUDED.brand_info,
+                         categories = EXCLUDED.categories, page_count = EXCLUDED.page_count,
+                         updated_at = EXCLUDED.updated_at""",
+                    (store_id, pj, bj, cj, cnt, now)
+                )
+            else:
+                db.execute(
+                    """INSERT OR REPLACE INTO rag_snapshots
+                       (store_id, pages, brand_info, categories, page_count, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (store_id, pj, bj, cj, cnt, now)
+                )
+        return True
+    except Exception as e:
+        logger.warning(f"save_rag_snapshot error: {e}")
+        return False
+
+
+def get_rag_snapshot(store_id: str) -> dict | None:
+    """Return {pages, brand_info, categories} for a store, or None."""
+    try:
+        with get_db() as db:
+            row = db.execute(
+                "SELECT pages, brand_info, categories FROM rag_snapshots WHERE store_id = ?",
+                (store_id,)
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "pages": json.loads(row["pages"] or "[]"),
+            "brand_info": json.loads(row["brand_info"] or "{}"),
+            "categories": json.loads(row["categories"] or "[]"),
+        }
+    except Exception as e:
+        logger.warning(f"get_rag_snapshot error: {e}")
+        return None
 
 
 # ── Initialize on import ────────────────────────────────────

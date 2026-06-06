@@ -38,6 +38,7 @@ from database import (
     log_event, get_event_analytics, save_lead, get_leads, get_lead_count,
     get_active_playbook, get_playbook_history, get_signal_count, update_playbook,
     get_persona_distribution, mark_latest_signal_converted,
+    save_rag_snapshot, get_rag_snapshot,
 )
 from admin_routes import router as admin_router, get_current_user
 from cache import ResponseCache
@@ -65,6 +66,36 @@ response_cache = ResponseCache(max_entries=2000, default_ttl=1800)
 # ── Multi-tenant RAG instances ───────────────────────────────
 _rag_instances: dict[str, MarkRAG] = {}
 _rag_lock = threading.Lock()
+
+
+def _init_rag(sid: str, r: "MarkRAG"):
+    """Background: rehydrate the index from a saved snapshot (instant, no crawl)
+    if one exists; otherwise crawl and persist the result so the next restart/
+    deploy rehydrates instead of re-crawling (kills cold-start 'still loading')."""
+    try:
+        snap = get_rag_snapshot(sid)
+        if snap and r.import_snapshot(snap):
+            logger.info(f"RAG rehydrated from snapshot for {sid} ({len(r.pages)} pages)")
+            return
+        r.initialize()  # full crawl
+        if r.ready and r.pages:
+            s = r.export_snapshot()
+            save_rag_snapshot(sid, s["pages"], s["brand_info"], s["categories"])
+            logger.info(f"RAG crawled + snapshot saved for {sid} ({len(r.pages)} pages)")
+    except Exception as e:
+        logger.warning(f"_init_rag error for {sid}: {e}")
+
+
+def _reindex_rag(sid: str, r: "MarkRAG"):
+    """Background: re-crawl then persist the refreshed snapshot."""
+    try:
+        r.reindex()
+        if r.ready and r.pages:
+            s = r.export_snapshot()
+            save_rag_snapshot(sid, s["pages"], s["brand_info"], s["categories"])
+            logger.info(f"RAG reindexed + snapshot saved for {sid} ({len(r.pages)} pages)")
+    except Exception as e:
+        logger.warning(f"_reindex_rag error for {sid}: {e}")
 
 # Default RAG for backward compatibility (single-tenant mode)
 rag = MarkRAG(CLIENT_WEBSITE_URL, max_pages=MAX_CRAWL_PAGES) if CLIENT_WEBSITE_URL else None
@@ -108,7 +139,7 @@ def _prewarm_all_stores():
                     max_p = store.get("max_crawl_pages", 120) or 120
                     r = MarkRAG(url, max_pages=max_p)
                     _rag_instances[sid] = r
-                    threading.Thread(target=r.initialize, daemon=True).start()
+                    threading.Thread(target=_init_rag, args=(sid, r), daemon=True).start()
                     logger.info(f"  Warming store '{store.get('store_name', sid)}' ({url})")
             time.sleep(0.5)
     except Exception as e:
@@ -123,11 +154,12 @@ def _auto_reindex_loop():
         try:
             logger.info("Auto-reindex: refreshing all RAG indexes...")
             with _rag_lock:
-                for sid, rag_inst in _rag_instances.items():
-                    if rag_inst.ready:
-                        threading.Thread(target=rag_inst.reindex, daemon=True).start()
-                        response_cache.invalidate_store(sid)
-                        time.sleep(2)
+                snapshot_items = list(_rag_instances.items())
+            for sid, rag_inst in snapshot_items:
+                if rag_inst.ready:
+                    threading.Thread(target=_reindex_rag, args=(sid, rag_inst), daemon=True).start()
+                    response_cache.invalidate_store(sid)
+                    time.sleep(2)
             logger.info("Auto-reindex triggered for all stores")
         except Exception as e:
             logger.error(f"Auto-reindex error: {e}")
@@ -301,10 +333,11 @@ def get_rag(tenant: dict | None) -> MarkRAG | None:
 
         # Check memory limits before creating new instance
         if len(_rag_instances) >= MAX_RAG_INSTANCES:
-            # Evict least recently used (simplest: evict first non-ready)
+            # Evict an idle, empty instance — but NEVER one that is mid-crawl
+            # (evicting it would orphan the running thread and waste the crawl).
             evict_candidates = [
                 s for s, r in _rag_instances.items()
-                if not r.ready or not r.pages
+                if (not r.ready or not r.pages) and not r._crawling
             ]
             if evict_candidates:
                 del _rag_instances[evict_candidates[0]]
@@ -318,7 +351,7 @@ def get_rag(tenant: dict | None) -> MarkRAG | None:
             return None
         r = MarkRAG(url, max_pages=tenant.get("max_crawl_pages", 120))
         _rag_instances[sid] = r
-        threading.Thread(target=r.initialize, daemon=True).start()
+        threading.Thread(target=_init_rag, args=(sid, r), daemon=True).start()
         return r
 
 
@@ -824,7 +857,7 @@ async def auto_register(body: RegisterRequest):
         if len(_rag_instances) < MAX_RAG_INSTANCES:
             r = MarkRAG(url, max_pages=MAX_CRAWL_PAGES)
             _rag_instances[sid] = r
-            threading.Thread(target=r.initialize, daemon=True).start()
+            threading.Thread(target=_init_rag, args=(sid, r), daemon=True).start()
             logger.info(f"Auto-registered store '{store_name}' ({url}), starting RAG crawl")
 
     return {
@@ -877,15 +910,17 @@ async def rag_crawl_trigger(request: Request, body: RAGCrawlRequest,
     sid = body.store_id
     with _rag_lock:
         if sid in _rag_instances:
-            _rag_instances[sid].base_url = body.website_url.rstrip('/')
-            _rag_instances[sid].domain = urlparse(body.website_url).netloc
-            threading.Thread(target=_rag_instances[sid].reindex, daemon=True).start()
+            inst = _rag_instances[sid]
+            with inst._lock:
+                inst.base_url = body.website_url.rstrip('/')
+                inst.domain = urlparse(body.website_url).netloc
+            threading.Thread(target=_reindex_rag, args=(sid, inst), daemon=True).start()
         else:
             if len(_rag_instances) >= MAX_RAG_INSTANCES:
                 return {"status": "error", "message": f"Max RAG instances ({MAX_RAG_INSTANCES}) reached."}
             r = MarkRAG(body.website_url, max_pages=MAX_CRAWL_PAGES)
             _rag_instances[sid] = r
-            threading.Thread(target=r.initialize, daemon=True).start()
+            threading.Thread(target=_init_rag, args=(sid, r), daemon=True).start()
 
     return {"status": "crawling", "message": f"RAG crawl started for {body.website_url}"}
 

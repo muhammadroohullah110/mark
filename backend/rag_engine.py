@@ -309,6 +309,7 @@ class MarkRAG:
         Each thread uses requests.get() directly (thread-safe)."""
         visited = set()
         to_visit = [self.base_url]
+        queued = {self.base_url}   # O(1) membership (was scanning the list — O(n^2))
         pages = []
 
         logger.info(f"Crawling {self.base_url} ...")
@@ -348,10 +349,11 @@ class MarkRAG:
                             if (
                                 self._is_internal(full_url)
                                 and full_url not in visited
+                                and full_url not in queued
                                 and not self._should_skip(full_url)
-                                and full_url not in to_visit
                             ):
                                 to_visit.append(full_url)
+                                queued.add(full_url)
 
                 time.sleep(0.3)
         except Exception:
@@ -368,6 +370,10 @@ class MarkRAG:
             return False
 
         corpus = [p['content'] for p in pages]
+        # TfidfVectorizer(max_df=0.95) errors on a single-document corpus
+        # ("max_df < min_df"). Relax the doc-frequency bounds for tiny sites.
+        if len(corpus) < 3:
+            self.vectorizer.set_params(max_df=1.0, min_df=1)
         self.tfidf_matrix = self.vectorizer.fit_transform(corpus)
 
         type_counts = {}
@@ -385,10 +391,11 @@ class MarkRAG:
         return True
 
     def initialize(self):
-        """Thread-safe initialization. Prevents double-crawl."""
-        if self._crawling:
-            return
-        self._crawling = True
+        """Thread-safe initialization. Prevents double-crawl (atomic flag)."""
+        with self._lock:
+            if self._crawling:
+                return
+            self._crawling = True
         try:
             pages = self.crawl()
             with self._lock:
@@ -399,6 +406,35 @@ class MarkRAG:
             logger.error(f"Initialize error: {e}")
         finally:
             self._crawling = False
+
+    # ── Snapshot persistence (survive restarts/deploys) ──────
+    def export_snapshot(self) -> dict:
+        """Lightweight, JSON-serializable snapshot of the crawled index.
+        Stores only the page text + brand metadata (NOT the sklearn objects),
+        so it's version-proof — the TF-IDF matrix is rebuilt on import."""
+        with self._lock:
+            return {
+                "pages": self.pages,
+                "brand_info": self.brand_info,
+                "categories": self.categories,
+            }
+
+    def import_snapshot(self, snap: dict) -> bool:
+        """Rehydrate from a saved snapshot (rebuilds the TF-IDF matrix from the
+        stored pages — fast, no re-crawl). Returns True if the index is ready."""
+        if not snap:
+            return False
+        pages = snap.get("pages") or []
+        if not pages:
+            return False
+        with self._lock:
+            self.brand_info = snap.get("brand_info") or {}
+            self.categories = snap.get("categories") or []
+            if self.build_index(pages):
+                self.pages = pages
+                self.ready = True
+                return True
+        return False
 
     # ── Search ───────────────────────────────────────────────
 
@@ -502,10 +538,11 @@ class MarkRAG:
 
     def reindex(self):
         """Re-crawl and rebuild — zero downtime (keeps old data during crawl)."""
-        if self._crawling:
-            logger.info(f"Skipping reindex for {self.base_url} — already crawling")
-            return
-        self._crawling = True
+        with self._lock:
+            if self._crawling:
+                logger.info(f"Skipping reindex for {self.base_url} — already crawling")
+                return
+            self._crawling = True
         logger.info(f"Reindexing {self.base_url}...")
         try:
             pages = self.crawl()
