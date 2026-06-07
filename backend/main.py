@@ -36,6 +36,7 @@ from database import (
     get_store, get_store_by_token, get_store_by_url, get_all_active_stores,
     log_conversation_db, init_db, create_store, update_store,
     log_event, get_event_analytics, save_lead, get_leads, get_lead_count,
+    get_analytics,
     get_active_playbook, get_playbook_history, get_signal_count, update_playbook,
     get_persona_distribution, mark_latest_signal_converted,
     save_rag_snapshot, get_rag_snapshot,
@@ -1321,6 +1322,15 @@ async def get_store_event_analytics(store_id: str, days: int = 30, user=Depends(
     data = get_event_analytics(store_id, min(days, 90))
     data["lead_count"] = get_lead_count(store_id)
     return data
+
+
+@app.get("/api/stores/{store_id}/conversations")
+async def get_store_conversations(store_id: str, user=Depends(verify_store_token_or_user)):
+    """Recent conversations + summary stats for a store (token/owner auth).
+    Reads the BACKEND conversation log (where the live widget actually writes),
+    not the WP mirror — that's why the WP admin page showed 0."""
+    _enforce_store_access(store_id, user)
+    return get_analytics(store_id)
 
 
 # ── MAIE: Adaptive Learning (playbook) endpoints ─────────────

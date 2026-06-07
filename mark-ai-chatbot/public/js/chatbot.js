@@ -1249,20 +1249,33 @@
     let typewriterTimer = null;
     let hideCaptionTimer = null;
 
-    // Render text into an element, turning URLs into real clickable links.
-    // Built with text nodes + <a> elements (never innerHTML) so it's XSS-safe.
+    // Render text, turning raw URLs into a CLEAN, tappable "page →" pill that
+    // navigates in the SAME tab (a real redirect — not an ugly raw link, and
+    // not a new tab). Built with text nodes + <a> (never innerHTML) = XSS-safe.
     const URL_IN_TEXT = /(https?:\/\/[^\s<>()]+)/g;
+    function _prettyLinkLabel(url) {
+        try {
+            const seg = new URL(url).pathname.split('/').filter(Boolean).pop();
+            if (seg) {
+                return decodeURIComponent(seg)
+                    .replace(/\.[a-z]{2,4}$/i, '')
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\b\w/g, c => c.toUpperCase())
+                    .slice(0, 40);
+            }
+        } catch (_) {}
+        return 'View page';
+    }
     function appendLinkified(el, text) {
         el.textContent = '';
         let last = 0, m;
         URL_IN_TEXT.lastIndex = 0;
         while ((m = URL_IN_TEXT.exec(text)) !== null) {
             if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
+            const url = m[0];
             const a = document.createElement('a');
-            a.href = m[0];
-            a.textContent = m[0].replace(/^https?:\/\//, '').replace(/\/$/, '');
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
+            a.href = url;                       // no target → navigates same tab (redirect)
+            a.textContent = _prettyLinkLabel(url) + ' →';
             a.className = 'mark-link';
             el.appendChild(a);
             last = m.index + m[0].length;

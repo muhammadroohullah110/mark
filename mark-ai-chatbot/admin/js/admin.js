@@ -172,7 +172,7 @@
     /* ================================================================
        RENDER: APP SHELL
        ================================================================ */
-    function renderAppShell() {
+    async function renderAppShell() {
         injectKeyframes();
         const app = $('#mark-ai-app');
         if (!app) return;
@@ -200,6 +200,11 @@
             </div>
             <div id="mark-modal-container"></div>
         </div>`;
+
+        // Load global settings once (api_token, remote_store_id, backend_url) up
+        // front, so EVERY page's backend sync (voice/training/crawl) works no
+        // matter which sidebar page was opened directly.
+        try { globalSettings = await api('GET', 'settings'); } catch (e) {}
 
         navigate(currentPage);
     }
@@ -2039,34 +2044,53 @@
     /* ================================================================
        TAB: CONVERSATIONS
        ================================================================ */
+    function renderConvoCard(c) {
+        const when = c.created_at ? formatDate(c.created_at) : '';
+        return `
+        <div style="${T.glassLight}padding:16px 20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+                <span style="display:flex;align-items:center;gap:8px;font-size:12px;color:#73787a;">
+                    <span class="material-symbols-outlined" style="font-size:16px;color:#954921;">person</span>
+                    Visitor ${esc((c.visitor_hash || '').substring(0, 8) || '—')}
+                    <span style="${T.badgeActive}padding:1px 7px;font-size:10px;">${esc(c.language || 'en')}</span>
+                </span>
+                <span style="font-size:12px;color:#73787a;">${when}</span>
+            </div>
+            <div style="font-size:14px;line-height:1.5;color:#1a1c1c;margin-bottom:6px;"><strong style="color:#954921;">Visitor:</strong> ${esc(c.last_user_msg || '—')}</div>
+            <div style="font-size:14px;line-height:1.5;color:#42484a;"><strong style="color:#4f6169;">Mark:</strong> ${esc(c.mark_response || '—')}</div>
+        </div>`;
+    }
+
     async function loadConversationsTab(storeId) {
         const container = $('#tab-content');
         container.innerHTML = robotLoader('Loading conversations...');
         try {
-            const [analyticsData, convosData] = await Promise.all([api('GET', 'stores/' + storeId + '/analytics'), api('GET', 'stores/' + storeId + '/conversations')]);
-            const convos = convosData.conversations || [];
+            // Read from the BACKEND log (where the live widget writes) via the
+            // store token — the WP mirror is empty, which is why it showed 0.
+            const settings = globalSettings || {};
+            const backendUrl = settings.backend_url || (markAI || {}).backendUrl || 'https://mark-udfz.onrender.com';
+            const token = settings.api_token || '';
+            const remoteId = settings.remote_store_id || storeId;
+            const resp = await fetch(backendUrl + '/api/stores/' + remoteId + '/conversations', {
+                headers: { 'X-Store-Token': token }
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            const convos = data.recent || [];
             container.innerHTML = `
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin-bottom:32px;">
-                ${renderMiniStat('Total', analyticsData.total_conversations, 'forum')}
-                ${renderMiniStat('Today', analyticsData.today, 'today')}
-                ${renderMiniStat('This Week', analyticsData.this_week, 'date_range')}
-                ${renderMiniStat('Unique Visitors', analyticsData.unique_visitors, 'person')}
+                ${renderMiniStat('Total', data.total_conversations || 0, 'forum')}
+                ${renderMiniStat('Today', data.today || 0, 'today')}
+                ${renderMiniStat('This Week', data.this_week || 0, 'date_range')}
+                ${renderMiniStat('Unique Visitors', data.unique_visitors || 0, 'person')}
             </div>
-            <div style="${T.glass}padding:24px;overflow-x:auto;">
-                <h3 style="${T.headline}font-size:20px;margin:0 0 20px;">Recent Conversations</h3>
-                ${convos.length === 0 ? '<p style="color:#73787a;font-size:14px;">No conversations yet.</p>'
-                : `<table style="width:100%;border-collapse:separate;border-spacing:0;">
-                    <thead><tr>${['Visitor','Language','User Message',"Mark's Response",'Time'].map(h =>
-                        `<th style="text-align:left;padding:12px 16px;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:#42484a;border-bottom:1px solid rgba(194,199,202,0.4);font-weight:600;">${h}</th>`).join('')}</tr></thead>
-                    <tbody>${convos.map(c => `<tr style="transition:background 0.2s;" onmouseenter="this.style.background='rgba(225,245,254,0.3)'" onmouseleave="this.style.background='transparent'">
-                        <td style="padding:14px 16px;border-bottom:1px solid rgba(194,199,202,0.2);font-family:monospace;font-size:12px;color:#73787a;">${esc((c.visitor_hash||'').substring(0,8))}</td>
-                        <td style="padding:14px 16px;border-bottom:1px solid rgba(194,199,202,0.2);"><span style="${T.badgeActive}padding:2px 8px;font-size:10px;">${esc(c.language||'en')}</span></td>
-                        <td style="padding:14px 16px;border-bottom:1px solid rgba(194,199,202,0.2);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;">${esc(c.last_user_msg)}</td>
-                        <td style="padding:14px 16px;border-bottom:1px solid rgba(194,199,202,0.2);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:#42484a;">${esc(c.mark_response)}</td>
-                        <td style="padding:14px 16px;border-bottom:1px solid rgba(194,199,202,0.2);font-size:12px;color:#73787a;white-space:nowrap;">${formatDate(c.created_at)}</td>
-                    </tr>`).join('')}</tbody></table>`}
-            </div>`;
-        } catch (e) { container.innerHTML = `<p style="color:#73787a;text-align:center;padding:40px;">${esc(e.message)}</p>`; }
+            <h3 style="${T.headline}font-size:20px;margin:0 0 16px;">Recent Conversations</h3>
+            ${convos.length === 0
+                ? `<div style="${T.glassLight}padding:40px;text-align:center;color:#73787a;font-size:14px;">No conversations yet — once visitors chat with Mark, each exchange appears here.</div>`
+                : `<div style="display:flex;flex-direction:column;gap:12px;">${convos.map(renderConvoCard).join('')}</div>`}`;
+        } catch (e) {
+            container.innerHTML = `<div style="${T.glassLight}padding:40px;text-align:center;color:#73787a;font-size:14px;">Conversations unavailable — the backend may be waking up. Try again in a moment.</div>`;
+        }
     }
 
     function copyCode(id) { const el = document.getElementById(id); if (!el) return; navigator.clipboard.writeText(el.textContent).then(() => toast('Copied!','success')).catch(() => { const ta = document.createElement('textarea'); ta.value = el.textContent; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Copied!','success'); }); }
