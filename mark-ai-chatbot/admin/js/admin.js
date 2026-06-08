@@ -2223,6 +2223,30 @@
                 </div>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:32px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span class="material-symbols-outlined" style="font-size:20px;color:#4f6169;">visibility</span><h3 style="${T.headline}font-size:24px;margin:0;">Where Mark Appears</h3></div>
+                <p style="color:#42484a;font-size:14px;margin:0 0 20px;">Choose which pages Mark shows on. (Mark never appears in the WordPress or page-builder editor.)</p>
+                <div style="max-width:380px;margin-bottom:20px;">
+                    <label style="${T.label}">Show Mark on</label>
+                    <select id="g-display-mode" onchange="markAdmin.toggleDisplayPages()" style="${T.select}">
+                        <option value="all" ${(s.widget_display_mode||'all')==='all'?'selected':''}>All pages</option>
+                        <option value="include" ${s.widget_display_mode==='include'?'selected':''}>Only selected pages</option>
+                        <option value="exclude" ${s.widget_display_mode==='exclude'?'selected':''}>All pages except selected</option>
+                    </select>
+                </div>
+                <div id="g-display-pages-wrap" style="display:${(s.widget_display_mode||'all')==='all'?'none':'block'};">
+                    <label style="${T.label}">Select pages</label>
+                    <div style="max-height:260px;overflow:auto;border:1px solid rgba(194,199,202,0.4);border-radius:10px;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px;">
+                        ${(s.available_pages||[]).length === 0
+                            ? '<p style="color:#73787a;font-size:13px;padding:8px;">No pages found yet — publish pages on your site, then refresh.</p>'
+                            : (s.available_pages||[]).map(p => `
+                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(149,73,33,0.06)'" onmouseleave="this.style.background='transparent'">
+                                <input type="checkbox" class="g-display-page" value="${p.id}" ${(s.widget_display_pages||[]).includes(p.id)?'checked':''} style="accent-color:#954921;width:15px;height:15px;flex-shrink:0;">
+                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.title)} <span style="color:#73787a;font-size:11px;">(${esc(p.type)})</span></span>
+                            </label>`).join('')}
+                    </div>
+                </div>
+            </div>
+            <div style="${T.glass}padding:32px;margin-bottom:32px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#4f6169;">cable</span><h3 style="${T.headline}font-size:24px;margin:0;">Connection Test</h3></div>
                 <p style="color:#42484a;font-size:14px;margin:0 0 16px;">Verify your Groq API key is working.</p>
                 <button style="${T.btnSecondary}" onclick="markAdmin.testConnection()" id="test-conn-btn"><span class="material-symbols-outlined" style="font-size:18px;">power</span> Test Groq Connection</button>
@@ -2247,8 +2271,21 @@
             greeting_sound_text: ($('#g-greeting-sound') || {}).value?.trim() || 'Ayie!',
             name_celebrate_text: ($('#g-celebrate-text') || {}).value?.trim() || 'Welcome',
             idle_timeout: Math.max(15, Math.min(600, parseInt(($('#g-idle-timeout') || {}).value) || 60)),
+            widget_display_mode: ($('#g-display-mode') || {}).value || 'all',
+            widget_display_pages: Array.from(document.querySelectorAll('.g-display-page:checked')).map(c => parseInt(c.value, 10)),
         };
-        try { await api('POST', 'settings', data); toast('Global settings saved!', 'success'); } catch (e) { toast(e.message, 'error'); }
+        try {
+            await api('POST', 'settings', data);
+            globalSettings = { ...globalSettings, ...data };
+            toast('Global settings saved!', 'success');
+        } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // Show/hide the page checklist based on the visibility mode.
+    function toggleDisplayPages() {
+        const mode = ($('#g-display-mode') || {}).value || 'all';
+        const wrap = $('#g-display-pages-wrap');
+        if (wrap) wrap.style.display = (mode === 'all') ? 'none' : 'block';
     }
 
     async function testConnection() {
@@ -2338,7 +2375,7 @@
         saveTraining, syncProducts,
         confirmDelete, deleteStore,
         copyCode, copyText, closeModal,
-        saveGlobalSettings, testConnection,
+        saveGlobalSettings, testConnection, toggleDisplayPages,
         completeSetup, showPreview,
         startTour, endTour,
         updateSizePreview,

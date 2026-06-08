@@ -67,9 +67,52 @@ class Mark_AI_Widget {
     }
 
     /**
+     * Decide whether Mark should appear on the current request.
+     * Respects page-builder edit modes (never show while editing) and the
+     * owner's visibility rules (all pages / only selected / all except selected).
+     */
+    private function should_display() {
+        // Never inside the WP admin or any page-builder edit/preview iframe.
+        if ( is_admin() ) {
+            return false;
+        }
+        $builder_flags = [ 'elementor-preview', 'et_fb', 'fl_builder', 'vc_editable', 'brizy-edit', 'tve', 'ct_builder' ];
+        foreach ( $builder_flags as $flag ) {
+            if ( isset( $_GET[ $flag ] ) ) {                       // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+                return false;
+            }
+        }
+        if ( isset( $_GET['action'] ) && $_GET['action'] === 'elementor' ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+            return false;
+        }
+
+        $settings = get_option( 'mark_ai_settings', [] );
+        $mode  = $settings['widget_display_mode'] ?? 'all';
+        if ( $mode === 'all' ) {
+            return true;
+        }
+
+        $pages = $settings['widget_display_pages'] ?? [];
+        $pages = is_array( $pages ) ? array_map( 'intval', $pages ) : [];
+        $current_id = (int) get_queried_object_id();
+        $listed = in_array( $current_id, $pages, true );
+
+        if ( $mode === 'include' ) {
+            return $listed;          // show ONLY on the selected pages
+        }
+        if ( $mode === 'exclude' ) {
+            return ! $listed;        // show everywhere EXCEPT the selected pages
+        }
+        return true;
+    }
+
+    /**
      * Enqueue frontend chatbot assets.
      */
     public function enqueue_assets() {
+        if ( ! $this->should_display() ) {
+            return;
+        }
         $settings = get_option('mark_ai_settings', []);
 
         // Google Fonts (Outfit for the robot UI) — display=swap already set
@@ -206,6 +249,9 @@ class Mark_AI_Widget {
      * Inject the chatbot container into the footer.
      */
     public function inject_widget() {
+        if ( ! $this->should_display() ) {
+            return;
+        }
         $settings = get_option('mark_ai_settings', []);
         $position = $settings['widget_position'] ?? 'bottom-right';
 

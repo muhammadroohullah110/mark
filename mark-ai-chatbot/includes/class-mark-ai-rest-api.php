@@ -220,6 +220,31 @@ class Mark_AI_Rest_API {
         } else {
             $settings['has_groq_key'] = false;
         }
+
+        // Published pages/posts the owner can target Mark to (visibility rules).
+        $available = [];
+        $posts = get_posts([
+            'post_type'   => [ 'page', 'post' ],
+            'post_status' => 'publish',
+            'numberposts' => 200,
+            'orderby'     => 'title',
+            'order'       => 'ASC',
+        ]);
+        foreach ( $posts as $p ) {
+            $available[] = [
+                'id'    => $p->ID,
+                'title' => $p->post_title !== '' ? $p->post_title : ( '#' . $p->ID ),
+                'type'  => $p->post_type,
+            ];
+        }
+        $settings['available_pages'] = $available;
+        if ( ! isset( $settings['widget_display_mode'] ) ) {
+            $settings['widget_display_mode'] = 'all';
+        }
+        if ( ! isset( $settings['widget_display_pages'] ) || ! is_array( $settings['widget_display_pages'] ) ) {
+            $settings['widget_display_pages'] = [];
+        }
+
         return new WP_REST_Response($settings, 200);
     }
 
@@ -232,7 +257,7 @@ class Mark_AI_Rest_API {
             'tts_rate', 'tts_pitch', 'llm_model', 'max_tokens', 'temperature',
             'widget_enabled', 'widget_position', 'auto_greet', 'primary_language',
             'widget_accent_color', 'greeting_sound_text', 'idle_timeout',
-            'name_celebrate_text',
+            'name_celebrate_text', 'widget_display_mode',
         ];
 
         foreach ($allowed as $key) {
@@ -248,6 +273,8 @@ class Mark_AI_Rest_API {
                     $value = sanitize_hex_color( $value ) ?: '';
                 } elseif ( $key === 'widget_position' ) {
                     $value = sanitize_text_field( $value );
+                } elseif ( $key === 'widget_display_mode' ) {
+                    $value = in_array( $value, [ 'all', 'include', 'exclude' ], true ) ? $value : 'all';
                 } elseif ( $key === 'groq_api_key' ) {
                     // Only update if a real key is provided (not masked)
                     if ( strpos( $value, '...' ) !== false || empty( $value ) ) {
@@ -260,6 +287,11 @@ class Mark_AI_Rest_API {
 
                 $current[$key] = $value;
             }
+        }
+
+        // Page-visibility list (array of page IDs) — sanitize to unique ints.
+        if ( isset( $body['widget_display_pages'] ) && is_array( $body['widget_display_pages'] ) ) {
+            $current['widget_display_pages'] = array_values( array_unique( array_map( 'intval', $body['widget_display_pages'] ) ) );
         }
 
         update_option('mark_ai_settings', $current);
