@@ -53,14 +53,14 @@ RATE_TTS = int(os.environ.get("RATE_TTS", "20"))
 
 # ── Edge TTS (FREE — no API key needed) ─────────────────────
 EDGE_TTS_VOICES = {
-    "en_male":   "en-US-GuyNeural",
+    "en_male":   "en-GB-RyanNeural",
     "en_female": "en-US-AriaNeural",
     "ur_male":   "ur-PK-AsadNeural",
     "ur_female": "ur-PK-UzmaNeural",
     "hi_male":   "hi-IN-MadhurNeural",
     "hi_female": "hi-IN-SwaraNeural",
 }
-DEFAULT_EDGE_VOICE = "en-US-GuyNeural"
+DEFAULT_EDGE_VOICE = "en-GB-RyanNeural"
 EDGE_TTS_RATE = "+0%"
 EDGE_TTS_PITCH = "+0Hz"
 

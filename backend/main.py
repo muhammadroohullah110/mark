@@ -359,7 +359,10 @@ def get_rag(tenant: dict | None) -> MarkRAG | None:
 def get_edge_voice(tenant: dict | None, language: str = "en") -> str:
     if tenant:
         en_voice = tenant.get("tts_voice", "")
-        if en_voice:
+        # Old installs defaulted to US 'Guy' — treat that legacy default as
+        # "unset" so existing stores pick up the new British default without a
+        # manual re-save. Any OTHER explicit voice choice is respected.
+        if en_voice and en_voice != "en-US-GuyNeural":
             return en_voice
     return EDGE_TTS_VOICES.get("en_male", DEFAULT_EDGE_VOICE)
 

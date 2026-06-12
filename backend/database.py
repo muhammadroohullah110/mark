@@ -153,7 +153,7 @@ def _build_schema(pg: bool) -> str:
             walking_enabled INTEGER NOT NULL DEFAULT 1,
             sound_effects INTEGER NOT NULL DEFAULT 1,
 
-            tts_voice TEXT DEFAULT 'en-US-GuyNeural',
+            tts_voice TEXT DEFAULT 'en-GB-RyanNeural',
             tts_voice_urdu TEXT DEFAULT 'ur-PK-AsadNeural',
             tts_rate TEXT DEFAULT '+0%',
             tts_pitch TEXT DEFAULT '+0Hz',

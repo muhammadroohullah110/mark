@@ -1898,12 +1898,12 @@
                 <p style="color:#42484a;font-size:14px;margin:0 0 32px;">Powered by <span style="color:#954921;font-weight:600;">Edge TTS</span> -- free, no API key needed.</p>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
                     <div><label style="${T.label}">English Voice</label><select id="s-tts-voice" style="${T.select}">
-                        <option value="en-US-GuyNeural" ${s.tts_voice==='en-US-GuyNeural'?'selected':''}>Guy (Male, Warm)</option>
-                        <option value="en-US-AriaNeural" ${s.tts_voice==='en-US-AriaNeural'?'selected':''}>Aria (Female, Natural)</option>
-                        <option value="en-US-JennyNeural" ${s.tts_voice==='en-US-JennyNeural'?'selected':''}>Jenny (Female, Friendly)</option>
-                        <option value="en-US-DavisNeural" ${s.tts_voice==='en-US-DavisNeural'?'selected':''}>Davis (Male, Casual)</option>
-                        <option value="en-GB-RyanNeural" ${s.tts_voice==='en-GB-RyanNeural'?'selected':''}>Ryan (Male, British)</option>
+                        <option value="en-GB-RyanNeural" ${!s.tts_voice||s.tts_voice==='en-US-GuyNeural'||s.tts_voice==='en-GB-RyanNeural'?'selected':''}>Ryan (Male, British) — default</option>
                         <option value="en-GB-SoniaNeural" ${s.tts_voice==='en-GB-SoniaNeural'?'selected':''}>Sonia (Female, British)</option>
+                        <option value="en-US-GuyNeural" ${s.tts_voice==='en-US-GuyNeural'?'':''}>Guy (Male, US Warm)</option>
+                        <option value="en-US-AriaNeural" ${s.tts_voice==='en-US-AriaNeural'?'selected':''}>Aria (Female, US Natural)</option>
+                        <option value="en-US-JennyNeural" ${s.tts_voice==='en-US-JennyNeural'?'selected':''}>Jenny (Female, US Friendly)</option>
+                        <option value="en-US-DavisNeural" ${s.tts_voice==='en-US-DavisNeural'?'selected':''}>Davis (Male, US Casual)</option>
                     </select></div>
                     <div><label style="${T.label}">Speech Rate</label><select id="s-tts-rate" style="${T.select}">
                         <option value="-20%" ${s.tts_rate==='-20%'?'selected':''}>Slow (-20%)</option><option value="-10%" ${s.tts_rate==='-10%'?'selected':''}>Slightly Slow</option>

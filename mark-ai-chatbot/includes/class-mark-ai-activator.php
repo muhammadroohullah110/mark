@@ -74,7 +74,7 @@ class Mark_AI_Activator {
             sound_effects tinyint(1) NOT NULL DEFAULT 1,
             widget_scale_desktop tinyint(2) NOT NULL DEFAULT 5,
             widget_scale_mobile tinyint(2) NOT NULL DEFAULT 5,
-            tts_voice varchar(100) DEFAULT 'en-US-GuyNeural',
+            tts_voice varchar(100) DEFAULT 'en-GB-RyanNeural',
             tts_rate varchar(20) DEFAULT '+0%',
             tts_pitch varchar(20) DEFAULT '+0Hz',
             groq_api_key varchar(255) DEFAULT '',
