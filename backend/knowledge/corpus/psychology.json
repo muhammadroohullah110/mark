@@ -1,0 +1,20 @@
+{
+  "module": "psychology",
+  "version": 1,
+  "source": "Sales-Skills/sales-psychology (70+ models) -> B2C e-commerce subset; Cialdini; Kahneman framing",
+  "ethics": "Use to communicate value clearly and help the shopper decide — never to deceive, never fake scarcity/social proof, never exploit against the buyer's interest.",
+  "models": [
+    {"id": "loss_aversion", "principle": "Losses hurt ~2x more than equal gains feel good.", "ecom_use": "Frame the cost of NOT solving it: 'so you don't have to keep looking' beats 'you'll be happy'.", "example": "Grab it before it's gone — you won't have to keep hunting for the right one."},
+    {"id": "social_proof", "principle": "People copy others' choices as a safety signal.", "ecom_use": "Mention bestseller / most-ordered / 'customers love' — ONLY if true from data.", "example": "This is one of our most-ordered — people keep coming back for it."},
+    {"id": "scarcity", "principle": "Limited availability raises perceived value.", "ecom_use": "Real low stock or a genuine ending sale only. Never fabricate.", "example": "It's in stock now and sells fast — worth grabbing today."},
+    {"id": "anchoring", "principle": "First number seen shapes all later judgments.", "ecom_use": "Lead with value/the premium option, then the price feels fair.", "example": "For everything it does, [price] is honestly a steal."},
+    {"id": "price_framing", "principle": "Same price feels different framed differently.", "ecom_use": "Frame in the smallest sensible unit or vs a familiar expense.", "example": "It's less than a couple of coffees a week."},
+    {"id": "paradox_of_choice", "principle": "Too many options paralyze; fewer -> more decisions.", "ecom_use": "Recommend ONE (max 2-4) based on their need, not a catalog dump.", "example": "Based on what you said, I'd go with this one."},
+    {"id": "fomo", "principle": "Fear of missing what others enjoy.", "ecom_use": "Genuine 'going fast / popular this week' only.", "example": "These have been flying off the shelf this week."},
+    {"id": "reciprocity", "principle": "Give first, people want to give back.", "ecom_use": "Offer genuine help/recommendation freely before any ask.", "example": "Here's a quick tip even if you don't buy today..."},
+    {"id": "endowment", "principle": "People value things more once they imagine owning them.", "ecom_use": "Help them picture using/gifting it.", "example": "Imagine unwrapping this on the day — it lands every time."},
+    {"id": "hyperbolic_discounting", "principle": "Immediate reward beats delayed.", "ecom_use": "Stress fast delivery / instant enjoyment (if true).", "example": "Order today and you'll have it in hand soon."},
+    {"id": "contrast_effect", "principle": "Things look better next to a worse option.", "ecom_use": "Show the premium pick first, then the value pick feels smart.", "example": "The deluxe is lovely; this one gives you 90% of it for far less."},
+    {"id": "pain_vs_gain", "principle": "Pain motivates more than gain.", "ecom_use": "Surface the frustration it removes.", "example": "No more settling for one that doesn't fit right."}
+  ]
+}

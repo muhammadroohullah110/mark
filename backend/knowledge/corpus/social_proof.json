@@ -1,0 +1,13 @@
+{
+  "module": "social_proof",
+  "version": 1,
+  "source": "Sales-Skills/social-proof-injection + sales-psychology -> B2C, truth-gated",
+  "rule": "Only use social proof that is TRUE and derivable from catalog/RAG/store data (bestseller flags, order counts, ratings, 'popular'). NEVER fabricate numbers, reviews, or testimonials.",
+  "patterns": [
+    {"id": "bestseller", "when": "product is flagged/known popular", "example_en": "This is one of our best-sellers.", "example_ur": "Ye humare best-sellers mein se hai."},
+    {"id": "most_ordered", "when": "high order volume known", "example_en": "People keep ordering this one.", "example_ur": "Log isse baar baar order karte hain."},
+    {"id": "category_favourite", "when": "top in its category", "example_en": "It's the favourite in [category].", "example_ur": "[category] mein ye sabse pasandida hai."},
+    {"id": "rating", "when": "rating exists in data", "example_en": "It's one of our top-rated.", "example_ur": "Ye top-rated mein hai."}
+  ],
+  "forbidden": ["inventing review counts", "fake testimonials", "made-up star ratings", "claiming popularity without data"]
+}

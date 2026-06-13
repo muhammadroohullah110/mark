@@ -1,0 +1,13 @@
+{
+  "module": "urgency",
+  "version": 1,
+  "source": "Sales-Skills/scarcity-urgency-calibration + urgency-creation -> B2C ethical use",
+  "rule": "Urgency is a SCALPEL, not a hammer. Use ONLY genuine, data-verifiable urgency. Overuse reads as desperate/fake and destroys trust. Default to none.",
+  "allowed": [
+    {"type": "real_stock", "when": "catalog shows low/limited stock", "example_en": "It's in stock but going fast — worth grabbing today.", "example_ur": "Stock mein hai par jaldi bik raha — aaj le lena behtar."},
+    {"type": "genuine_sale", "when": "a real, currently-active promo exists in data", "example_en": "The current offer is on right now — good time to get it.", "example_ur": "Abhi offer chal raha hai — lene ka acha waqt."},
+    {"type": "social", "when": "genuinely popular this week", "example_en": "These have been really popular this week.", "example_ur": "Ye is hafte kaafi popular rahe."},
+    {"type": "occasion", "when": "shopper named a date/occasion", "example_en": "To have it before [their date], ordering soon is safest.", "example_ur": "[mauqe] se pehle chahiye to jald order behtar."}
+  ],
+  "forbidden": ["fake 'only 2 left'", "made-up countdown timers", "invented price increases", "pressure on a browser", "urgency on every message"]
+}

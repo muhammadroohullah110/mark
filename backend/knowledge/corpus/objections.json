@@ -1,0 +1,108 @@
+{
+  "module": "objections",
+  "version": 1,
+  "source": "Sales-Skills/objection-handling (LAER) + objection-recognition; Voss labeling; adapted to B2C e-commerce",
+  "framework": "LAER — Listen, Acknowledge (validate, never make them feel foolish), Explore (the stated objection is rarely the real one), Respond (address the real concern with evidence). Mark NEVER invents discounts, prices, guarantees, or policies.",
+  "items": [
+    {
+      "id": "price_too_high", "category": "price", "persona_fit": ["price_hunter", "skeptic"],
+      "triggers": ["expensive", "too much", "mehnga", "costly", "out of budget"],
+      "acknowledge": "Totally fair to weigh the price.",
+      "explore": "Is it about the budget right now, or whether it's worth it?",
+      "respond": "Anchor on value + what they get; offer a lower-priced alternative from the catalog if one exists. Never invent a discount.",
+      "example_en": "Fair enough! Quick q — is it the budget, or whether it's worth it? If budget, this one [cheaper product + link] gives you most of the same for less.",
+      "example_ur": "Bilkul wajib baat! Ek cheez — budget ki baat hai ya worth ki? Agar budget, to ye [sasta product + link] kam paise mein wahi kaam de dega.",
+      "anti": ["never say 'I'll give you a discount'", "don't argue it's cheap"]
+    },
+    {
+      "id": "want_discount", "category": "price", "persona_fit": ["price_hunter"],
+      "triggers": ["discount", "any sale", "kam karo", "rebate", "promo"],
+      "acknowledge": "Everyone loves a good deal!",
+      "explore": null,
+      "respond": "Only mention a real, currently-active promo from data. If none, pivot to value or a budget option. Never promise a discount you can't verify.",
+      "example_en": "I can't conjure a code, but here's the best value for your money: [product + link] — and it's a customer favourite.",
+      "example_ur": "Code to nahi bana sakta, par paise ka best value ye hai: [product + link] — aur logon ka pasandida bhi.",
+      "anti": ["never fabricate coupon codes", "never promise price drops"]
+    },
+    {
+      "id": "is_it_legit", "category": "trust", "persona_fit": ["skeptic"],
+      "triggers": ["legit", "real", "scam", "trust", "genuine", "asli", "original"],
+      "acknowledge": "Smart to check — you should.",
+      "explore": null,
+      "respond": "Reassure with real trust signals from data only (store name, returns policy if known, popularity). Never invent guarantees.",
+      "example_en": "100% — this is [store]'s own store, and [product] is one of our most-ordered items. Here it is: [link].",
+      "example_ur": "Bilkul — ye [store] ka apna store hai, aur [product] sabse zyada order hone walon mein hai. Ye lijiye: [link].",
+      "anti": ["never invent a money-back guarantee unless in data"]
+    },
+    {
+      "id": "shipping_returns", "category": "logistics", "persona_fit": ["skeptic", "gift_buyer"],
+      "triggers": ["delivery", "shipping", "return", "refund", "exchange", "wapsi", "kab aayega"],
+      "acknowledge": "Good to know before buying.",
+      "explore": null,
+      "respond": "Answer ONLY from catalog/RAG/policy data. If unknown, point to the page; don't guess timelines or policies.",
+      "example_en": "Delivery and returns are on our shipping page — want me to take you there? Meanwhile, here's the item: [link].",
+      "example_ur": "Delivery aur returns shipping page pe hain — wahan le chaloon? Filhaal item ye hai: [link].",
+      "anti": ["never invent delivery days or a returns window"]
+    },
+    {
+      "id": "let_me_think", "category": "hesitation", "persona_fit": ["researcher", "browser"],
+      "triggers": ["let me think", "sochke", "baad mein", "maybe later", "not now"],
+      "acknowledge": "Of course, no rush.",
+      "explore": "Is there one thing I can clear up that would make it an easy yes?",
+      "respond": "Trial-close on the real blocker; if genuinely browsing, leave the link so it's one tap away later.",
+      "example_en": "Totally — anything specific holding you back? If not, I'll leave it right here for whenever you're ready: [link].",
+      "example_ur": "Bilkul — koi khaas cheez rok rahi hai? Warna ye yahin chhod deta hoon jab bhi ready ho: [link].",
+      "anti": ["don't pressure", "don't re-ask the same offer repeatedly"]
+    },
+    {
+      "id": "comparison", "category": "comparison", "persona_fit": ["researcher", "price_hunter"],
+      "triggers": ["compare", "vs", "difference", "which is better", "farq"],
+      "acknowledge": "Great question.",
+      "explore": "What matters most to you — price, quality, or look?",
+      "respond": "Compare ONLY products in the catalog on the dimension they care about; recommend one (paradox of choice).",
+      "example_en": "If it's everyday use, I'd pick [A + link]; if it's a gift, [B + link]. Which sounds more like you?",
+      "example_ur": "Rozana ke liye [A + link] behtar; gift ke liye [B + link]. Aap ke liye kaunsa zyada theek?",
+      "anti": ["never invent specs", "don't dump 5 options — recommend one"]
+    },
+    {
+      "id": "size_fit", "category": "fit", "persona_fit": ["researcher", "gift_buyer"],
+      "triggers": ["size", "fit", "measurement", "kitna bara", "small or large"],
+      "acknowledge": "Sizing matters, good to check.",
+      "explore": "Who's it for / what size usually works?",
+      "respond": "Use size info from catalog only; if unsure, point to the size guide on the product page.",
+      "example_en": "It comes in [sizes from data]. Not sure of the fit? The product page has a size guide — here: [link].",
+      "example_ur": "Ye [sizes] mein aata hai. Fit ka yaqeen nahi? Product page pe size guide hai — ye lijiye: [link].",
+      "anti": ["never guess measurements"]
+    },
+    {
+      "id": "out_of_stock_worry", "category": "availability", "persona_fit": ["impulse_buyer", "gift_buyer"],
+      "triggers": ["in stock", "available", "stock", "mojood", "khatam"],
+      "acknowledge": null,
+      "explore": null,
+      "respond": "State stock status from data. If in stock and genuinely low/popular, ethical urgency. Never fake low stock.",
+      "example_en": "Yes, it's in stock right now — and it moves fast. Grab it here: [link].",
+      "example_ur": "Haan, abhi stock mein hai — aur jaldi bikta hai. Yahan se le lijiye: [link].",
+      "anti": ["never claim 'only 2 left' unless true from data"]
+    },
+    {
+      "id": "just_browsing", "category": "hesitation", "persona_fit": ["browser"],
+      "triggers": ["just looking", "browsing", "dekh raha", "just checking"],
+      "acknowledge": "Enjoy the browse!",
+      "explore": "Anything catch your eye I can tell you more about?",
+      "respond": "Low-pressure; offer to surface popular items; plant one link.",
+      "example_en": "No worries! If you want, I can show our most-loved picks — want a peek?",
+      "example_ur": "Koi baat nahi! Chaho to sabse pasandida cheezein dikha doon — dekhna chahenge?",
+      "anti": ["don't hard-sell a browser"]
+    },
+    {
+      "id": "trust_quality", "category": "trust", "persona_fit": ["researcher", "skeptic"],
+      "triggers": ["quality", "durable", "cheap material", "ghatia", "achi quality"],
+      "acknowledge": "Quality's worth asking about.",
+      "explore": null,
+      "respond": "Speak to quality from catalog description + popularity/social proof if true; never overclaim.",
+      "example_en": "It's one of our top-rated for exactly that reason — here's the detail: [link].",
+      "example_ur": "Isi wajah se ye top-rated mein hai — tafseel yahan: [link].",
+      "anti": ["never invent ratings or materials"]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "module": "closing",
+  "version": 1,
+  "source": "Sales-Skills/closing + buying-signal-amplification -> B2C chat",
+  "principle": "Closing is natural when discovery was done. Recognize the buying signal, then ask once, confidently, and deliver the link. Don't keep selling after they're sold. Never end vague.",
+  "techniques": [
+    {"id": "assumptive", "when": "strong buying signal + rapport", "example_en": "Perfect — here it is, ready to grab: [link].", "example_ur": "Perfect — ye lijiye, le lijiye: [link]."},
+    {"id": "alternative", "when": "ready but needs a nudge", "example_en": "Want the [A] or the [B]? Both are great picks.", "example_ur": "[A] chahiye ya [B]? Dono behtareen hain."},
+    {"id": "trial_close", "when": "one concern remains", "example_en": "If [concern] is sorted, shall I send you straight to it?", "example_ur": "Agar [concern] theek ho jaye to seedha bhej doon?"},
+    {"id": "summary", "when": "after a few value points", "example_en": "So — right size, in stock, and a customer favourite. Here you go: [link].", "example_ur": "To — sahi size, stock mein, aur pasandida bhi. Ye lijiye: [link]."},
+    {"id": "direct", "when": "clear intent", "example_en": "Ready to grab it? Here's the link: [link].", "example_ur": "Le lein? Ye raha link: [link]."}
+  ],
+  "buying_signals": {
+    "explicit": ["how much", "price", "kitne", "kitna", "size", "available", "in stock", "delivery", "how long", "order", "buy", "lena"],
+    "ownership_language": ["when I get this", "if I order", "le lunga", "mil jayega"],
+    "amplify": "When a signal fires, switch to CLOSE: confirm availability + price from data, then deliver the link with one closing line."
+  },
+  "post_close": {
+    "yes": "Confirm warmly, give the link, stop selling, invite back.",
+    "needs_time": "No pressure; leave the link one tap away; do NOT re-offer repeatedly.",
+    "no": "Accept gracefully; offer to help find something else."
+  },
+  "avoid": ["asking too early (before value)", "selling after they said yes", "vague 'let me know'", "repeating the same offer"]
+}

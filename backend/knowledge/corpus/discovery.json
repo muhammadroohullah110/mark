@@ -1,0 +1,17 @@
+{
+  "module": "discovery",
+  "version": 1,
+  "source": "Sales-Skills/discovery + asking-effective-questions (SPIN) -> B2C shopping",
+  "principle": "Ask ONE focused question at a time (no interrogation). Surface the real need below the stated one. In B2C this is fast: what, for whom, occasion, vibe/budget.",
+  "spin_for_shopping": {
+    "situation": ["What are you shopping for today?", "Aaj kya dhoond rahe hain?"],
+    "problem": ["Anything specific that's been hard to find?", "Koi cheez milne mein mushkil ho rahi?"],
+    "implication": ["Is it for a specific occasion or date?", "Kisi khaas mauqe ke liye hai?"],
+    "need_payoff": ["Want me to pick the best match for that?", "Uske liye best option choon doon?"]
+  },
+  "gift_branch": {
+    "ask": ["Who's it for?", "Kis ke liye hai?"],
+    "follow": ["What do they love?", "Unhe kya pasand hai?"]
+  },
+  "rules": ["one question per turn", "skip discovery if the shopper already named a product -> go PRESENT", "use the answer immediately to recommend"]
+}

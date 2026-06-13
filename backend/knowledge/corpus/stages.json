@@ -1,0 +1,61 @@
+{
+  "module": "stages",
+  "version": 1,
+  "source": "Sales-Skills/closing + conversational-flow-management; adapted to B2C e-commerce chat",
+  "description": "Mark's sales stage machine. Pure-heuristic stage detection drives which doctrine blocks get injected. Hot-path, no LLM calls.",
+  "stages": [
+    {
+      "id": "GREET",
+      "goal": "Warm welcome, learn the shopper's name once.",
+      "enter_when": "first turn, __INIT__, or returning visitor",
+      "moves": ["warm 1-line greeting", "ask name on first visit (once)", "invite their need"],
+      "doctrine": ["building_rapport", "tone_matching"],
+      "next": ["DISCOVER", "PRESENT"]
+    },
+    {
+      "id": "DISCOVER",
+      "goal": "Understand WHAT they want and FOR WHOM before recommending.",
+      "enter_when": "greeted but need still vague",
+      "moves": ["ONE focused need question", "occasion / recipient if gift", "soft budget read"],
+      "doctrine": ["discovery", "asking_questions", "active_listening"],
+      "next": ["PRESENT"]
+    },
+    {
+      "id": "PRESENT",
+      "goal": "Recommend specific products with price + clean link.",
+      "enter_when": "need is clear OR shopper names a product/category",
+      "moves": ["name 2-4 real products w/ price", "one tangible benefit each (storytelling)", "clean link pill", "social proof only if true"],
+      "doctrine": ["product_knowledge", "storytelling", "social_proof", "psychology"],
+      "next": ["OBJECTION", "CLOSE"]
+    },
+    {
+      "id": "OBJECTION",
+      "goal": "Resolve the concern with LAER; never fake a discount or guarantee.",
+      "enter_when": "shopper pushes back (price / trust / shipping / 'let me think')",
+      "moves": ["LAER", "persona-aware reframe", "value hold, no invented promises"],
+      "doctrine": ["objections", "pricing", "psychology"],
+      "next": ["PRESENT", "CLOSE"]
+    },
+    {
+      "id": "CLOSE",
+      "goal": "Convert — get the click / cart / decision.",
+      "enter_when": "a buying signal is detected OR an objection was just resolved",
+      "moves": ["assumptive or alternative close", "micro-commitment ladder (small yes -> bigger yes)", "ethical urgency ONLY if genuinely true", "deliver the link and stop selling"],
+      "doctrine": ["closing", "micro_commitments", "urgency"],
+      "next": ["AFTERCARE"]
+    },
+    {
+      "id": "AFTERCARE",
+      "goal": "Reassure, optionally cross-sell, invite back.",
+      "enter_when": "shopper indicated intent to buy / link delivered",
+      "moves": ["reassure (returns/shipping if known from data)", "ONE relevant cross-sell", "warm invite back"],
+      "doctrine": ["cross_sell"],
+      "next": []
+    }
+  ],
+  "signal_lexicon": {
+    "buying": ["price", "cost", "how much", "kitne", "kitna", "qeemat", "size", "available", "in stock", "stock", "delivery", "shipping", "deliver", "order", "buy", "lena", "le lunga", "le lon", "cart", "checkout", "kharidna"],
+    "objection": ["expensive", "too much", "mehnga", "costly", "not sure", "sochke", "let me think", "think about", "trust", "legit", "real", "fake", "return", "refund", "wapsi", "later", "baad mein", "discount", "cheaper", "sasta"],
+    "affirmation": ["yes", "yeah", "yep", "sure", "ok", "okay", "haan", "han", "g", "ji", "theek", "karo", "kardo", "dikhao", "show me"]
+  }
+}

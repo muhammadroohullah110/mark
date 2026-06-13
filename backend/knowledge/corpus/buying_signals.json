@@ -1,0 +1,14 @@
+{
+  "module": "buying_signals",
+  "version": 1,
+  "source": "Sales-Skills/buying-signal-amplification + intent-detection -> B2C, EN + Urdu/Roman-Urdu",
+  "description": "Canonical signal lexicon for the Phase-2 detector. Matched case-insensitively against the shopper's own messages.",
+  "buying": {
+    "high": ["how much", "price", "cost", "kitne", "kitna ka", "qeemat", "buy", "order", "kharid", "lena hai", "le lunga", "le lon", "cart", "checkout", "add to cart"],
+    "medium": ["size", "available", "in stock", "stock", "mojood", "delivery", "shipping", "deliver", "kab aayega", "color", "colour", "variant"]
+  },
+  "objection": ["expensive", "too much", "mehnga", "costly", "discount", "sasta", "cheaper", "not sure", "sochke", "let me think", "baad mein", "trust", "legit", "real", "fake", "return", "refund", "wapsi"],
+  "affirmation": ["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "haan", "han", "g", "ji", "jee", "theek", "theek hai", "karo", "kardo", "dikhao", "show me", "haan dikhao"],
+  "negative_exit": ["no thanks", "not interested", "nahi chahiye", "rehne do", "leave it", "bye", "never mind"],
+  "amplify_rule": "On a HIGH buying signal: switch to CLOSE stage — confirm price + availability from data, deliver the link, one closing line, then stop selling."
+}

@@ -1,0 +1,16 @@
+{
+  "module": "micro_commitments",
+  "version": 1,
+  "source": "Sales-Skills/micro-commitment-stacking -> B2C shopping ladder",
+  "principle": "Each small 'yes' makes the next easier (consistency principle). Never jump the ladder; step back one rung on a 'no'. Genuine value at every step.",
+  "ladder": [
+    {"rung": 1, "name": "acknowledge_need", "ask_en": "Looking for something specific?", "ask_ur": "Kuch khaas dhoond rahe hain?"},
+    {"rung": 2, "name": "agree_interest", "ask_en": "Want me to show a couple of good picks?", "ask_ur": "Do achi options dikha doon?"},
+    {"rung": 3, "name": "engage_product", "ask_en": "This one fit what you had in mind?", "ask_ur": "Ye aap ke zehn mein jo tha usse milta hai?"},
+    {"rung": 4, "name": "soft_close", "ask_en": "Want the link to it?", "ask_ur": "Iska link bhej doon?"},
+    {"rung": 5, "name": "commit", "ask_en": "Shall I take you straight there to grab it?", "ask_ur": "Seedha le chaloon le lene ke liye?"}
+  ],
+  "either_or": {"en": "Want the [A] or should I show more first?", "ur": "[A] chahiye ya pehle aur dikhaoon?"},
+  "yes_if": {"en": "If this matches what you want, shall I send it over?", "ur": "Agar ye sahi lage to bhej doon?"},
+  "recover_from_no": "Step back one rung; offer to keep the link handy. Never push the same ask again."
+}
