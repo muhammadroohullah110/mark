@@ -45,6 +45,7 @@ from admin_routes import router as admin_router, get_current_user
 from cache import ResponseCache
 from llm_router import LLMRouter
 import learning_engine as maie
+import sales_cortex
 
 load_dotenv()
 
@@ -1031,16 +1032,31 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     # Detect this visitor's buyer persona and, if the store has a trained
     # playbook, fold the matching strategy into Mark's system prompt.
     # Pure-Python + one cached DB read — negligible latency.
+    # Detect buyer persona (cheap, pure-python) — used by BOTH MAIE and Sales Cortex.
     detected_persona = maie.DEFAULT_PERSONA
+    try:
+        detected_persona = maie.detect_persona(cleaned)
+    except Exception:
+        pass
+
+    # MAIE: per-store LEARNED playbook (what this store's buyers actually do).
     if tenant and tenant.get("auto_learning_enabled", 1) and body.store_id:
         try:
-            detected_persona = maie.detect_persona(cleaned)
             playbook = get_active_playbook(body.store_id)
             block = maie.build_playbook_prompt_block(playbook, detected_persona)
             if block:
                 messages_for_api[0]["content"] += "\n" + block
         except Exception as e:
             logger.warning(f"MAIE inject skipped: {e}")
+
+    # Sales Cortex: universal elite-sales DOCTRINE (stage + persona + objection).
+    # Pure-python, ~300 tokens, kill-switch via env SALES_CORTEX=0.
+    try:
+        cortex_block = sales_cortex.build_cortex_block(cleaned, detected_persona)
+        if cortex_block:
+            messages_for_api[0]["content"] += "\n" + cortex_block
+    except Exception as e:
+        logger.warning(f"Cortex inject skipped: {e}")
 
     # ── Cache check (skip for init/returning/streaming) ──
     rag_snippet = ""
