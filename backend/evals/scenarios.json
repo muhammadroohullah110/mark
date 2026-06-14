@@ -1,0 +1,28 @@
+{
+  "description": "Cortex decision scenarios — validate the sales brain picks the right stage/persona/objection per turn. 'turns' are the visitor's messages; assistant replies are stubbed between them. Expectations check the FINAL turn's Cortex decision.",
+  "scenarios": [
+    {"id": "greet_init", "turns": [], "expect": {"stage": "GREET"}},
+    {"id": "discover_first", "turns": ["hi there"], "expect": {"stage": "DISCOVER"}},
+    {"id": "present_after_need", "turns": ["hi", "show me running shoes"], "expect": {"stage": "PRESENT"}},
+
+    {"id": "price_objection", "buyer": "price_hunter", "turns": ["show me bags", "this is too expensive"], "expect": {"stage": "OBJECTION", "persona": "price_hunter", "objection": "price_too_high"}},
+    {"id": "discount_ask", "buyer": "price_hunter", "turns": ["any discount available"], "expect": {"stage": "OBJECTION", "persona": "price_hunter", "objection": "want_discount"}},
+    {"id": "cheaper_request", "buyer": "price_hunter", "turns": ["got anything cheaper"], "expect": {"stage": "OBJECTION", "persona": "price_hunter"}},
+
+    {"id": "trust_legit", "buyer": "skeptic", "turns": ["is this store legit"], "expect": {"stage": "OBJECTION", "persona": "skeptic", "objection": "is_it_legit"}},
+    {"id": "trust_return", "buyer": "skeptic", "turns": ["what is your return policy"], "expect": {"stage": "OBJECTION", "persona": "skeptic", "objection": "shipping_returns"}},
+
+    {"id": "comparison", "buyer": "researcher", "turns": ["what's the difference between these"], "expect": {"stage": "OBJECTION", "objection": "comparison"}},
+
+    {"id": "gift_persona", "buyer": "gift_buyer", "turns": ["i need a gift for my wife birthday"], "expect": {"persona": "gift_buyer"}},
+
+    {"id": "buying_signal_price", "buyer": "impulse_buyer", "turns": ["i love this", "how much is it"], "expect": {"stage": "CLOSE", "buying_signal": true}},
+    {"id": "buying_signal_urdu", "buyer": "impulse_buyer", "turns": ["ye wala", "kitne ka hai"], "expect": {"stage": "CLOSE", "buying_signal": true}},
+    {"id": "affirm_close", "buyer": "impulse_buyer", "turns": ["do you have it", "Yes! here it is", "yes"], "expect": {"stage": "CLOSE"}},
+    {"id": "affirm_urdu_close", "turns": ["dikhao baby toys", "Sure, here are some", "haan"], "expect": {"stage": "CLOSE"}},
+
+    {"id": "browser_lowpressure", "buyer": "browser", "turns": ["just looking around"], "expect": {"persona": "browser"}},
+
+    {"id": "size_objection", "buyer": "researcher", "turns": ["what size does it come in"], "expect": {"stage": "OBJECTION", "objection": "size_fit"}}
+  ]
+}

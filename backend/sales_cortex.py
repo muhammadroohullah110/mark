@@ -59,8 +59,10 @@ def detect_stage(messages, signals) -> str:
 
     if n == 0:
         return "GREET"
-    # An objection takes priority — resolve before anything else.
-    if _hit(last, signals["objection"]):
+    # An objection takes priority — resolve before anything else. Enter OBJECTION
+    # on either the objection signal lexicon OR a concrete objection-card match
+    # (e.g. "difference"/"size" live only in the cards, not the lexicon).
+    if _hit(last, signals["objection"]) or (DOCTRINE and match_objection(last, DOCTRINE)):
         return "OBJECTION"
     # Explicit purchase intent OR a bare "yes/haan" after an offer → close.
     if _hit(last, signals["buying_high"]) or bare in signals["affirmation"]:
