@@ -11,8 +11,9 @@
 
 /* -- Reset WP Admin Styles Inside Our App -- */
 #mark-ai-app {
-    font-family: 'Open Sans', -apple-system, sans-serif;
-    color: #1a1c1c;
+    font-family: 'Space Grotesk', -apple-system, sans-serif;
+    color: #F5F7FA;
+    background: #050507;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.6;
@@ -28,8 +29,8 @@
 #mark-ai-app h2,
 #mark-ai-app h3,
 #mark-ai-app h4 {
-    font-family: 'Open Sans', sans-serif;
-    color: #1a1c1c;
+    font-family: 'Space Grotesk', sans-serif;
+    color: #F5F7FA;
     line-height: 1.2;
 }
 
@@ -52,12 +53,12 @@
 }
 
 #mark-ai-app ::-webkit-scrollbar-thumb {
-    background: #c2c7ca;
+    background: rgba(45,226,230,0.3);
     border-radius: 3px;
 }
 
 #mark-ai-app ::-webkit-scrollbar-thumb:hover {
-    background: #73787a;
+    background: rgba(45,226,230,0.5);
 }
 
 /* -- Range slider (Mark Size) -- */
@@ -66,10 +67,10 @@
     appearance: none;
     width: 20px; height: 20px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #fc9b6c, #954921);
+    background: linear-gradient(135deg, #5CF6FA, #2DE2E6);
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(149,73,33,0.35);
-    border: 2px solid #fff;
+    box-shadow: 0 2px 12px rgba(45,226,230,0.45);
+    border: 2px solid #04181A;
     margin-top: -7px;
     transition: transform 0.15s ease;
 }
@@ -79,10 +80,10 @@
 #mark-ai-app input[type="range"]::-moz-range-thumb {
     width: 20px; height: 20px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #fc9b6c, #954921);
+    background: linear-gradient(135deg, #5CF6FA, #2DE2E6);
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(149,73,33,0.35);
-    border: 2px solid #fff;
+    box-shadow: 0 2px 12px rgba(45,226,230,0.45);
+    border: 2px solid #04181A;
 }
 
 /* -- Chart canvas -- */
