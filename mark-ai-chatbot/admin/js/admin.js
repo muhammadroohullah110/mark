@@ -36,15 +36,15 @@
        ================================================================ */
     const T = {
         pageBg: `background:radial-gradient(1200px 600px at 80% -10%, rgba(45,226,230,0.06), transparent 60%), #050507;position:relative;color:#F5F7FA;`,
-        glass: `background:rgba(255,255,255,0.035);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(45,226,230,0.15);box-shadow:0 8px 32px rgba(0,0,0,0.45);border-radius:16px;position:relative;overflow:hidden;`,
-        glassLight: `background:rgba(255,255,255,0.05);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(45,226,230,0.1);box-shadow:0 4px 18px rgba(0,0,0,0.35);border-radius:16px;`,
+        glass: `background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.022));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(45,226,230,0.16);box-shadow:0 12px 44px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.07);border-radius:18px;position:relative;overflow:hidden;`,
+        glassLight: `background:linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.02));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(45,226,230,0.11);box-shadow:0 6px 24px rgba(0,0,0,0.38),inset 0 1px 0 rgba(255,255,255,0.05);border-radius:18px;`,
         input: `background:rgba(255,255,255,0.04);border:1px solid rgba(154,163,173,0.22);color:#F5F7FA;padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:14px;width:100%;outline:none;border-radius:10px;transition:border-color .25s ease,box-shadow .25s ease;`,
         select: `background:rgba(255,255,255,0.04);border:1px solid rgba(154,163,173,0.22);color:#F5F7FA;padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:14px;width:100%;outline:none;border-radius:10px;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235CF6FA' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;`,
         btnPrimary: `background:linear-gradient(135deg,#2DE2E6,#06B6C7);color:#04181A;border:none;border-radius:10px;padding:12px 24px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform .2s ease,box-shadow .25s ease,filter .2s ease;box-shadow:0 4px 22px rgba(45,226,230,0.35);letter-spacing:0.02em;`,
         btnSecondary: `background:rgba(45,226,230,0.08);color:#5CF6FA;border:1px solid rgba(45,226,230,0.28);border-radius:10px;padding:10px 20px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;`,
         btnDanger: `background:rgba(239,68,68,0.1);color:#ff7a7a;border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 20px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;`,
         label: `display:block;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;color:#9AA3AD;margin-bottom:6px;letter-spacing:0.04em;line-height:1;`,
-        statValue: `font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;line-height:1.1;letter-spacing:-0.02em;color:#F5F7FA;`,
+        statValue: `font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;line-height:1.1;letter-spacing:-0.02em;background:linear-gradient(135deg,#FFFFFF 0%,#5CF6FA 120%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;`,
         headline: `font-family:'Space Grotesk',sans-serif;font-weight:500;color:#F5F7FA;`,
         muted: `color:#9AA3AD;font-size:13px;`,
         cardHoverShadow: '0 14px 48px rgba(45,226,230,0.18)',
@@ -181,6 +181,46 @@
             .mark-ai-app-root a { color:#5CF6FA; }
             .mark-orb-mars { position:absolute;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,rgba(45,226,230,0.12) 0%,transparent 70%);filter:blur(50px);top:-180px;right:-120px;pointer-events:none;z-index:0;animation:markFloat 12s ease-in-out infinite; }
             .mark-orb-saturn { position:absolute;width:620px;height:620px;border-radius:50%;background:radial-gradient(circle,rgba(6,182,199,0.1) 0%,transparent 70%);filter:blur(55px);bottom:-220px;left:-160px;pointer-events:none;z-index:0;animation:markFloat 16s ease-in-out infinite reverse; }
+            /* ── elevated motion + components (the "insane" layer) ── */
+            @keyframes markTextShine { to { background-position:200% center; } }
+            .mark-gradient-text {
+                background:linear-gradient(100deg,#F5F7FA 0%,#5CF6FA 45%,#2DE2E6 55%,#F5F7FA 100%);
+                background-size:200% auto;-webkit-background-clip:text;background-clip:text;
+                -webkit-text-fill-color:transparent;color:transparent;
+                animation:markTextShine 7s linear infinite;
+            }
+            /* staggered card entrance — cards rise in sequence, not all at once */
+            .mark-stagger > * { animation:markRise .55s cubic-bezier(0.16,1,0.3,1) both; }
+            .mark-stagger > *:nth-child(1){animation-delay:.04s}
+            .mark-stagger > *:nth-child(2){animation-delay:.10s}
+            .mark-stagger > *:nth-child(3){animation-delay:.16s}
+            .mark-stagger > *:nth-child(4){animation-delay:.22s}
+            .mark-stagger > *:nth-child(5){animation-delay:.28s}
+            .mark-stagger > *:nth-child(6){animation-delay:.34s}
+            /* premium stat card: top accent glow line + lift on hover */
+            .mark-stat-card { position:relative; transition:transform .28s cubic-bezier(0.16,1,0.3,1), box-shadow .28s ease, border-color .28s ease; }
+            .mark-stat-card::before {
+                content:'';position:absolute;top:0;left:24px;right:24px;height:1px;
+                background:linear-gradient(90deg,transparent,rgba(45,226,230,0.7),transparent);
+                opacity:.5;transition:opacity .28s ease;
+            }
+            .mark-stat-card:hover { transform:translateY(-5px); box-shadow:0 22px 60px rgba(45,226,230,0.22),inset 0 1px 0 rgba(255,255,255,0.08); border-color:rgba(45,226,230,0.5) !important; }
+            .mark-stat-card:hover::before { opacity:1; }
+            /* glowing icon chip used in stat cards */
+            .mark-icon-chip {
+                display:inline-flex;align-items:center;justify-content:center;
+                width:40px;height:40px;border-radius:12px;
+                background:linear-gradient(135deg,rgba(45,226,230,0.16),rgba(6,182,199,0.08));
+                border:1px solid rgba(45,226,230,0.25);
+                box-shadow:0 4px 16px rgba(45,226,230,0.18);
+                color:#5CF6FA;
+            }
+            .mark-icon-chip .material-symbols-outlined { font-size:22px; }
+            @media (prefers-reduced-motion: reduce) {
+                .mark-gradient-text { animation:none; }
+                .mark-stagger > * { animation:none; }
+                .mark-orb-mars, .mark-orb-saturn { animation:none; }
+            }
         `;
         document.head.appendChild(style);
     }
@@ -211,7 +251,7 @@
         <div class="mark-ai-app-root" style="${T.pageBg}min-height:500px;padding:0;font-family:'Space Grotesk',sans-serif;color:#F5F7FA;-webkit-font-smoothing:antialiased;border-radius:8px;overflow:hidden;">
             <div class="mark-orb-mars"></div>
             <div class="mark-orb-saturn"></div>
-            <div style="padding:32px 32px;max-width:1200px;position:relative;z-index:1;" id="mark-page-content">
+            <div style="padding:40px 40px 72px;max-width:1280px;margin:0 auto;position:relative;z-index:1;" id="mark-page-content">
                 ${skeleton('200px')}<div style="margin-top:16px;">${skeleton('300px')}</div>
             </div>
             <div id="mark-modal-container"></div>
@@ -257,12 +297,10 @@
        ================================================================ */
     function renderStatCard(label, value, icon) {
         return `
-        <div style="${T.glass}padding:32px;min-height:160px;display:flex;flex-direction:column;justify-content:space-between;transition:all 0.3s ease;"
-             onmouseenter="this.style.boxShadow='${T.cardHoverShadow}';this.style.transform='translateY(-2px)'"
-             onmouseleave="this.style.boxShadow='0 8px 32px 0 rgba(0,100,255,0.05)';this.style.transform='translateY(0)'">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
-                <span style="${T.label}margin-bottom:0;text-transform:uppercase;letter-spacing:0.08em;font-size:12px;">${esc(label)}</span>
-                <span class="material-symbols-outlined" style="color:#9AA3AD;font-size:24px;">${icon}</span>
+        <div class="mark-stat-card" style="${T.glass}padding:28px 28px 30px;min-height:158px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+                <span style="${T.label}margin-bottom:0;text-transform:uppercase;letter-spacing:0.1em;font-size:11px;">${esc(label)}</span>
+                <span class="mark-icon-chip"><span class="material-symbols-outlined">${icon}</span></span>
             </div>
             <div style="${T.statValue}">${formatNum(value)}</div>
         </div>`;
@@ -270,12 +308,12 @@
 
     function renderMiniStat(label, value, icon) {
         return `
-        <div style="${T.glassLight}padding:20px;display:flex;flex-direction:column;justify-content:space-between;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-                <span style="${T.label}margin-bottom:0;text-transform:uppercase;letter-spacing:0.08em;font-size:12px;">${esc(label)}</span>
-                <span class="material-symbols-outlined" style="color:#9AA3AD;font-size:16px;">${icon}</span>
+        <div class="mark-stat-card" style="${T.glassLight}padding:20px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+                <span style="${T.label}margin-bottom:0;text-transform:uppercase;letter-spacing:0.1em;font-size:11px;">${esc(label)}</span>
+                <span class="mark-icon-chip" style="width:32px;height:32px;border-radius:10px;"><span class="material-symbols-outlined" style="font-size:18px;">${icon}</span></span>
             </div>
-            <div style="font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:300;color:#F5F7FA;">${formatNum(value)}</div>
+            <div style="${T.statValue}font-size:32px;">${formatNum(value)}</div>
         </div>`;
     }
 
@@ -680,7 +718,7 @@
             <!-- Header -->
             <div style="margin-bottom:40px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;">
                 <div>
-                    <h1 style="${T.headline}font-size:48px;line-height:56px;letter-spacing:-0.02em;font-weight:300;margin:0 0 8px;">Overview</h1>
+                    <h1 class="mark-gradient-text" style="${T.headline}font-size:52px;line-height:58px;letter-spacing:-0.025em;font-weight:600;margin:0 0 8px;">Overview</h1>
                     <p style="font-family:'Space Grotesk',sans-serif;font-size:18px;color:#C7CDD4;line-height:1.6;margin:0;">Monitor your Mark AI performance.</p>
                 </div>
                 <div style="display:flex;gap:10px;">
@@ -694,7 +732,7 @@
             </div>
 
             <!-- Stats Grid -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;margin-bottom:40px;">
+            <div class="mark-stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;margin-bottom:40px;">
                 ${renderStatCard('Total Conversations', dashboardStats.total_conversations, 'forum')}
                 ${renderStatCard("Today's Chats", dashboardStats.today_conversations, 'chat')}
                 ${renderStatCard('Active Stores', dashboardStats.active_stores, 'bolt')}
@@ -702,8 +740,8 @@
             </div>
 
             <!-- Charts Row -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px;" id="mark-charts-row">
-                <div style="${T.glass}padding:24px;">
+            <div class="mark-stagger" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px;" id="mark-charts-row">
+                <div class="mark-lift" style="${T.glass}padding:24px;">
                     <h3 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 16px;">
                         <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">trending_up</span>
                         Conversation Trend (14 days)
@@ -712,7 +750,7 @@
                         <canvas id="mark-chart-trend"></canvas>
                     </div>
                 </div>
-                <div style="${T.glass}padding:24px;">
+                <div class="mark-lift" style="${T.glass}padding:24px;">
                     <h3 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 16px;">
                         <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">schedule</span>
                         Peak Hours (last 30 days)
@@ -827,8 +865,8 @@
         <!-- Store Header -->
         <div style="margin-bottom:32px;">
             <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#9AA3AD;margin-bottom:6px;">${esc(tabTitles[activeTab] || 'Store')}</div>
-            <h2 style="${T.headline}font-size:40px;line-height:48px;letter-spacing:-0.02em;font-weight:300;margin:0 0 4px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                ${esc(s.store_name)}
+            <h2 style="${T.headline}font-size:42px;line-height:50px;letter-spacing:-0.025em;font-weight:600;margin:0 0 4px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                <span class="mark-gradient-text">${esc(s.store_name)}</span>
                 ${renderBadge(s.is_active)}
             </h2>
             <a style="font-size:15px;color:#C7CDD4;text-decoration:none;display:inline-flex;align-items:center;gap:4px;"
@@ -839,7 +877,7 @@
             </a>
         </div>
 
-        ${isSettings ? `<div id="store-analytics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;margin-bottom:48px;">
+        ${isSettings ? `<div id="store-analytics" class="mark-stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;margin-bottom:48px;">
             ${renderMiniStat('Total Chats', '--', 'forum')}
             ${renderMiniStat('Today', '--', 'today')}
             ${renderMiniStat('This Week', '--', 'date_range')}
