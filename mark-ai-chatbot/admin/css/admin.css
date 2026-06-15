@@ -9,27 +9,27 @@
 
 /* Google Fonts loaded via wp_enqueue_style in class-mark-ai-admin.php */
 
-/* -- Fill the ENTIRE WP content area with our dark theme --
+/* -- Fill the ENTIRE WP content area with our Aurora theme --
    This stylesheet only loads on Mark AI pages, so it's safe to style WP's own
-   containers. Without this, WP's white #wpbody-content shows below our app
+   containers. Without this, WP's default gray shows below our app
    (the "white space at the bottom" gap) whenever a page's content is short. */
-html.wp-toolbar { background: #050507; }
-#wpcontent, #wpbody, #wpbody-content { background: #050507 !important; }
+html.wp-toolbar { background: #F4F5FA; }
+#wpcontent, #wpbody, #wpbody-content { background: #F4F5FA !important; }
 #wpbody-content { padding-bottom: 0 !important; }
-#wpfooter { color: #5b6770; }   /* keep WP footer legible on dark */
+#wpfooter { color: #8A8FA8; }
 
 /* -- Reset WP Admin Styles Inside Our App -- */
 #mark-ai-app {
-    font-family: 'Space Grotesk', -apple-system, sans-serif;
-    color: #F5F7FA;
-    background: #050507;
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    color: #14152A;
+    background: #F4F5FA;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.6;
     min-height: calc(100vh - 32px);   /* fill viewport — no dead space below */
 }
 #mark-ai-app .mark-ai-app-root {
-    min-height: calc(100vh - 60px) !important;   /* dark theme reaches the bottom */
+    min-height: calc(100vh - 60px) !important;
 }
 
 #mark-ai-app *,
@@ -42,8 +42,8 @@ html.wp-toolbar { background: #050507; }
 #mark-ai-app h2,
 #mark-ai-app h3,
 #mark-ai-app h4 {
-    font-family: 'Space Grotesk', sans-serif;
-    color: #F5F7FA;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #14152A;
     line-height: 1.2;
 }
 
@@ -66,12 +66,12 @@ html.wp-toolbar { background: #050507; }
 }
 
 #mark-ai-app ::-webkit-scrollbar-thumb {
-    background: rgba(45,226,230,0.3);
+    background: rgba(124,92,255,0.32);
     border-radius: 3px;
 }
 
 #mark-ai-app ::-webkit-scrollbar-thumb:hover {
-    background: rgba(45,226,230,0.5);
+    background: rgba(124,92,255,0.55);
 }
 
 /* -- Range slider (Mark Size) -- */
@@ -80,10 +80,10 @@ html.wp-toolbar { background: #050507; }
     appearance: none;
     width: 20px; height: 20px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #5CF6FA, #2DE2E6);
+    background: linear-gradient(135deg, #7C5CFF, #FF6FA8);
     cursor: pointer;
-    box-shadow: 0 2px 12px rgba(45,226,230,0.45);
-    border: 2px solid #04181A;
+    box-shadow: 0 2px 12px rgba(124,92,255,0.45);
+    border: 2px solid #FFFFFF;
     margin-top: -7px;
     transition: transform 0.15s ease;
 }
@@ -93,10 +93,10 @@ html.wp-toolbar { background: #050507; }
 #mark-ai-app input[type="range"]::-moz-range-thumb {
     width: 20px; height: 20px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #5CF6FA, #2DE2E6);
+    background: linear-gradient(135deg, #7C5CFF, #FF6FA8);
     cursor: pointer;
-    box-shadow: 0 2px 12px rgba(45,226,230,0.45);
-    border: 2px solid #04181A;
+    box-shadow: 0 2px 12px rgba(124,92,255,0.45);
+    border: 2px solid #FFFFFF;
 }
 
 /* -- Chart canvas -- */

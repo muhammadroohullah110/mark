@@ -30,29 +30,29 @@
     let chartInstances = {};  // Track Chart.js instances for cleanup
 
     /* ================================================================
-       DESIGN TOKENS  — Mark "Neon Cyan" (matches markai.shop)
-       bg #050507 / surface #04181A · accent #2DE2E6 / #5CF6FA / #06B6C7
-       text #F5F7FA · muted #9AA3AD · fonts Space Grotesk + JetBrains Mono
+       DESIGN TOKENS  — Mark "Aurora" (light, premium-fintech)
+       page #F4F5FA / cards #FFFFFF · accent violet #7C5CFF -> pink #FF6FA8
+       text #14152A · muted #6B6F86 / #8A8FA8 · font Plus Jakarta Sans
        ================================================================ */
     const T = {
-        pageBg: `background:radial-gradient(1200px 600px at 80% -10%, rgba(45,226,230,0.06), transparent 60%), #050507;position:relative;color:#F5F7FA;`,
-        glass: `background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.022));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(45,226,230,0.16);box-shadow:0 12px 44px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.07);border-radius:18px;position:relative;overflow:hidden;`,
-        glassLight: `background:linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.02));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(45,226,230,0.11);box-shadow:0 6px 24px rgba(0,0,0,0.38),inset 0 1px 0 rgba(255,255,255,0.05);border-radius:18px;`,
-        input: `background:rgba(255,255,255,0.04);border:1px solid rgba(154,163,173,0.22);color:#F5F7FA;padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:14px;width:100%;outline:none;border-radius:10px;transition:border-color .25s ease,box-shadow .25s ease;`,
-        select: `background:rgba(255,255,255,0.04);border:1px solid rgba(154,163,173,0.22);color:#F5F7FA;padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:14px;width:100%;outline:none;border-radius:10px;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235CF6FA' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;`,
-        btnPrimary: `background:linear-gradient(135deg,#2DE2E6,#06B6C7);color:#04181A;border:none;border-radius:10px;padding:12px 24px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform .2s ease,box-shadow .25s ease,filter .2s ease;box-shadow:0 4px 22px rgba(45,226,230,0.35);letter-spacing:0.02em;`,
-        btnSecondary: `background:rgba(45,226,230,0.08);color:#5CF6FA;border:1px solid rgba(45,226,230,0.28);border-radius:10px;padding:10px 20px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;`,
-        btnDanger: `background:rgba(239,68,68,0.1);color:#ff7a7a;border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px 20px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;`,
-        label: `display:block;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;color:#9AA3AD;margin-bottom:6px;letter-spacing:0.04em;line-height:1;`,
-        statValue: `font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:600;line-height:1.1;letter-spacing:-0.02em;background:linear-gradient(135deg,#FFFFFF 0%,#5CF6FA 120%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;`,
-        headline: `font-family:'Space Grotesk',sans-serif;font-weight:500;color:#F5F7FA;`,
-        muted: `color:#9AA3AD;font-size:13px;`,
-        cardHoverShadow: '0 14px 48px rgba(45,226,230,0.18)',
-        cardHoverBorder: 'rgba(45,226,230,0.5)',
-        badgeActive: `display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;font-weight:600;border-radius:9999px;background:rgba(45,226,230,0.12);border:1px solid rgba(45,226,230,0.35);color:#5CF6FA;font-family:'Space Grotesk',sans-serif;`,
-        badgeInactive: `display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;font-weight:600;border-radius:9999px;background:rgba(154,163,173,0.08);border:1px solid rgba(154,163,173,0.2);color:#9AA3AD;font-family:'Space Grotesk',sans-serif;`,
-        tabBtn: `padding:12px 24px;font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:400;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s ease;white-space:nowrap;color:#9AA3AD;`,
-        tabBtnActive: `padding:12px 24px;font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;background:none;border:none;border-bottom:2px solid #2DE2E6;cursor:pointer;transition:all .2s ease;white-space:nowrap;color:#5CF6FA;`,
+        pageBg: `background:radial-gradient(1000px 520px at 88% -12%, rgba(124,92,255,0.10), transparent 58%), radial-gradient(820px 520px at -5% 108%, rgba(255,111,168,0.09), transparent 58%), #F4F5FA;position:relative;color:#14152A;`,
+        glass: `background:#FFFFFF;border:1px solid rgba(20,21,42,0.06);box-shadow:0 12px 34px rgba(20,21,60,0.07);border-radius:20px;position:relative;overflow:hidden;`,
+        glassLight: `background:#FFFFFF;border:1px solid rgba(20,21,42,0.05);box-shadow:0 6px 20px rgba(20,21,60,0.05);border-radius:20px;`,
+        input: `background:#FFFFFF;border:1px solid rgba(20,21,42,0.12);color:#14152A;padding:12px 14px;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;width:100%;outline:none;border-radius:12px;transition:border-color .22s ease,box-shadow .22s ease;`,
+        select: `background:#FFFFFF;border:1px solid rgba(20,21,42,0.12);color:#14152A;padding:12px 14px;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;width:100%;outline:none;border-radius:12px;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237C5CFF' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;`,
+        btnPrimary: `background:#14152A;color:#FFFFFF;border:none;border-radius:12px;padding:12px 24px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform .2s ease,box-shadow .25s ease,filter .2s ease;box-shadow:0 8px 22px rgba(20,21,42,0.18);letter-spacing:0.01em;`,
+        btnSecondary: `background:#FFFFFF;color:#14152A;border:1px solid rgba(20,21,42,0.12);border-radius:12px;padding:10px 20px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;box-shadow:0 2px 8px rgba(20,21,60,0.04);`,
+        btnDanger: `background:#FFFFFF;color:#D83A52;border:1px solid rgba(216,58,82,0.28);border-radius:12px;padding:10px 20px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;`,
+        label: `display:block;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600;color:#8A8FA8;margin-bottom:6px;letter-spacing:0.02em;line-height:1;`,
+        statValue: `font-family:'Plus Jakarta Sans',sans-serif;font-size:46px;font-weight:800;line-height:1.05;letter-spacing:-0.03em;background:linear-gradient(120deg,#7C5CFF 0%,#FF6FA8 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;`,
+        headline: `font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;color:#14152A;`,
+        muted: `color:#6B6F86;font-size:13px;`,
+        cardHoverShadow: '0 20px 48px rgba(124,92,255,0.18)',
+        cardHoverBorder: 'rgba(124,92,255,0.4)',
+        badgeActive: `display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;font-weight:700;border-radius:9999px;background:#E7F8F0;border:1px solid #BFE9D4;color:#0E8A5C;font-family:'Plus Jakarta Sans',sans-serif;`,
+        badgeInactive: `display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;font-weight:700;border-radius:9999px;background:#F0F1F5;border:1px solid rgba(20,21,42,0.08);color:#8A8FA8;font-family:'Plus Jakarta Sans',sans-serif;`,
+        tabBtn: `padding:12px 22px;font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:500;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .2s ease;white-space:nowrap;color:#8A8FA8;`,
+        tabBtnActive: `padding:12px 22px;font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:700;background:none;border:none;border-bottom:2px solid #7C5CFF;cursor:pointer;transition:all .2s ease;white-space:nowrap;color:#7C5CFF;`,
     };
 
     /* ================================================================
@@ -111,14 +111,14 @@
 
         const colors = {
             success: { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.3)', text: '#16a34a', icon: 'check_circle' },
-            error:   { bg: 'rgba(186,26,26,0.1)', border: 'rgba(186,26,26,0.25)', text: '#ff7a7a', icon: 'error' },
-            info:    { bg: 'rgba(79,97,105,0.1)', border: 'rgba(79,97,105,0.25)', text: '#9AA3AD', icon: 'info' },
+            error:   { bg: 'rgba(186,26,26,0.1)', border: 'rgba(186,26,26,0.25)', text: '#D83A52', icon: 'error' },
+            info:    { bg: 'rgba(79,97,105,0.1)', border: 'rgba(79,97,105,0.25)', text: '#6B6F86', icon: 'info' },
         };
         const c = colors[type] || colors.info;
 
         const el = document.createElement('div');
         el.className = 'mark-ai-toast';
-        el.style.cssText = `position:fixed;top:40px;right:20px;z-index:999999;min-width:320px;padding:16px 20px;border-radius:12px;font-family:'Space Grotesk',sans-serif;font-size:14px;backdrop-filter:blur(16px);border:1px solid ${c.border};background:${c.bg};color:${c.text};transform:translateX(120%);transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;gap:10px;`;
+        el.style.cssText = `position:fixed;top:40px;right:20px;z-index:999999;min-width:320px;padding:16px 20px;border-radius:12px;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;backdrop-filter:blur(16px);border:1px solid ${c.border};background:${c.bg};color:${c.text};transform:translateX(120%);transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;gap:10px;`;
         el.innerHTML = `<span class="material-symbols-outlined" style="font-size:20px;">${c.icon}</span><span>${esc(message)}</span>`;
         document.body.appendChild(el);
         requestAnimationFrame(() => { el.style.transform = 'translateX(0)'; });
@@ -129,22 +129,22 @@
        SKELETON + KEYFRAMES
        ================================================================ */
     function skeleton(height = '200px') {
-        return `<div style="height:${height};border-radius:14px;background:linear-gradient(90deg,rgba(255,255,255,0.03) 25%,rgba(45,226,230,0.08) 50%,rgba(255,255,255,0.03) 75%);background-size:200% 100%;animation:markShimmer 1.5s infinite;"></div>`;
+        return `<div style="height:${height};border-radius:14px;background:linear-gradient(90deg,rgba(20,21,42,0.05) 25%,rgba(124,92,255,0.12) 50%,rgba(20,21,42,0.05) 75%);background-size:200% 100%;animation:markShimmer 1.5s infinite;"></div>`;
     }
 
     /** Cute robot head loader — replaces boring spinners */
     function robotLoader(text = 'Loading...', size = 32) {
-        return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#9AA3AD;padding:40px;min-height:55vh;text-align:center;">
+        return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#6B6F86;padding:40px;min-height:55vh;text-align:center;">
             <div style="animation:markRobotBob 1s ease-in-out infinite;">
                 <svg width="${size}" height="${size}" viewBox="0 0 20 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <line x1="10" y1="0.5" x2="10" y2="3" stroke="#2DE2E6" stroke-width="1" stroke-linecap="round"/>
-                    <circle cx="10" cy="0.5" r="0.8" fill="#5CF6FA"/>
-                    <rect x="3" y="3" width="14" height="10" rx="3" fill="#2DE2E6"/>
+                    <line x1="10" y1="0.5" x2="10" y2="3" stroke="#7C5CFF" stroke-width="1" stroke-linecap="round"/>
+                    <circle cx="10" cy="0.5" r="0.8" fill="#7C5CFF"/>
+                    <rect x="3" y="3" width="14" height="10" rx="3" fill="#7C5CFF"/>
                     <circle cx="7" cy="7.5" r="2" fill="white"/>
                     <circle cx="13" cy="7.5" r="2" fill="white"/>
                     <circle cx="7" cy="7.5" r="0.9" fill="#1a1a1a"/>
                     <circle cx="13" cy="7.5" r="0.9" fill="#1a1a1a"/>
-                    <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#5CF6FA" stroke-width="0.7" fill="none" stroke-linecap="round"/>
+                    <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#7C5CFF" stroke-width="0.7" fill="none" stroke-linecap="round"/>
                 </svg>
             </div>
             <span style="font-size:14px;">${text}</span>
@@ -163,28 +163,28 @@
             @keyframes markFloat { 0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)} }
             @keyframes markRise { 0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:none} }
             @keyframes markGlow { 0%,100%{opacity:0.5}50%{opacity:0.9} }
-            #mark-ai-app, .mark-ai-app-root { color:#F5F7FA; }
-            .mark-ai-app-root ::selection { background:rgba(45,226,230,0.3); color:#fff; }
-            .mark-ai-app-root input::placeholder, .mark-ai-app-root textarea::placeholder { color:rgba(154,163,173,0.6); }
+            #mark-ai-app, .mark-ai-app-root { color:#14152A; }
+            .mark-ai-app-root ::selection { background:rgba(124,92,255,0.22); color:#14152A; }
+            .mark-ai-app-root input::placeholder, .mark-ai-app-root textarea::placeholder { color:rgba(20,21,42,0.4); }
             .mark-ai-app-root input:focus,.mark-ai-app-root textarea:focus,.mark-ai-app-root select:focus {
-                border-color:#2DE2E6 !important;box-shadow:0 0 0 3px rgba(45,226,230,0.18) !important;outline:none !important;
+                border-color:#7C5CFF !important;box-shadow:0 0 0 4px rgba(124,92,255,0.15) !important;outline:none !important;
             }
-            .mark-ai-app-root select option { background:#0b1416;color:#F5F7FA; }
+            .mark-ai-app-root select option { background:#FFFFFF;color:#14152A; }
             #mark-ai-app .mark-ai-app-root { margin:0 !important; }
             /* card entrance + hover lift (the "tabahi" motion) */
             .mark-rise { animation:markRise .5s cubic-bezier(0.16,1,0.3,1) both; }
             .mark-lift { transition:transform .25s cubic-bezier(0.16,1,0.3,1), box-shadow .25s ease, border-color .25s ease; }
-            .mark-lift:hover { transform:translateY(-4px); box-shadow:0 14px 48px rgba(45,226,230,0.18); border-color:rgba(45,226,230,0.45) !important; }
+            .mark-lift:hover { transform:translateY(-4px); box-shadow:0 20px 48px rgba(124,92,255,0.16); border-color:rgba(124,92,255,0.32) !important; }
             .mark-ai-app-root button { transition:transform .18s ease, box-shadow .25s ease, filter .2s ease; }
-            .mark-ai-app-root button:hover { filter:brightness(1.08); }
+            .mark-ai-app-root button:hover { filter:brightness(1.04); }
             .mark-ai-app-root button:active { transform:scale(0.97); }
-            .mark-ai-app-root a { color:#5CF6FA; }
-            .mark-orb-mars { position:absolute;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,rgba(45,226,230,0.12) 0%,transparent 70%);filter:blur(50px);top:-180px;right:-120px;pointer-events:none;z-index:0;animation:markFloat 12s ease-in-out infinite; }
-            .mark-orb-saturn { position:absolute;width:620px;height:620px;border-radius:50%;background:radial-gradient(circle,rgba(6,182,199,0.1) 0%,transparent 70%);filter:blur(55px);bottom:-220px;left:-160px;pointer-events:none;z-index:0;animation:markFloat 16s ease-in-out infinite reverse; }
+            .mark-ai-app-root a { color:#7C5CFF; }
+            .mark-orb-mars { position:absolute;width:560px;height:560px;border-radius:50%;background:radial-gradient(circle,rgba(124,92,255,0.18) 0%,transparent 70%);filter:blur(60px);top:-200px;right:-140px;pointer-events:none;z-index:0;animation:markFloat 12s ease-in-out infinite; }
+            .mark-orb-saturn { position:absolute;width:640px;height:640px;border-radius:50%;background:radial-gradient(circle,rgba(255,111,168,0.15) 0%,transparent 70%);filter:blur(65px);bottom:-240px;left:-180px;pointer-events:none;z-index:0;animation:markFloat 16s ease-in-out infinite reverse; }
             /* ── elevated motion + components (the "insane" layer) ── */
             @keyframes markTextShine { to { background-position:200% center; } }
             .mark-gradient-text {
-                background:linear-gradient(100deg,#F5F7FA 0%,#5CF6FA 45%,#2DE2E6 55%,#F5F7FA 100%);
+                background:linear-gradient(100deg,#7C5CFF 0%,#B14BF0 40%,#FF6FA8 70%,#7C5CFF 100%);
                 background-size:200% auto;-webkit-background-clip:text;background-clip:text;
                 -webkit-text-fill-color:transparent;color:transparent;
                 animation:markTextShine 7s linear infinite;
@@ -197,23 +197,22 @@
             .mark-stagger > *:nth-child(4){animation-delay:.22s}
             .mark-stagger > *:nth-child(5){animation-delay:.28s}
             .mark-stagger > *:nth-child(6){animation-delay:.34s}
-            /* premium stat card: top accent glow line + lift on hover */
+            /* premium stat card: gradient top accent + lift on hover */
             .mark-stat-card { position:relative; transition:transform .28s cubic-bezier(0.16,1,0.3,1), box-shadow .28s ease, border-color .28s ease; }
             .mark-stat-card::before {
-                content:'';position:absolute;top:0;left:24px;right:24px;height:1px;
-                background:linear-gradient(90deg,transparent,rgba(45,226,230,0.7),transparent);
-                opacity:.5;transition:opacity .28s ease;
+                content:'';position:absolute;top:0;left:0;right:0;height:3px;
+                background:linear-gradient(90deg,#7C5CFF,#FF6FA8);
+                opacity:0;transition:opacity .28s ease;
             }
-            .mark-stat-card:hover { transform:translateY(-5px); box-shadow:0 22px 60px rgba(45,226,230,0.22),inset 0 1px 0 rgba(255,255,255,0.08); border-color:rgba(45,226,230,0.5) !important; }
+            .mark-stat-card:hover { transform:translateY(-5px); box-shadow:0 26px 56px rgba(124,92,255,0.20); border-color:rgba(124,92,255,0.3) !important; }
             .mark-stat-card:hover::before { opacity:1; }
-            /* glowing icon chip used in stat cards */
+            /* gradient icon chip used in stat cards */
             .mark-icon-chip {
                 display:inline-flex;align-items:center;justify-content:center;
-                width:40px;height:40px;border-radius:12px;
-                background:linear-gradient(135deg,rgba(45,226,230,0.16),rgba(6,182,199,0.08));
-                border:1px solid rgba(45,226,230,0.25);
-                box-shadow:0 4px 16px rgba(45,226,230,0.18);
-                color:#5CF6FA;
+                width:40px;height:40px;border-radius:13px;
+                background:linear-gradient(135deg,#7C5CFF,#B14BF0);
+                box-shadow:0 6px 16px rgba(124,92,255,0.32);
+                color:#FFFFFF;
             }
             .mark-icon-chip .material-symbols-outlined { font-size:22px; }
             @media (prefers-reduced-motion: reduce) {
@@ -248,7 +247,7 @@
         currentPage = pageMap[PAGE] || 'dashboard';
 
         app.innerHTML = `
-        <div class="mark-ai-app-root" style="${T.pageBg}min-height:500px;padding:0;font-family:'Space Grotesk',sans-serif;color:#F5F7FA;-webkit-font-smoothing:antialiased;border-radius:8px;overflow:hidden;">
+        <div class="mark-ai-app-root" style="${T.pageBg}min-height:500px;padding:0;font-family:'Plus Jakarta Sans',sans-serif;color:#14152A;-webkit-font-smoothing:antialiased;border-radius:8px;overflow:hidden;">
             <div class="mark-orb-mars"></div>
             <div class="mark-orb-saturn"></div>
             <div style="padding:40px 40px 72px;max-width:1280px;margin:0 auto;position:relative;z-index:1;" id="mark-page-content">
@@ -359,12 +358,12 @@
                 datasets: [{
                     label: 'Conversations',
                     data: values,
-                    borderColor: '#2DE2E6',
-                    backgroundColor: 'rgba(252,155,108,0.15)',
+                    borderColor: '#7C5CFF',
+                    backgroundColor: 'rgba(124,92,255,0.15)',
                     borderWidth: 2.5,
                     fill: true,
                     tension: 0.4,
-                    pointBackgroundColor: '#2DE2E6',
+                    pointBackgroundColor: '#7C5CFF',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2,
                     pointRadius: 4,
@@ -378,8 +377,8 @@
                     legend: { display: false },
                     tooltip: {
                         backgroundColor: 'rgba(26,28,28,0.9)',
-                        titleFont: { family: "'Space Grotesk', sans-serif", size: 12 },
-                        bodyFont: { family: "'Space Grotesk', sans-serif", size: 13 },
+                        titleFont: { family: "'Plus Jakarta Sans', sans-serif", size: 12 },
+                        bodyFont: { family: "'Plus Jakarta Sans', sans-serif", size: 13 },
                         padding: 12,
                         cornerRadius: 8,
                     },
@@ -387,12 +386,12 @@
                 scales: {
                     x: {
                         grid: { color: 'rgba(194,199,202,0.15)' },
-                        ticks: { font: { family: "'Space Grotesk', sans-serif", size: 11 }, color: '#9AA3AD' },
+                        ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }, color: '#6B6F86' },
                     },
                     y: {
                         beginAtZero: true,
                         grid: { color: 'rgba(194,199,202,0.15)' },
-                        ticks: { font: { family: "'Space Grotesk', sans-serif", size: 11 }, color: '#9AA3AD', stepSize: 1 },
+                        ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }, color: '#6B6F86', stepSize: 1 },
                     },
                 },
             },
@@ -420,7 +419,7 @@
                     backgroundColor: hourlyData.map((v, i) => {
                         const max = Math.max(...hourlyData, 1);
                         const intensity = v / max;
-                        return `rgba(45,226,230,${0.15 + intensity * 0.65})`;
+                        return `rgba(124,92,255,${0.15 + intensity * 0.65})`;
                     }),
                     borderRadius: 4,
                     borderSkipped: false,
@@ -433,8 +432,8 @@
                     legend: { display: false },
                     tooltip: {
                         backgroundColor: 'rgba(26,28,28,0.9)',
-                        titleFont: { family: "'Space Grotesk', sans-serif", size: 12 },
-                        bodyFont: { family: "'Space Grotesk', sans-serif", size: 13 },
+                        titleFont: { family: "'Plus Jakarta Sans', sans-serif", size: 12 },
+                        bodyFont: { family: "'Plus Jakarta Sans', sans-serif", size: 13 },
                         padding: 12,
                         cornerRadius: 8,
                     },
@@ -442,12 +441,12 @@
                 scales: {
                     x: {
                         grid: { display: false },
-                        ticks: { font: { family: "'Space Grotesk', sans-serif", size: 10 }, color: '#9AA3AD', maxRotation: 0 },
+                        ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 10 }, color: '#6B6F86', maxRotation: 0 },
                     },
                     y: {
                         beginAtZero: true,
                         grid: { color: 'rgba(194,199,202,0.15)' },
-                        ticks: { font: { family: "'Space Grotesk', sans-serif", size: 11 }, color: '#9AA3AD', stepSize: 1 },
+                        ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }, color: '#6B6F86', stepSize: 1 },
                     },
                 },
             },
@@ -471,15 +470,15 @@
         const container = $('#mark-modal-container');
         container.innerHTML = `
         <div style="position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="markAdmin.closeModal(event)">
-            <div style="background:#0b1416;border:1px solid rgba(45,226,230,0.18);border-radius:20px;width:90%;max-width:900px;max-height:90vh;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.2);" onclick="event.stopPropagation()">
+            <div style="background:#FFFFFF;border:1px solid rgba(124,92,255,0.18);border-radius:20px;width:90%;max-width:900px;max-height:90vh;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.2);" onclick="event.stopPropagation()">
                 <!-- Header -->
                 <div style="padding:24px 32px;border-bottom:1px solid rgba(194,199,202,0.3);display:flex;align-items:center;justify-content:space-between;">
                     <div style="display:flex;align-items:center;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:24px;color:#2DE2E6;">visibility</span>
+                        <span class="material-symbols-outlined" style="font-size:24px;color:#7C5CFF;">visibility</span>
                         <h2 style="${T.headline}font-size:20px;font-weight:600;margin:0;">Widget Preview</h2>
                     </div>
                     <button style="background:none;border:none;cursor:pointer;padding:8px;" onclick="markAdmin.closeModal()">
-                        <span class="material-symbols-outlined" style="font-size:24px;color:#9AA3AD;">close</span>
+                        <span class="material-symbols-outlined" style="font-size:24px;color:#6B6F86;">close</span>
                     </button>
                 </div>
                 <!-- Preview Area -->
@@ -493,7 +492,7 @@
                                 <span style="width:10px;height:10px;border-radius:50%;background:#ffbd2e;display:inline-block;"></span>
                                 <span style="width:10px;height:10px;border-radius:50%;background:#28ca41;display:inline-block;"></span>
                             </div>
-                            <div style="flex:1;background:rgba(255,255,255,0.06);border-radius:6px;padding:4px 12px;font-size:12px;color:#9AA3AD;font-family:monospace;">${esc(store?.website_url || 'yourstore.com')}</div>
+                            <div style="flex:1;background:rgba(20,21,42,0.04);border-radius:6px;padding:4px 12px;font-size:12px;color:#6B6F86;font-family:monospace;">${esc(store?.website_url || 'yourstore.com')}</div>
                         </div>
                         <!-- Fake page content -->
                         <div style="padding:24px;">
@@ -508,17 +507,17 @@
                         </div>
                         <!-- Robot widget simulation -->
                         <div style="position:absolute;bottom:16px;right:16px;">
-                            <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(45,226,230,0.4);cursor:pointer;animation:markPulse 3s ease-in-out infinite;">
+                            <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(124,92,255,0.4);cursor:pointer;animation:markPulse 3s ease-in-out infinite;">
                                 <span class="material-symbols-outlined" style="font-size:32px;color:#fff;">smart_toy</span>
                             </div>
                         </div>
                         <!-- Chat bubble simulation -->
-                        <div style="position:absolute;bottom:92px;right:16px;width:280px;background:rgba(255,255,255,0.06);border-radius:16px 16px 4px 16px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,0.12);font-family:'Space Grotesk',sans-serif;font-size:14px;color:#F5F7FA;line-height:1.5;">
+                        <div style="position:absolute;bottom:92px;right:16px;width:280px;background:rgba(20,21,42,0.04);border-radius:16px 16px 4px 16px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,0.12);font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;color:#14152A;line-height:1.5;">
                             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                                <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);display:flex;align-items:center;justify-content:center;">
+                                <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;">
                                     <span class="material-symbols-outlined" style="font-size:14px;color:#fff;">smart_toy</span>
                                 </div>
-                                <strong style="font-size:13px;color:#2DE2E6;">${esc(name)}</strong>
+                                <strong style="font-size:13px;color:#7C5CFF;">${esc(name)}</strong>
                             </div>
                             ${esc(greeting)}
                         </div>
@@ -527,15 +526,15 @@
                     <div style="width:240px;display:flex;flex-direction:column;gap:16px;">
                         <div style="${T.glassLight}padding:20px;">
                             <h4 style="${T.headline}font-size:14px;font-weight:600;margin:0 0 12px;text-transform:uppercase;letter-spacing:0.08em;">Current Config</h4>
-                            <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:#C7CDD4;">
+                            <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:#4B4F66;">
                                 <div><strong>Name:</strong> ${esc(name)}</div>
                                 <div><strong>Style:</strong> ${esc(personality)}</div>
                                 <div><strong>Position:</strong> ${esc(globalSettings.widget_position || 'bottom-right')}</div>
                                 <div><strong>Auto Greet:</strong> ${globalSettings.auto_greet !== false && globalSettings.auto_greet !== '0' ? 'Yes' : 'No'}</div>
                             </div>
                         </div>
-                        <div style="padding:16px;background:rgba(252,155,108,0.08);border-radius:12px;border:1px solid rgba(252,155,108,0.2);">
-                            <p style="font-size:12px;color:#2DE2E6;margin:0;line-height:1.6;">
+                        <div style="padding:16px;background:rgba(124,92,255,0.08);border-radius:12px;border:1px solid rgba(124,92,255,0.2);">
+                            <p style="font-size:12px;color:#7C5CFF;margin:0;line-height:1.6;">
                                 <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">info</span>
                                 This is a visual preview. Visit your website to see the real 3D robot in action!
                             </p>
@@ -557,26 +556,26 @@
         <div style="max-width:640px;margin:0 auto;text-align:center;padding:40px 0;">
             <!-- Welcome Header with Robot -->
             <div style="margin-bottom:48px;">
-                <div id="mark-welcome-visual" style="width:180px;height:180px;border-radius:50%;overflow:hidden;margin:0 auto 24px;box-shadow:0 8px 40px rgba(45,226,230,0.35);border:4px solid rgba(252,155,108,0.3);position:relative;">
-                    <div style="display:flex;width:100%;height:100%;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);align-items:center;justify-content:center;">
+                <div id="mark-welcome-visual" style="width:180px;height:180px;border-radius:50%;overflow:hidden;margin:0 auto 24px;box-shadow:0 8px 40px rgba(124,92,255,0.35);border:4px solid rgba(124,92,255,0.3);position:relative;">
+                    <div style="display:flex;width:100%;height:100%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);align-items:center;justify-content:center;">
                         <div style="animation:markRobotBob 1.5s ease-in-out infinite;">
                             <svg width="90" height="90" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <line x1="10" y1="0.5" x2="10" y2="3" stroke="white" stroke-width="1" stroke-linecap="round"/>
                                 <circle cx="10" cy="0.5" r="0.8" fill="rgba(255,255,255,0.8)"/>
                                 <rect x="3" y="3" width="14" height="10" rx="3" fill="white" opacity="0.95"/>
-                                <circle cx="7" cy="7.5" r="2" fill="#2DE2E6"/>
-                                <circle cx="13" cy="7.5" r="2" fill="#2DE2E6"/>
+                                <circle cx="7" cy="7.5" r="2" fill="#7C5CFF"/>
+                                <circle cx="13" cy="7.5" r="2" fill="#7C5CFF"/>
                                 <circle cx="7.3" cy="7.2" r="0.6" fill="white"/>
                                 <circle cx="13.3" cy="7.2" r="0.6" fill="white"/>
-                                <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#2DE2E6" stroke-width="0.7" fill="none" stroke-linecap="round"/>
+                                <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#7C5CFF" stroke-width="0.7" fill="none" stroke-linecap="round"/>
                                 <rect x="5.5" y="14" width="9" height="4.5" rx="1.5" fill="white" opacity="0.85"/>
-                                <circle cx="10" cy="16.2" r="1" fill="#5CF6FA"/>
+                                <circle cx="10" cy="16.2" r="1" fill="#7C5CFF"/>
                             </svg>
                         </div>
                     </div>
                 </div>
                 <h1 style="${T.headline}font-size:36px;font-weight:300;letter-spacing:-0.02em;margin:0 0 12px;">Welcome to Mark AI</h1>
-                <p style="color:#C7CDD4;font-size:18px;line-height:1.6;margin:0;">
+                <p style="color:#4B4F66;font-size:18px;line-height:1.6;margin:0;">
                     Meet your AI robot assistant! Let's set it up in under 2 minutes.
                 </p>
             </div>
@@ -584,16 +583,16 @@
             <!-- Step: API Key -->
             <div style="${T.glass}padding:40px;text-align:left;margin-bottom:24px;">
                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);display:flex;align-items:center;justify-content:center;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;">
                         <span style="color:#fff;font-weight:600;font-size:14px;">1</span>
                     </div>
                     <h3 style="${T.headline}font-size:20px;font-weight:600;margin:0;">Connect your AI</h3>
                 </div>
-                <p style="color:#C7CDD4;font-size:14px;margin:0 0 20px;line-height:1.6;">
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 20px;line-height:1.6;">
                     Mark uses <strong>Groq</strong> for blazing-fast AI responses. It's free — just grab an API key:
                 </p>
-                <ol style="color:#C7CDD4;font-size:14px;line-height:2;margin:0 0 20px;padding-left:20px;">
-                    <li>Go to <a href="https://console.groq.com" target="_blank" style="color:#2DE2E6;font-weight:600;text-decoration:none;">console.groq.com</a></li>
+                <ol style="color:#4B4F66;font-size:14px;line-height:2;margin:0 0 20px;padding-left:20px;">
+                    <li>Go to <a href="https://console.groq.com" target="_blank" style="color:#7C5CFF;font-weight:600;text-decoration:none;">console.groq.com</a></li>
                     <li>Sign up (free) and create an API key</li>
                     <li>Paste it below</li>
                 </ol>
@@ -601,7 +600,7 @@
                     <label style="${T.label}">Groq API Key</label>
                     <div style="position:relative;">
                         <input id="onboard-key" type="password" placeholder="gsk_..." style="${T.input}" />
-                        <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#9AA3AD;cursor:pointer;font-size:20px;"
+                        <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#6B6F86;cursor:pointer;font-size:20px;"
                               onclick="const i=document.getElementById('onboard-key');i.type=i.type==='password'?'text':'password';">visibility_off</span>
                     </div>
                 </div>
@@ -610,7 +609,7 @@
             <!-- Step: Customize -->
             <div style="${T.glass}padding:40px;text-align:left;margin-bottom:32px;">
                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);display:flex;align-items:center;justify-content:center;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;">
                         <span style="color:#fff;font-weight:600;font-size:14px;">2</span>
                     </div>
                     <h3 style="${T.headline}font-size:20px;font-weight:600;margin:0;">Customize your robot</h3>
@@ -641,8 +640,8 @@
 
             <!-- Complete Button -->
             <button style="${T.btnPrimary}padding:16px 48px;font-size:16px;" onclick="markAdmin.completeSetup()"
-                    onmouseenter="this.style.boxShadow='0 6px 20px rgba(45,226,230,0.4)';this.style.transform='translateY(-2px)'"
-                    onmouseleave="this.style.boxShadow='0 4px 15px rgba(45,226,230,0.25)';this.style.transform='translateY(0)'">
+                    onmouseenter="this.style.boxShadow='0 6px 20px rgba(124,92,255,0.4)';this.style.transform='translateY(-2px)'"
+                    onmouseleave="this.style.boxShadow='0 4px 15px rgba(124,92,255,0.25)';this.style.transform='translateY(0)'">
                 <span class="material-symbols-outlined" style="font-size:20px;">rocket_launch</span>
                 Launch Mark AI
             </button>
@@ -719,7 +718,7 @@
             <div style="margin-bottom:40px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;">
                 <div>
                     <h1 class="mark-gradient-text" style="${T.headline}font-size:52px;line-height:58px;letter-spacing:-0.025em;font-weight:600;margin:0 0 8px;">Overview</h1>
-                    <p style="font-family:'Space Grotesk',sans-serif;font-size:18px;color:#C7CDD4;line-height:1.6;margin:0;">Monitor your Mark AI performance.</p>
+                    <p style="font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;color:#4B4F66;line-height:1.6;margin:0;">Monitor your Mark AI performance.</p>
                 </div>
                 <div style="display:flex;gap:10px;">
                     <button style="${T.btnSecondary}" onclick="markAdmin.startTour()">
@@ -743,7 +742,7 @@
             <div class="mark-stagger" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px;" id="mark-charts-row">
                 <div class="mark-lift" style="${T.glass}padding:24px;">
                     <h3 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 16px;">
-                        <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">trending_up</span>
+                        <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">trending_up</span>
                         Conversation Trend (14 days)
                     </h3>
                     <div style="height:220px;position:relative;">
@@ -752,7 +751,7 @@
                 </div>
                 <div class="mark-lift" style="${T.glass}padding:24px;">
                     <h3 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 16px;">
-                        <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">schedule</span>
+                        <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">schedule</span>
                         Peak Hours (last 30 days)
                     </h3>
                     <div style="height:220px;position:relative;">
@@ -770,7 +769,7 @@
                             <h2 style="${T.headline}font-size:24px;font-weight:600;margin:0;">${esc(store.store_name)}</h2>
                             ${renderBadge(store.is_active)}
                         </div>
-                        <p style="color:#C7CDD4;font-size:14px;margin:0;">
+                        <p style="color:#4B4F66;font-size:14px;margin:0;">
                             <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">language</span>
                             ${esc(store.website_url)}
                             &nbsp;&middot;&nbsp;
@@ -786,9 +785,9 @@
                 </div>
             </div>` : `
             <div style="${T.glass}padding:48px;text-align:center;">
-                <span class="material-symbols-outlined" style="font-size:48px;color:#9AA3AD;opacity:0.5;margin-bottom:12px;">storefront</span>
+                <span class="material-symbols-outlined" style="font-size:48px;color:#6B6F86;opacity:0.5;margin-bottom:12px;">storefront</span>
                 <h3 style="${T.headline}font-size:20px;margin:0 0 8px;">No store configured</h3>
-                <p style="color:#C7CDD4;font-size:14px;margin:0;">Go to <strong>My Store</strong> in the sidebar to set up your store.</p>
+                <p style="color:#4B4F66;font-size:14px;margin:0;">Go to <strong>My Store</strong> in the sidebar to set up your store.</p>
             </div>`}
             `;
 
@@ -799,7 +798,7 @@
             <div style="text-align:center;padding:80px 20px;">
                 <span class="material-symbols-outlined" style="font-size:64px;color:rgba(186,26,26,0.3);">error</span>
                 <h3 style="${T.headline}font-size:20px;margin:16px 0 8px;">Failed to load dashboard</h3>
-                <p style="color:#C7CDD4;font-size:14px;margin:0 0 20px;">${esc(e.message)}</p>
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 20px;">${esc(e.message)}</p>
                 <button style="${T.btnSecondary}" onclick="markAdmin.navigate('dashboard')">
                     <span class="material-symbols-outlined" style="font-size:18px;">refresh</span> Retry
                 </button>
@@ -821,9 +820,9 @@
 
             if (!store) {
                 content.innerHTML = `<div style="text-align:center;padding:60px;">
-                    <span class="material-symbols-outlined" style="font-size:48px;color:#9AA3AD;opacity:0.5;margin-bottom:12px;">storefront</span>
+                    <span class="material-symbols-outlined" style="font-size:48px;color:#6B6F86;opacity:0.5;margin-bottom:12px;">storefront</span>
                     <h3 style="${T.headline}font-size:20px;">No store found</h3>
-                    <p style="color:#C7CDD4;margin:0 0 20px;">Your store was deleted or hasn't been created yet.</p>
+                    <p style="color:#4B4F66;margin:0 0 20px;">Your store was deleted or hasn't been created yet.</p>
                     <button style="${T.btnPrimary}" onclick="markAdmin.navigate('dashboard')">
                         <span class="material-symbols-outlined" style="font-size:18px;">add</span> Set Up a New Store
                     </button>
@@ -864,14 +863,14 @@
         content.innerHTML = `
         <!-- Store Header -->
         <div style="margin-bottom:32px;">
-            <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#9AA3AD;margin-bottom:6px;">${esc(tabTitles[activeTab] || 'Store')}</div>
+            <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6B6F86;margin-bottom:6px;">${esc(tabTitles[activeTab] || 'Store')}</div>
             <h2 style="${T.headline}font-size:42px;line-height:50px;letter-spacing:-0.025em;font-weight:600;margin:0 0 4px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
                 <span class="mark-gradient-text">${esc(s.store_name)}</span>
                 ${renderBadge(s.is_active)}
             </h2>
-            <a style="font-size:15px;color:#C7CDD4;text-decoration:none;display:inline-flex;align-items:center;gap:4px;"
+            <a style="font-size:15px;color:#4B4F66;text-decoration:none;display:inline-flex;align-items:center;gap:4px;"
                href="${esc(s.website_url)}" target="_blank"
-               onmouseenter="this.style.color='#9AA3AD'" onmouseleave="this.style.color='#C7CDD4'">
+               onmouseenter="this.style.color='#6B6F86'" onmouseleave="this.style.color='#4B4F66'">
                 ${esc(s.website_url)}
                 <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
             </a>
@@ -887,8 +886,8 @@
         <div id="tab-content"></div>
 
         ${isSettings ? `<div style="margin-top:64px;padding:24px;border:1px solid rgba(186,26,26,0.2);border-radius:12px;background:rgba(255,218,214,0.1);">
-            <h3 style="${T.headline}font-size:20px;color:#ff7a7a;margin:0 0 8px;">Danger Zone</h3>
-            <p style="color:#C7CDD4;font-size:14px;margin:0 0 16px;">Permanently delete this store and all its data.</p>
+            <h3 style="${T.headline}font-size:20px;color:#D83A52;margin:0 0 8px;">Danger Zone</h3>
+            <p style="color:#4B4F66;font-size:14px;margin:0 0 16px;">Permanently delete this store and all its data.</p>
             <button style="${T.btnDanger}" onclick="markAdmin.confirmDelete()">
                 <span class="material-symbols-outlined" style="font-size:18px;">delete_forever</span> Delete Store
             </button>
@@ -949,7 +948,7 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
                     <div><label style="${T.label}">Store Name</label><input id="s-store-name" type="text" value="${esc(s.store_name)}" style="${T.input}" /></div>
                     <div><label style="${T.label}">Website URL</label><input id="s-website-url" type="url" value="${esc(s.website_url)}" style="${T.input}" /></div>
-                    <div><label style="${T.label}">Assistant Name</label><input id="s-assistant-name" type="text" value="${esc(s.assistant_name || 'Mark')}" style="${T.input}" /><span style="font-size:13px;color:#9AA3AD;margin-top:4px;">What should the AI call itself?</span></div>
+                    <div><label style="${T.label}">Assistant Name</label><input id="s-assistant-name" type="text" value="${esc(s.assistant_name || 'Mark')}" style="${T.input}" /><span style="font-size:13px;color:#6B6F86;margin-top:4px;">What should the AI call itself?</span></div>
                     <div><label style="${T.label}">Personality</label><select id="s-personality" style="${T.select}"><option value="professional" ${s.personality==='professional'?'selected':''}>Professional & Precise</option><option value="friendly" ${s.personality==='friendly'?'selected':''}>Friendly & Approachable</option><option value="playful" ${s.personality==='playful'?'selected':''}>Playful & Witty</option></select></div>
                     <div><label style="${T.label}">Primary Language</label><select id="s-primary-lang" style="${T.select}"><option value="en" selected>English</option></select></div>
                     <div><label style="${T.label}">Idle Timeout (Seconds)</label><input id="s-idle-timeout" type="number" value="${s.idle_timeout||300}" style="${T.input}" /></div>
@@ -958,12 +957,12 @@
                 </div>
 
                 <!-- ── MARK SIZE CONTROL ── -->
-                <div style="padding:28px;border:1px solid rgba(45,226,230,0.15);border-radius:12px;background:rgba(252,155,108,0.04);">
+                <div style="padding:28px;border:1px solid rgba(124,92,255,0.15);border-radius:12px;background:rgba(124,92,255,0.04);">
                     <h3 style="${T.headline}font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:8px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;">straighten</span>
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;">straighten</span>
                         Mark Size
                     </h3>
-                    <p style="color:#9AA3AD;font-size:13px;margin:0 0 24px;">Control how big Mark appears on your website. Desktop and mobile have separate scales.</p>
+                    <p style="color:#6B6F86;font-size:13px;margin:0 0 24px;">Control how big Mark appears on your website. Desktop and mobile have separate scales.</p>
 
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;">
                         <!-- Desktop Size -->
@@ -973,14 +972,14 @@
                                     <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">desktop_windows</span>
                                     Desktop Size
                                 </label>
-                                <span id="s-desk-val" style="font-size:22px;font-weight:600;color:#2DE2E6;font-family:'Space Grotesk',sans-serif;">${deskScale}</span>
+                                <span id="s-desk-val" style="font-size:22px;font-weight:600;color:#7C5CFF;font-family:'Plus Jakarta Sans',sans-serif;">${deskScale}</span>
                             </div>
                             <div style="position:relative;padding:4px 0;">
                                 <input id="s-scale-desktop" type="range" min="1" max="10" step="1" value="${deskScale}"
                                     oninput="document.getElementById('s-desk-val').textContent=this.value;markAdmin.updateSizePreview();"
-                                    style="width:100%;height:6px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,rgba(45,226,230,0.15),rgba(45,226,230,0.4));border-radius:3px;outline:none;cursor:pointer;" />
+                                    style="width:100%;height:6px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,rgba(124,92,255,0.15),rgba(124,92,255,0.4));border-radius:3px;outline:none;cursor:pointer;" />
                             </div>
-                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#9AA3AD;margin-top:4px;">
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B6F86;margin-top:4px;">
                                 <span>Tiny</span><span>Default</span><span>Large</span>
                             </div>
                         </div>
@@ -992,35 +991,35 @@
                                     <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">smartphone</span>
                                     Mobile Size
                                 </label>
-                                <span id="s-mob-val" style="font-size:22px;font-weight:600;color:#2DE2E6;font-family:'Space Grotesk',sans-serif;">${mobScale}</span>
+                                <span id="s-mob-val" style="font-size:22px;font-weight:600;color:#7C5CFF;font-family:'Plus Jakarta Sans',sans-serif;">${mobScale}</span>
                             </div>
                             <div style="position:relative;padding:4px 0;">
                                 <input id="s-scale-mobile" type="range" min="1" max="10" step="1" value="${mobScale}"
                                     oninput="document.getElementById('s-mob-val').textContent=this.value;markAdmin.updateSizePreview();"
-                                    style="width:100%;height:6px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,rgba(45,226,230,0.15),rgba(45,226,230,0.4));border-radius:3px;outline:none;cursor:pointer;" />
+                                    style="width:100%;height:6px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,rgba(124,92,255,0.15),rgba(124,92,255,0.4));border-radius:3px;outline:none;cursor:pointer;" />
                             </div>
-                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#9AA3AD;margin-top:4px;">
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B6F86;margin-top:4px;">
                                 <span>Tiny</span><span>Default</span><span>Large</span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Preview -->
-                    <div style="margin-top:24px;padding:20px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px dashed rgba(45,226,230,0.25);">
+                    <div style="margin-top:24px;padding:20px;background:rgba(20,21,42,0.03);border-radius:10px;border:1px dashed rgba(124,92,255,0.25);">
                         <div style="display:flex;align-items:center;justify-content:center;gap:48px;">
                             <div style="text-align:center;">
-                                <div id="s-preview-desktop" style="width:115px;height:115px;border-radius:12px;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;transition:all 0.3s ease;box-shadow:0 4px 15px rgba(45,226,230,0.25);">
-                                    <svg width="40" height="40" viewBox="0 0 20 20" fill="none"><line x1="10" y1="1" x2="10" y2="3.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="10" cy="1" r="1" fill="rgba(255,255,255,0.7)"/><rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="white"/><circle cx="7.2" cy="8" r="1.8" fill="#2DE2E6"/><circle cx="12.8" cy="8" r="1.8" fill="#2DE2E6"/><path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#5CF6FA" stroke-width="0.8" fill="none" stroke-linecap="round"/><rect x="5.5" y="13.5" width="9" height="4.5" rx="1.5" fill="white"/></svg>
+                                <div id="s-preview-desktop" style="width:115px;height:115px;border-radius:12px;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;transition:all 0.3s ease;box-shadow:0 4px 15px rgba(124,92,255,0.25);">
+                                    <svg width="40" height="40" viewBox="0 0 20 20" fill="none"><line x1="10" y1="1" x2="10" y2="3.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="10" cy="1" r="1" fill="rgba(255,255,255,0.7)"/><rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="white"/><circle cx="7.2" cy="8" r="1.8" fill="#7C5CFF"/><circle cx="12.8" cy="8" r="1.8" fill="#7C5CFF"/><path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#7C5CFF" stroke-width="0.8" fill="none" stroke-linecap="round"/><rect x="5.5" y="13.5" width="9" height="4.5" rx="1.5" fill="white"/></svg>
                                 </div>
-                                <span style="font-size:12px;color:#9AA3AD;font-weight:600;">Desktop</span>
-                                <span id="s-preview-desk-px" style="display:block;font-size:11px;color:#2DE2E6;">115px</span>
+                                <span style="font-size:12px;color:#6B6F86;font-weight:600;">Desktop</span>
+                                <span id="s-preview-desk-px" style="display:block;font-size:11px;color:#7C5CFF;">115px</span>
                             </div>
                             <div style="text-align:center;">
-                                <div id="s-preview-mobile" style="width:90px;height:90px;border-radius:10px;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;transition:all 0.3s ease;box-shadow:0 4px 15px rgba(45,226,230,0.25);">
-                                    <svg width="30" height="30" viewBox="0 0 20 20" fill="none"><line x1="10" y1="1" x2="10" y2="3.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="10" cy="1" r="1" fill="rgba(255,255,255,0.7)"/><rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="white"/><circle cx="7.2" cy="8" r="1.8" fill="#2DE2E6"/><circle cx="12.8" cy="8" r="1.8" fill="#2DE2E6"/><path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#5CF6FA" stroke-width="0.8" fill="none" stroke-linecap="round"/><rect x="5.5" y="13.5" width="9" height="4.5" rx="1.5" fill="white"/></svg>
+                                <div id="s-preview-mobile" style="width:90px;height:90px;border-radius:10px;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;transition:all 0.3s ease;box-shadow:0 4px 15px rgba(124,92,255,0.25);">
+                                    <svg width="30" height="30" viewBox="0 0 20 20" fill="none"><line x1="10" y1="1" x2="10" y2="3.5" stroke="white" stroke-width="1.2" stroke-linecap="round"/><circle cx="10" cy="1" r="1" fill="rgba(255,255,255,0.7)"/><rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="white"/><circle cx="7.2" cy="8" r="1.8" fill="#7C5CFF"/><circle cx="12.8" cy="8" r="1.8" fill="#7C5CFF"/><path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#7C5CFF" stroke-width="0.8" fill="none" stroke-linecap="round"/><rect x="5.5" y="13.5" width="9" height="4.5" rx="1.5" fill="white"/></svg>
                                 </div>
-                                <span style="font-size:12px;color:#9AA3AD;font-weight:600;">Mobile</span>
-                                <span id="s-preview-mob-px" style="display:block;font-size:11px;color:#2DE2E6;">90px</span>
+                                <span style="font-size:12px;color:#6B6F86;font-weight:600;">Mobile</span>
+                                <span id="s-preview-mob-px" style="display:block;font-size:11px;color:#7C5CFF;">90px</span>
                             </div>
                         </div>
                     </div>
@@ -1095,36 +1094,36 @@
         return `
         <div style="${T.glassLight}padding:40px;">
             <h3 style="${T.headline}font-size:24px;margin:0 0 4px;">
-                <span class="material-symbols-outlined" style="vertical-align:middle;font-size:28px;margin-right:8px;color:#2DE2E6;">school</span>
+                <span class="material-symbols-outlined" style="vertical-align:middle;font-size:28px;margin-right:8px;color:#7C5CFF;">school</span>
                 Train Mark About Your Brand
             </h3>
-            <p style="color:#C7CDD4;font-size:14px;margin:0 0 36px;">The more Mark knows about your brand, the better conversations he'll have with your visitors.</p>
+            <p style="color:#4B4F66;font-size:14px;margin:0 0 36px;">The more Mark knows about your brand, the better conversations he'll have with your visitors.</p>
 
             <!-- SECTION 1: Brand Knowledge -->
             <div style="margin-bottom:40px;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                    <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;">store</span>
+                    <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;">store</span>
                     <label style="${T.label}margin:0;">Brand Story & Identity</label>
                 </div>
-                <p style="font-size:13px;color:#9AA3AD;margin:0 0 12px;">Tell Mark everything about your brand — mission, values, what makes you unique, target audience, tone. The more detail, the smarter Mark becomes.</p>
+                <p style="font-size:13px;color:#6B6F86;margin:0 0 12px;">Tell Mark everything about your brand — mission, values, what makes you unique, target audience, tone. The more detail, the smarter Mark becomes.</p>
                 <textarea id="tt-brand-info" style="${T.input}min-height:140px;resize:vertical;line-height:1.6;" placeholder="Example: We are FreshBite — a family-owned organic food store since 2018. We believe in farm-to-table freshness. Our customers are health-conscious families aged 25-45. We're known for our handpicked seasonal fruits and same-day delivery in Lahore...">${esc(brandInfo)}</textarea>
-                <span style="font-size:12px;color:#9AA3AD;margin-top:6px;display:block;">This is fed directly into Mark's brain. He'll speak about your brand with pride and accuracy.</span>
+                <span style="font-size:12px;color:#6B6F86;margin-top:6px;display:block;">This is fed directly into Mark's brain. He'll speak about your brand with pride and accuracy.</span>
             </div>
 
             <!-- SECTION 2: Products from RAG -->
             <div style="margin-bottom:40px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
                     <div style="display:flex;align-items:center;gap:10px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;">inventory_2</span>
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;">inventory_2</span>
                         <label style="${T.label}margin:0;">Products Mark Knows About</label>
                     </div>
                     <button type="button" id="tt-sync-btn" style="${T.btnSecondary}padding:8px 16px;font-size:13px;" onclick="markAdmin.syncProducts()">
                         <span class="material-symbols-outlined" style="font-size:16px;">sync</span> Sync Products
                     </button>
                 </div>
-                <p style="font-size:13px;color:#9AA3AD;margin:0 0 12px;">These products were auto-discovered from your website via RAG crawling. If products are missing, click <strong>Sync Products</strong> to re-crawl.</p>
-                <div id="tt-products-list" style="background:rgba(255,255,255,0.04);border:1px solid rgba(45,226,230,0.15);border-radius:10px;padding:16px;min-height:80px;">
-                    <div style="text-align:center;color:#9AA3AD;font-size:14px;padding:20px 0;">
+                <p style="font-size:13px;color:#6B6F86;margin:0 0 12px;">These products were auto-discovered from your website via RAG crawling. If products are missing, click <strong>Sync Products</strong> to re-crawl.</p>
+                <div id="tt-products-list" style="background:rgba(20,21,42,0.03);border:1px solid rgba(124,92,255,0.15);border-radius:10px;padding:16px;min-height:80px;">
+                    <div style="text-align:center;color:#6B6F86;font-size:14px;padding:20px 0;">
                         <span class="material-symbols-outlined" style="font-size:32px;display:block;margin-bottom:8px;opacity:0.5;">hourglass_top</span>
                         Loading products...
                     </div>
@@ -1134,19 +1133,19 @@
             <!-- SECTION 3: Seasonal / Priority Products -->
             <div style="margin-bottom:40px;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                    <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;">trending_up</span>
+                    <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;">trending_up</span>
                     <label style="${T.label}margin:0;">Priority Products (What to Push)</label>
                 </div>
-                <p style="font-size:13px;color:#9AA3AD;margin:0 0 12px;">Tell Mark which products are your current focus — bestsellers, new arrivals, or seasonal items. Mark will naturally recommend these first.</p>
+                <p style="font-size:13px;color:#6B6F86;margin:0 0 12px;">Tell Mark which products are your current focus — bestsellers, new arrivals, or seasonal items. Mark will naturally recommend these first.</p>
                 <textarea id="tt-priority-products" style="${T.input}min-height:90px;resize:vertical;line-height:1.6;" placeholder="Example: Our Mango Collection is the star right now — Pakistani Chaunsa and Sindhri mangoes are in season. Also push the Summer Hydration Bundle (20% off this week).">${esc(priorityProducts)}</textarea>
             </div>
 
             <div style="margin-bottom:40px;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-                    <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;">calendar_month</span>
+                    <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;">calendar_month</span>
                     <label style="${T.label}margin:0;">Seasonal Context</label>
                 </div>
-                <p style="font-size:13px;color:#9AA3AD;margin:0 0 12px;">Current season, events, or promotions Mark should know about. Update this regularly.</p>
+                <p style="font-size:13px;color:#6B6F86;margin:0 0 12px;">Current season, events, or promotions Mark should know about. Update this regularly.</p>
                 <textarea id="tt-seasonal" style="${T.input}min-height:80px;resize:vertical;line-height:1.6;" placeholder="Example: It's Ramadan season — our Iftar Boxes are selling fast. Free delivery on orders above Rs 3,000. Eid sale starts next week with 30% off on all dry fruits.">${esc(seasonalProducts)}</textarea>
             </div>
 
@@ -1165,7 +1164,7 @@
         const backendUrl = globalSettings.backend_url || 'https://mark-udfz.onrender.com';
         if (!remoteId) {
             const el = document.getElementById('tt-products-list');
-            if (el) el.innerHTML = '<p style="color:#9AA3AD;font-size:14px;padding:8px;">Connect to backend first (set Remote Store ID in Settings).</p>';
+            if (el) el.innerHTML = '<p style="color:#6B6F86;font-size:14px;padding:8px;">Connect to backend first (set Remote Store ID in Settings).</p>';
             return;
         }
         try {
@@ -1187,20 +1186,20 @@
             html += `<div style="padding:8px 16px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);font-size:13px;font-weight:600;color:#6366f1;">
                 ${pagesIndexed} Pages Indexed
             </div>`;
-            html += `<div style="padding:8px 16px;border-radius:8px;background:rgba(45,226,230,0.08);border:1px solid rgba(45,226,230,0.2);font-size:13px;font-weight:600;color:#2DE2E6;">
+            html += `<div style="padding:8px 16px;border-radius:8px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.2);font-size:13px;font-weight:600;color:#7C5CFF;">
                 ${productsLoaded} Products Found
             </div>`;
             html += `</div>`;
 
             if (productsLoaded === 0) {
-                html += `<p style="font-size:13px;color:#9AA3AD;">No products detected yet. If your site has products, click <strong>Sync Products</strong> to re-crawl.</p>`;
+                html += `<p style="font-size:13px;color:#6B6F86;">No products detected yet. If your site has products, click <strong>Sync Products</strong> to re-crawl.</p>`;
             } else {
-                html += `<p style="font-size:13px;color:#9AA3AD;">Mark knows about ${productsLoaded} products from your website. These are used for recommendations and answering product questions.</p>`;
+                html += `<p style="font-size:13px;color:#6B6F86;">Mark knows about ${productsLoaded} products from your website. These are used for recommendations and answering product questions.</p>`;
             }
             el.innerHTML = html;
         } catch (e) {
             const el = document.getElementById('tt-products-list');
-            if (el) el.innerHTML = '<p style="color:#ff7a7a;font-size:14px;padding:8px;">Could not reach backend. Make sure your backend is running.</p>';
+            if (el) el.innerHTML = '<p style="color:#D83A52;font-size:14px;padding:8px;">Could not reach backend. Make sure your backend is running.</p>';
         }
     }
 
@@ -1272,10 +1271,10 @@
         return `
         <div style="margin-bottom:32px;">
             <h3 style="${T.headline}font-size:24px;font-weight:400;margin:0 0 8px;">
-                <span class="material-symbols-outlined" style="font-size:24px;vertical-align:middle;margin-right:8px;color:#2DE2E6;">analytics</span>
+                <span class="material-symbols-outlined" style="font-size:24px;vertical-align:middle;margin-right:8px;color:#7C5CFF;">analytics</span>
                 Event Analytics
             </h3>
-            <p style="color:#C7CDD4;font-size:14px;margin:0;">Track how visitors interact with Mark on your site.</p>
+            <p style="color:#4B4F66;font-size:14px;margin:0;">Track how visitors interact with Mark on your site.</p>
         </div>
 
         <!-- Event Stat Cards -->
@@ -1291,14 +1290,14 @@
         <!-- Conversion Funnel -->
         <div style="${T.glass}padding:32px;margin-bottom:32px;">
             <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0 0 24px;">
-                <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">filter_alt</span>
+                <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">filter_alt</span>
                 Conversion Funnel (30 days)
             </h4>
             <div id="analytics-funnel" style="display:flex;flex-direction:column;gap:0;">
-                ${renderFunnelStep('Widget Opened', '--', 100, '#5CF6FA')}
+                ${renderFunnelStep('Widget Opened', '--', 100, '#7C5CFF')}
                 ${renderFunnelStep('Chat Started', '--', 0, '#e88a5e')}
                 ${renderFunnelStep('Message Sent', '--', 0, '#d47a50')}
-                ${renderFunnelStep('Lead Captured', '--', 0, '#2DE2E6')}
+                ${renderFunnelStep('Lead Captured', '--', 0, '#7C5CFF')}
             </div>
         </div>
 
@@ -1306,17 +1305,17 @@
         <div style="${T.glass}padding:32px;margin-bottom:32px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
                 <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0;">
-                    <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">trending_up</span>
+                    <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">trending_up</span>
                     Daily Trends (14 days)
                 </h4>
                 <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#C7CDD4;">
-                        <span style="width:12px;height:3px;border-radius:2px;background:#2DE2E6;display:inline-block;"></span> Widget Opens
+                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#4B4F66;">
+                        <span style="width:12px;height:3px;border-radius:2px;background:#7C5CFF;display:inline-block;"></span> Widget Opens
                     </span>
-                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#C7CDD4;">
-                        <span style="width:12px;height:3px;border-radius:2px;background:#9AA3AD;display:inline-block;"></span> Chats
+                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#4B4F66;">
+                        <span style="width:12px;height:3px;border-radius:2px;background:#6B6F86;display:inline-block;"></span> Chats
                     </span>
-                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#C7CDD4;">
+                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#4B4F66;">
                         <span style="width:12px;height:3px;border-radius:2px;background:#16a34a;display:inline-block;"></span> Voice
                     </span>
                 </div>
@@ -1328,10 +1327,10 @@
 
         <!-- Unique Visitors -->
         <div style="${T.glassLight}padding:24px;display:flex;align-items:center;gap:16px;">
-            <span class="material-symbols-outlined" style="font-size:32px;color:#9AA3AD;">group</span>
+            <span class="material-symbols-outlined" style="font-size:32px;color:#6B6F86;">group</span>
             <div>
-                <div style="font-size:14px;color:#C7CDD4;font-weight:600;">Unique Visitors (30 days)</div>
-                <div id="analytics-unique" style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:300;color:#F5F7FA;">--</div>
+                <div style="font-size:14px;color:#4B4F66;font-weight:600;">Unique Visitors (30 days)</div>
+                <div id="analytics-unique" style="font-family:'Plus Jakarta Sans',sans-serif;font-size:28px;font-weight:300;color:#14152A;">--</div>
             </div>
         </div>`;
     }
@@ -1340,13 +1339,13 @@
         const width = Math.max(pct, 8);
         return `
         <div style="display:flex;align-items:center;gap:16px;padding:8px 0;">
-            <div style="width:140px;font-size:13px;color:#C7CDD4;font-weight:500;text-align:right;flex-shrink:0;">${label}</div>
+            <div style="width:140px;font-size:13px;color:#4B4F66;font-weight:500;text-align:right;flex-shrink:0;">${label}</div>
             <div style="flex:1;position:relative;height:36px;background:rgba(194,199,202,0.1);border-radius:6px;overflow:hidden;">
                 <div style="height:100%;width:${width}%;background:${color};border-radius:6px;transition:width 0.6s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:12px;">
                     <span style="font-size:14px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.2);" class="funnel-val">${formatNum(value)}</span>
                 </div>
             </div>
-            <div style="width:50px;font-size:12px;color:#9AA3AD;text-align:right;flex-shrink:0;" class="funnel-pct">${pct > 0 ? pct + '%' : '--'}</div>
+            <div style="width:50px;font-size:12px;color:#6B6F86;text-align:right;flex-shrink:0;" class="funnel-pct">${pct > 0 ? pct + '%' : '--'}</div>
         </div>`;
     }
 
@@ -1422,7 +1421,7 @@
             const cards = document.getElementById('analytics-cards');
             if (cards) {
                 cards.insertAdjacentHTML('afterend',
-                    `<p style="color:#9AA3AD;font-size:13px;margin:-24px 0 24px;font-style:italic;">
+                    `<p style="color:#6B6F86;font-size:13px;margin:-24px 0 24px;font-style:italic;">
                         <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">info</span>
                         Event analytics unavailable — backend may be starting up. Try again in a moment.
                     </p>`);
@@ -1457,28 +1456,28 @@
                     {
                         label: 'Widget Opens',
                         data: widgetOpens,
-                        borderColor: '#2DE2E6',
-                        backgroundColor: 'rgba(45,226,230,0.08)',
+                        borderColor: '#7C5CFF',
+                        backgroundColor: 'rgba(124,92,255,0.08)',
                         borderWidth: 2.5,
                         fill: true,
                         tension: 0.4,
                         pointRadius: 3,
                         pointHoverRadius: 5,
-                        pointBackgroundColor: '#2DE2E6',
+                        pointBackgroundColor: '#7C5CFF',
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
                     },
                     {
                         label: 'Chats',
                         data: chatStarts,
-                        borderColor: '#9AA3AD',
+                        borderColor: '#6B6F86',
                         backgroundColor: 'rgba(79,97,105,0.06)',
                         borderWidth: 2,
                         fill: true,
                         tension: 0.4,
                         pointRadius: 3,
                         pointHoverRadius: 5,
-                        pointBackgroundColor: '#9AA3AD',
+                        pointBackgroundColor: '#6B6F86',
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2,
                     },
@@ -1506,8 +1505,8 @@
                     legend: { display: false },
                     tooltip: {
                         backgroundColor: 'rgba(26,28,28,0.92)',
-                        titleFont: { family: "'Space Grotesk', sans-serif", size: 12 },
-                        bodyFont: { family: "'Space Grotesk', sans-serif", size: 13 },
+                        titleFont: { family: "'Plus Jakarta Sans', sans-serif", size: 12 },
+                        bodyFont: { family: "'Plus Jakarta Sans', sans-serif", size: 13 },
                         padding: 12,
                         cornerRadius: 8,
                         callbacks: {
@@ -1520,12 +1519,12 @@
                 scales: {
                     x: {
                         grid: { color: 'rgba(194,199,202,0.12)' },
-                        ticks: { font: { family: "'Space Grotesk', sans-serif", size: 11 }, color: '#9AA3AD', maxRotation: 45 },
+                        ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }, color: '#6B6F86', maxRotation: 45 },
                     },
                     y: {
                         beginAtZero: true,
                         grid: { color: 'rgba(194,199,202,0.12)' },
-                        ticks: { font: { family: "'Space Grotesk', sans-serif", size: 11 }, color: '#9AA3AD', stepSize: 1 },
+                        ticks: { font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }, color: '#6B6F86', stepSize: 1 },
                     },
                 },
             },
@@ -1538,7 +1537,7 @@
        ================================================================ */
     const PERSONA_META = {
         price_hunter:  { label: 'Price Hunter',   icon: 'sell',            color: '#16a34a' },
-        researcher:    { label: 'Researcher',     icon: 'fact_check',      color: '#9AA3AD' },
+        researcher:    { label: 'Researcher',     icon: 'fact_check',      color: '#6B6F86' },
         impulse_buyer: { label: 'Impulse Buyer',  icon: 'bolt',           color: '#d97706' },
         skeptic:       { label: 'Skeptic',        icon: 'gpp_maybe',       color: '#9333ea' },
         gift_buyer:    { label: 'Gift Buyer',     icon: 'redeem',          color: '#db2777' },
@@ -1565,10 +1564,10 @@
         return `
         <div style="margin-bottom:32px;">
             <h3 style="${T.headline}font-size:24px;font-weight:400;margin:0 0 8px;">
-                <span class="material-symbols-outlined" style="font-size:24px;vertical-align:middle;margin-right:8px;color:#2DE2E6;">neurology</span>
+                <span class="material-symbols-outlined" style="font-size:24px;vertical-align:middle;margin-right:8px;color:#7C5CFF;">neurology</span>
                 Auto-Learning
             </h3>
-            <p style="color:#C7CDD4;font-size:14px;margin:0;max-width:680px;">
+            <p style="color:#4B4F66;font-size:14px;margin:0;max-width:680px;">
                 Mark studies real (anonymized) conversations on your store and learns who your buyers are
                 and how to sell to them — automatically. This is a glass box: everything Mark learns is shown
                 below, and you stay in control.
@@ -1581,17 +1580,17 @@
                 <div style="flex:1;min-width:240px;">
                     <div id="learn-toggle-row" style="display:flex;flex-direction:column;gap:18px;">
                         <label style="display:flex;align-items:center;gap:12px;cursor:pointer;">
-                            <input type="checkbox" id="learn-enabled" onchange="markAdmin.toggleLearning('auto_learning_enabled', this.checked)" style="width:18px;height:18px;accent-color:#2DE2E6;cursor:pointer;">
+                            <input type="checkbox" id="learn-enabled" onchange="markAdmin.toggleLearning('auto_learning_enabled', this.checked)" style="width:18px;height:18px;accent-color:#7C5CFF;cursor:pointer;">
                             <span>
-                                <span style="font-weight:600;color:#F5F7FA;font-size:15px;">Enable auto-learning</span>
-                                <span style="display:block;color:#9AA3AD;font-size:13px;">Capture conversation patterns and improve Mark over time.</span>
+                                <span style="font-weight:600;color:#14152A;font-size:15px;">Enable auto-learning</span>
+                                <span style="display:block;color:#6B6F86;font-size:13px;">Capture conversation patterns and improve Mark over time.</span>
                             </span>
                         </label>
                         <label style="display:flex;align-items:center;gap:12px;cursor:pointer;">
-                            <input type="checkbox" id="learn-autoapprove" onchange="markAdmin.toggleLearning('learning_autoapprove', this.checked)" style="width:18px;height:18px;accent-color:#2DE2E6;cursor:pointer;">
+                            <input type="checkbox" id="learn-autoapprove" onchange="markAdmin.toggleLearning('learning_autoapprove', this.checked)" style="width:18px;height:18px;accent-color:#7C5CFF;cursor:pointer;">
                             <span>
-                                <span style="font-weight:600;color:#F5F7FA;font-size:15px;">Auto-apply new playbooks</span>
-                                <span style="display:block;color:#9AA3AD;font-size:13px;">Apply each new playbook automatically. Turn off to review before activating.</span>
+                                <span style="font-weight:600;color:#14152A;font-size:15px;">Auto-apply new playbooks</span>
+                                <span style="display:block;color:#6B6F86;font-size:13px;">Apply each new playbook automatically. Turn off to review before activating.</span>
                             </span>
                         </label>
                     </div>
@@ -1601,7 +1600,7 @@
                         <span class="material-symbols-outlined" style="font-size:18px;">model_training</span>
                         Train Now
                     </button>
-                    <div style="color:#9AA3AD;font-size:12px;margin-top:8px;">Distills new conversations into a fresh playbook.</div>
+                    <div style="color:#6B6F86;font-size:12px;margin-top:8px;">Distills new conversations into a fresh playbook.</div>
                 </div>
             </div>
         </div>
@@ -1622,9 +1621,9 @@
         const need = Math.max(0, (minNeeded || 12) - (pending || 0));
         return `
         <div style="${T.glassLight}padding:48px 32px;text-align:center;">
-            <span class="material-symbols-outlined" style="font-size:48px;color:#5CF6FA;">school</span>
+            <span class="material-symbols-outlined" style="font-size:48px;color:#7C5CFF;">school</span>
             <h4 style="${T.headline}font-size:18px;font-weight:600;margin:16px 0 8px;">No playbook yet</h4>
-            <p style="color:#C7CDD4;font-size:14px;margin:0 auto;max-width:460px;">
+            <p style="color:#4B4F66;font-size:14px;margin:0 auto;max-width:460px;">
                 Mark needs at least <strong>${minNeeded || 12}</strong> meaningful conversations before it can
                 distill a playbook. ${need > 0 ? `About <strong>${need}</strong> more to go.` : 'Enough data — hit <strong>Train Now</strong>!'}
             </p>
@@ -1632,22 +1631,22 @@
     }
 
     function renderPersonaCard(p) {
-        const meta = PERSONA_META[p.key] || { label: p.label || p.key, icon: 'person', color: '#2DE2E6' };
+        const meta = PERSONA_META[p.key] || { label: p.label || p.key, icon: 'person', color: '#7C5CFF' };
         const phrases = (p.winning_phrases || []).map(x =>
             `<span style="display:inline-block;background:rgba(22,163,74,0.1);color:#15803d;font-size:12px;padding:3px 10px;border-radius:12px;margin:2px 4px 2px 0;">${esc(x)}</span>`).join('');
         const avoid = (p.avoid || []).map(x =>
-            `<span style="display:inline-block;background:rgba(186,26,26,0.08);color:#ff7a7a;font-size:12px;padding:3px 10px;border-radius:12px;margin:2px 4px 2px 0;">${esc(x)}</span>`).join('');
+            `<span style="display:inline-block;background:rgba(186,26,26,0.08);color:#D83A52;font-size:12px;padding:3px 10px;border-radius:12px;margin:2px 4px 2px 0;">${esc(x)}</span>`).join('');
         return `
         <div style="${T.glassLight}padding:24px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
                 <span class="material-symbols-outlined" style="font-size:26px;color:${meta.color};">${meta.icon}</span>
-                <span style="font-weight:700;font-size:16px;color:#F5F7FA;">${esc(meta.label)}</span>
+                <span style="font-weight:700;font-size:16px;color:#14152A;">${esc(meta.label)}</span>
             </div>
-            ${p.psychology ? `<p style="margin:0 0 12px;font-size:13px;color:#C7CDD4;font-style:italic;">${esc(p.psychology)}</p>` : ''}
-            ${p.how_to_talk ? `<div style="margin-bottom:8px;font-size:13px;"><strong style="color:#9AA3AD;">Talk:</strong> <span style="color:#C7CDD4;">${esc(p.how_to_talk)}</span></div>` : ''}
-            ${p.how_to_sell ? `<div style="margin-bottom:12px;font-size:13px;"><strong style="color:#9AA3AD;">Sell:</strong> <span style="color:#C7CDD4;">${esc(p.how_to_sell)}</span></div>` : ''}
-            ${phrases ? `<div style="margin-bottom:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#9AA3AD;margin-bottom:4px;">Phrasing that works</div>${phrases}</div>` : ''}
-            ${avoid ? `<div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#9AA3AD;margin-bottom:4px;">Avoid</div>${avoid}</div>` : ''}
+            ${p.psychology ? `<p style="margin:0 0 12px;font-size:13px;color:#4B4F66;font-style:italic;">${esc(p.psychology)}</p>` : ''}
+            ${p.how_to_talk ? `<div style="margin-bottom:8px;font-size:13px;"><strong style="color:#6B6F86;">Talk:</strong> <span style="color:#4B4F66;">${esc(p.how_to_talk)}</span></div>` : ''}
+            ${p.how_to_sell ? `<div style="margin-bottom:12px;font-size:13px;"><strong style="color:#6B6F86;">Sell:</strong> <span style="color:#4B4F66;">${esc(p.how_to_sell)}</span></div>` : ''}
+            ${phrases ? `<div style="margin-bottom:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6B6F86;margin-bottom:4px;">Phrasing that works</div>${phrases}</div>` : ''}
+            ${avoid ? `<div><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#6B6F86;margin-bottom:4px;">Avoid</div>${avoid}</div>` : ''}
         </div>`;
     }
 
@@ -1658,17 +1657,17 @@
         const grand = dist.reduce((a, d) => a + (d.total || 0), 0);
         if (!grand) return '';
         const rows = dist.map(d => {
-            const meta = PERSONA_META[d.persona] || { label: d.persona, icon: 'person', color: '#2DE2E6' };
+            const meta = PERSONA_META[d.persona] || { label: d.persona, icon: 'person', color: '#7C5CFF' };
             const share = Math.round((d.total / grand) * 100);
             const win = Math.round((d.win_rate || 0) * 100);
             return `
             <div style="margin-bottom:18px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                    <span style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#F5F7FA;">
+                    <span style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#14152A;">
                         <span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};">${meta.icon}</span>
                         ${esc(meta.label)}
                     </span>
-                    <span style="font-size:13px;color:#9AA3AD;">${share}% of buyers · <strong style="color:#15803d;">${win}% win</strong> · ${formatNum(d.total)} chats</span>
+                    <span style="font-size:13px;color:#6B6F86;">${share}% of buyers · <strong style="color:#15803d;">${win}% win</strong> · ${formatNum(d.total)} chats</span>
                 </div>
                 <div style="height:8px;background:rgba(0,0,0,0.05);border-radius:4px;overflow:hidden;">
                     <div style="height:100%;width:${share}%;background:linear-gradient(90deg,${meta.color},${meta.color}aa);border-radius:4px;transition:width .6s;"></div>
@@ -1678,10 +1677,10 @@
         return `
         <div style="${T.glass}padding:28px;margin-bottom:24px;">
             <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0 0 6px;">
-                <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">diversity_3</span>
+                <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">diversity_3</span>
                 Who shops on your store
             </h4>
-            <p style="color:#9AA3AD;font-size:13px;margin:0 0 20px;">Buyer-type mix Mark detected from ${formatNum(grand)} real conversations, with how often each type converts.</p>
+            <p style="color:#6B6F86;font-size:13px;margin:0 0 20px;">Buyer-type mix Mark detected from ${formatNum(grand)} real conversations, with how often each type converts.</p>
             ${rows}
         </div>`;
     }
@@ -1694,15 +1693,15 @@
             return `
             <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.04);">
                 <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-size:11px;font-weight:700;
-                    background:${isActive ? 'rgba(21,128,61,0.12)' : 'rgba(0,0,0,0.05)'};color:${isActive ? '#15803d' : '#9AA3AD'};">v${h.version}</span>
-                <span style="flex:1;font-size:13px;color:#C7CDD4;">${h.sample_size ? formatNum(h.sample_size) + ' conversations' : 'playbook update'}</span>
-                <span style="font-size:12px;color:#9AA3AD;">${when}${isActive ? ' · <strong style="color:#15803d;">active</strong>' : ''}</span>
+                    background:${isActive ? 'rgba(21,128,61,0.12)' : 'rgba(0,0,0,0.05)'};color:${isActive ? '#15803d' : '#6B6F86'};">v${h.version}</span>
+                <span style="flex:1;font-size:13px;color:#4B4F66;">${h.sample_size ? formatNum(h.sample_size) + ' conversations' : 'playbook update'}</span>
+                <span style="font-size:12px;color:#6B6F86;">${when}${isActive ? ' · <strong style="color:#15803d;">active</strong>' : ''}</span>
             </div>`;
         }).join('');
         return `
         <div style="${T.glassLight}padding:24px;margin-top:24px;">
             <h4 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 12px;">
-                <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">history</span>
+                <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">history</span>
                 How Mark improved over time
             </h4>
             ${items}
@@ -1717,21 +1716,21 @@
         const winning = (pb.winning_tactics || []).map(t =>
             `<li style="margin-bottom:8px;color:#15803d;font-size:14px;">${esc(t)}</li>`).join('');
         const losing = (pb.losing_patterns || []).map(t =>
-            `<li style="margin-bottom:8px;color:#ff7a7a;font-size:14px;">${esc(t)}</li>`).join('');
+            `<li style="margin-bottom:8px;color:#D83A52;font-size:14px;">${esc(t)}</li>`).join('');
 
         return `
         ${pb.summary ? `
-        <div style="${T.glass}padding:28px;margin-bottom:24px;border-left:4px solid #2DE2E6;">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#9AA3AD;margin-bottom:8px;">What Mark learned about your buyers</div>
-            <p style="margin:0;font-size:15px;line-height:1.6;color:#F5F7FA;">${esc(pb.summary)}</p>
+        <div style="${T.glass}padding:28px;margin-bottom:24px;border-left:4px solid #7C5CFF;">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#6B6F86;margin-bottom:8px;">What Mark learned about your buyers</div>
+            <p style="margin:0;font-size:15px;line-height:1.6;color:#14152A;">${esc(pb.summary)}</p>
         </div>` : ''}
 
         ${renderPersonaDistribution(data.persona_distribution)}
 
         ${personas ? `
         <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0 0 16px;">
-            <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">groups</span>
-            Buyer Personas <span style="font-size:13px;color:#9AA3AD;font-weight:400;">(detected on your store)</span>
+            <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">groups</span>
+            Buyer Personas <span style="font-size:13px;color:#6B6F86;font-weight:400;">(detected on your store)</span>
         </h4>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:32px;">${personas}</div>` : ''}
 
@@ -1743,7 +1742,7 @@
                 <ul style="margin:0;padding-left:20px;">${winning}</ul>
             </div>` : ''}
             ${losing ? `<div style="${T.glassLight}padding:24px;">
-                <h4 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 14px;color:#ff7a7a;">
+                <h4 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 14px;color:#D83A52;">
                     <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;">trending_down</span>What loses sales
                 </h4>
                 <ul style="margin:0;padding-left:20px;">${losing}</ul>
@@ -1781,7 +1780,7 @@
         } catch (e) {
             console.warn('Playbook load error:', e);
             const body = document.getElementById('learn-playbook');
-            if (body) body.innerHTML = `<p style="color:#9AA3AD;font-size:13px;font-style:italic;">
+            if (body) body.innerHTML = `<p style="color:#6B6F86;font-size:13px;font-style:italic;">
                 <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">info</span>
                 Learning data unavailable — backend may be starting up. Try again in a moment.</p>`;
         }
@@ -1835,7 +1834,7 @@
         return `
         <div style="${T.glassLight}padding:40px;">
             <h3 style="${T.headline}font-size:24px;margin:0 0 8px;">Sales Intelligence</h3>
-            <p style="color:#C7CDD4;font-size:14px;margin:0 0 32px;">Control how Mark handles sales conversations. Smart, not pushy.</p>
+            <p style="color:#4B4F66;font-size:14px;margin:0 0 32px;">Control how Mark handles sales conversations. Smart, not pushy.</p>
 
             <form style="display:flex;flex-direction:column;gap:32px;" onsubmit="event.preventDefault();markAdmin.saveSalesSettings();">
 
@@ -1847,7 +1846,7 @@
                         <option value="soft-sell" ${behavior==='soft-sell'?'selected':''}>Soft Sell (Gently suggest products when relevant)</option>
                         <option value="active" ${behavior==='active'?'selected':''}>Active (Proactively recommend products from RAG)</option>
                     </select>
-                    <span style="font-size:12px;color:#9AA3AD;margin-top:4px;display:block;">
+                    <span style="font-size:12px;color:#6B6F86;margin-top:4px;display:block;">
                         <strong>Helpful:</strong> Only answers questions, never suggests buying.
                         <strong>Soft Sell:</strong> Mentions relevant products naturally.
                         <strong>Active:</strong> Actively recommends products when user shows interest.
@@ -1856,18 +1855,18 @@
 
                 <!-- Discount Policy -->
                 <div style="padding:20px;border:1px solid rgba(186,26,26,0.2);border-radius:12px;background:rgba(255,218,214,0.06);">
-                    <label style="${T.label}color:#ff7a7a;">Discount & Pricing Policy</label>
+                    <label style="${T.label}color:#D83A52;">Discount & Pricing Policy</label>
                     <div style="display:flex;flex-direction:column;gap:12px;margin-top:8px;">
-                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#C7CDD4;cursor:pointer;">
-                            <input type="checkbox" id="ss-no-discounts" ${noDiscounts?'checked':''} style="width:18px;height:18px;accent-color:#2DE2E6;" />
+                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#4B4F66;cursor:pointer;">
+                            <input type="checkbox" id="ss-no-discounts" ${noDiscounts?'checked':''} style="width:18px;height:18px;accent-color:#7C5CFF;" />
                             <strong>Block Mark from offering discounts</strong> (Recommended)
                         </label>
-                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#C7CDD4;cursor:pointer;">
-                            <input type="checkbox" id="ss-no-price-promises" ${noPricePromises?'checked':''} style="width:18px;height:18px;accent-color:#2DE2E6;" />
+                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#4B4F66;cursor:pointer;">
+                            <input type="checkbox" id="ss-no-price-promises" ${noPricePromises?'checked':''} style="width:18px;height:18px;accent-color:#7C5CFF;" />
                             <strong>Block Mark from promising specific prices</strong> without RAG data
                         </label>
-                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#C7CDD4;cursor:pointer;">
-                            <input type="checkbox" id="ss-no-guarantees" ${noGuarantees?'checked':''} style="width:18px;height:18px;accent-color:#2DE2E6;" />
+                        <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#4B4F66;cursor:pointer;">
+                            <input type="checkbox" id="ss-no-guarantees" ${noGuarantees?'checked':''} style="width:18px;height:18px;accent-color:#7C5CFF;" />
                             <strong>Block Mark from making guarantees</strong> (free shipping, returns, etc.)
                         </label>
                     </div>
@@ -1891,8 +1890,8 @@
                         <option value="proactive" ${leadCapture==='proactive'?'selected':''}>Proactive (Ask for email after 3+ exchanges)</option>
                     </select>
                     <div style="margin-top:8px;padding:12px 16px;background:rgba(79,97,105,0.06);border:1px solid rgba(79,97,105,0.15);border-radius:8px;display:flex;align-items:flex-start;gap:8px;">
-                        <span class="material-symbols-outlined" style="font-size:16px;color:#9AA3AD;flex-shrink:0;margin-top:1px;">info</span>
-                        <span style="font-size:12px;color:#C7CDD4;line-height:1.5;">Captured leads appear in your <strong>Conversations</strong> tab. Look for messages where visitors shared their email address. All chat messages are logged automatically.</span>
+                        <span class="material-symbols-outlined" style="font-size:16px;color:#6B6F86;flex-shrink:0;margin-top:1px;">info</span>
+                        <span style="font-size:12px;color:#4B4F66;line-height:1.5;">Captured leads appear in your <strong>Conversations</strong> tab. Look for messages where visitors shared their email address. All chat messages are logged automatically.</span>
                     </div>
                 </div>
 
@@ -1900,7 +1899,7 @@
                 <div>
                     <label style="${T.label}">Call-to-Action URL (Optional)</label>
                     <input id="ss-cta-url" type="url" value="${esc(ctaUrl)}" style="${T.input}" placeholder="e.g., /contact or /get-started" />
-                    <span style="font-size:12px;color:#9AA3AD;margin-top:4px;display:block;">If set, Mark will suggest this page when visitors show strong buying interest.</span>
+                    <span style="font-size:12px;color:#6B6F86;margin-top:4px;display:block;">If set, Mark will suggest this page when visitors show strong buying interest.</span>
                 </div>
 
                 <!-- CTA Text -->
@@ -1949,7 +1948,7 @@
         <div style="display:grid;grid-template-columns:1fr 320px;gap:40px;">
             <div style="${T.glassLight}padding:40px;">
                 <h3 style="${T.headline}font-size:24px;margin:0 0 8px;">Voice Configuration</h3>
-                <p style="color:#C7CDD4;font-size:14px;margin:0 0 32px;">Powered by <span style="color:#2DE2E6;font-weight:600;">Edge TTS</span> -- free, no API key needed.</p>
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 32px;">Powered by <span style="color:#7C5CFF;font-weight:600;">Edge TTS</span> -- free, no API key needed.</p>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
                     <div><label style="${T.label}">English Voice</label><select id="s-tts-voice" style="${T.select}">
                         <option value="en-GB-RyanNeural" ${!s.tts_voice||s.tts_voice==='en-US-GuyNeural'||s.tts_voice==='en-GB-RyanNeural'?'selected':''}>Ryan (Male, British) — default</option>
@@ -1967,7 +1966,7 @@
                         <option value="+10%" ${s.tts_rate==='+10%'?'selected':''}>Slightly Fast (+10%)</option>
                         <option value="+20%" ${s.tts_rate==='+20%'?'selected':''}>Fast (+20%)</option>
                         <option value="+35%" ${s.tts_rate==='+35%'?'selected':''}>Very Fast (+35%)</option>
-                    </select><span style="font-size:12px;color:#9AA3AD;margin-top:4px;display:block;">How fast Mark speaks. Preview below before saving.</span></div>
+                    </select><span style="font-size:12px;color:#6B6F86;margin-top:4px;display:block;">How fast Mark speaks. Preview below before saving.</span></div>
                     <div><label style="${T.label}">Pitch</label><select id="s-tts-pitch" style="${T.select}">
                         <option value="-10Hz" ${s.tts_pitch==='-10Hz'?'selected':''}>Lower</option>
                         <option value="+0Hz" ${!s.tts_pitch||s.tts_pitch==='+0Hz'?'selected':''}>Normal</option>
@@ -2016,7 +2015,7 @@
         const preview = $('#voice-preview'), previewContent = $('#voice-preview-content');
         if (preview && previewContent) {
             preview.style.display = 'block';
-            previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><span class="material-symbols-outlined" style="animation:markRobotBob 0.8s ease-in-out infinite;font-size:26px;color:#2DE2E6;">graphic_eq</span><span style="font-size:14px;color:#C7CDD4;">Generating voice...</span></div>`;
+            previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><span class="material-symbols-outlined" style="animation:markRobotBob 0.8s ease-in-out infinite;font-size:26px;color:#7C5CFF;">graphic_eq</span><span style="font-size:14px;color:#4B4F66;">Generating voice...</span></div>`;
         }
         const settings = markAI || {};
         const backendUrl = settings.backendUrl || 'https://mark-udfz.onrender.com';
@@ -2034,13 +2033,13 @@
             if (res.ok) {
                 const blob = await res.blob(); const url = URL.createObjectURL(blob);
                 const audio = new Audio(url); audio.onended = () => URL.revokeObjectURL(url); await audio.play();
-                if (previewContent) previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><button style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="markAdmin.testVoice()"><span class="material-symbols-outlined" style="font-size:20px;">play_arrow</span></button><span style="font-size:14px;color:#C7CDD4;">Playing (Edge TTS)</span></div>`;
+                if (previewContent) previewContent.innerHTML = `<div style="display:flex;align-items:center;gap:12px;"><button style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="markAdmin.testVoice()"><span class="material-symbols-outlined" style="font-size:20px;">play_arrow</span></button><span style="font-size:14px;color:#4B4F66;">Playing (Edge TTS)</span></div>`;
                 toast('Playing Edge TTS voice!', 'success'); return;
             }
         } catch (e) { /* fallback */ }
         if ('speechSynthesis' in window) {
             const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
-            if (previewContent) previewContent.innerHTML = `<span style="font-size:14px;color:#C7CDD4;">Playing (browser fallback)</span>`;
+            if (previewContent) previewContent.innerHTML = `<span style="font-size:14px;color:#4B4F66;">Playing (browser fallback)</span>`;
             toast('Backend offline -- browser voice preview.', 'info');
         } else { toast('Voice preview not available.', 'error'); }
     }
@@ -2056,8 +2055,8 @@
             <div style="display:flex;flex-direction:column;gap:32px;">
                 <div><label style="${T.label}">Groq API Key</label>
                     <div style="position:relative;"><input id="s-groq-key" type="password" value="${esc(s.groq_api_key||'')}" placeholder="gsk_... (leave empty to use global key)" style="${T.input}" />
-                    <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#9AA3AD;cursor:pointer;font-size:20px;" onclick="const i=document.getElementById('s-groq-key');i.type=i.type==='password'?'text':'password';">visibility_off</span></div>
-                    <p style="font-size:12px;color:#9AA3AD;margin:6px 0 0;">Get your free key at <a href="https://console.groq.com" target="_blank" style="color:#2DE2E6;font-weight:600;text-decoration:none;">console.groq.com</a></p></div>
+                    <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#6B6F86;cursor:pointer;font-size:20px;" onclick="const i=document.getElementById('s-groq-key');i.type=i.type==='password'?'text':'password';">visibility_off</span></div>
+                    <p style="font-size:12px;color:#6B6F86;margin:6px 0 0;">Get your free key at <a href="https://console.groq.com" target="_blank" style="color:#7C5CFF;font-weight:600;text-decoration:none;">console.groq.com</a></p></div>
                 <div><label style="${T.label}">LLM Model</label><select id="s-llm-model" style="${T.select}">
                     <option value="llama-3.3-70b-versatile" ${s.llm_model==='llama-3.3-70b-versatile'?'selected':''}>Llama 3.3 70B Versatile</option>
                     <option value="llama-3.1-8b-instant" ${s.llm_model==='llama-3.1-8b-instant'?'selected':''}>Llama 3.1 8B Instant</option>
@@ -2066,11 +2065,11 @@
                 </select></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
                     <div><label style="${T.label}">Max Tokens</label><input id="s-max-tokens" type="number" value="${s.max_tokens||150}" min="50" max="500" style="${T.input}" /></div>
-                    <div><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><label style="${T.label}margin-bottom:0;">Temperature</label><span id="temp-val" style="font-size:14px;font-weight:600;color:#2DE2E6;">${tempVal}</span></div>
-                        <input type="range" id="s-temperature" min="0" max="1" step="0.01" value="${tempVal}" style="width:100%;height:4px;border-radius:2px;background:#c2c7ca;outline:none;-webkit-appearance:none;cursor:pointer;accent-color:#2DE2E6;" oninput="document.getElementById('temp-val').textContent=this.value" />
-                        <p style="font-size:12px;color:#9AA3AD;margin:6px 0 0;">Lower = focused, Higher = creative</p></div>
+                    <div><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><label style="${T.label}margin-bottom:0;">Temperature</label><span id="temp-val" style="font-size:14px;font-weight:600;color:#7C5CFF;">${tempVal}</span></div>
+                        <input type="range" id="s-temperature" min="0" max="1" step="0.01" value="${tempVal}" style="width:100%;height:4px;border-radius:2px;background:#c2c7ca;outline:none;-webkit-appearance:none;cursor:pointer;accent-color:#7C5CFF;" oninput="document.getElementById('temp-val').textContent=this.value" />
+                        <p style="font-size:12px;color:#6B6F86;margin:6px 0 0;">Lower = focused, Higher = creative</p></div>
                 </div>
-                <div><label style="${T.label}">Custom System Prompt</label><textarea id="s-custom-prompt" rows="6" placeholder="You are an AI assistant..." style="${T.input}resize:vertical;min-height:120px;">${esc(s.custom_system_prompt||'')}</textarea><p style="font-size:12px;color:#9AA3AD;margin:6px 0 0;">Advanced -- override Mark's entire personality.</p></div>
+                <div><label style="${T.label}">Custom System Prompt</label><textarea id="s-custom-prompt" rows="6" placeholder="You are an AI assistant..." style="${T.input}resize:vertical;min-height:120px;">${esc(s.custom_system_prompt||'')}</textarea><p style="font-size:12px;color:#6B6F86;margin:6px 0 0;">Advanced -- override Mark's entire personality.</p></div>
                 <div style="padding-top:24px;border-top:1px solid rgba(194,199,202,0.3);display:flex;justify-content:flex-end;">
                     <button style="${T.btnPrimary}" onclick="markAdmin.saveAI()">Save AI Config</button>
                 </div>
@@ -2107,15 +2106,15 @@
         return `
         <div style="${T.glassLight}padding:16px 20px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
-                <span style="display:flex;align-items:center;gap:8px;font-size:12px;color:#9AA3AD;">
-                    <span class="material-symbols-outlined" style="font-size:16px;color:#2DE2E6;">person</span>
+                <span style="display:flex;align-items:center;gap:8px;font-size:12px;color:#6B6F86;">
+                    <span class="material-symbols-outlined" style="font-size:16px;color:#7C5CFF;">person</span>
                     Visitor ${esc((c.visitor_hash || '').substring(0, 8) || '—')}
                     <span style="${T.badgeActive}padding:1px 7px;font-size:10px;">${esc(c.language || 'en')}</span>
                 </span>
-                <span style="font-size:12px;color:#9AA3AD;">${when}</span>
+                <span style="font-size:12px;color:#6B6F86;">${when}</span>
             </div>
-            <div style="font-size:14px;line-height:1.5;color:#F5F7FA;margin-bottom:6px;"><strong style="color:#2DE2E6;">Visitor:</strong> ${esc(c.last_user_msg || '—')}</div>
-            <div style="font-size:14px;line-height:1.5;color:#C7CDD4;"><strong style="color:#9AA3AD;">Mark:</strong> ${esc(c.mark_response || '—')}</div>
+            <div style="font-size:14px;line-height:1.5;color:#14152A;margin-bottom:6px;"><strong style="color:#7C5CFF;">Visitor:</strong> ${esc(c.last_user_msg || '—')}</div>
+            <div style="font-size:14px;line-height:1.5;color:#4B4F66;"><strong style="color:#6B6F86;">Mark:</strong> ${esc(c.mark_response || '—')}</div>
         </div>`;
     }
 
@@ -2144,10 +2143,10 @@
             </div>
             <h3 style="${T.headline}font-size:20px;margin:0 0 16px;">Recent Conversations</h3>
             ${convos.length === 0
-                ? `<div style="${T.glassLight}padding:40px;text-align:center;color:#9AA3AD;font-size:14px;">No conversations yet — once visitors chat with Mark, each exchange appears here.</div>`
+                ? `<div style="${T.glassLight}padding:40px;text-align:center;color:#6B6F86;font-size:14px;">No conversations yet — once visitors chat with Mark, each exchange appears here.</div>`
                 : `<div style="display:flex;flex-direction:column;gap:12px;">${convos.map(renderConvoCard).join('')}</div>`}`;
         } catch (e) {
-            container.innerHTML = `<div style="${T.glassLight}padding:40px;text-align:center;color:#9AA3AD;font-size:14px;">Conversations unavailable — the backend may be waking up. Try again in a moment.</div>`;
+            container.innerHTML = `<div style="${T.glassLight}padding:40px;text-align:center;color:#6B6F86;font-size:14px;">Conversations unavailable — the backend may be waking up. Try again in a moment.</div>`;
         }
     }
 
@@ -2161,10 +2160,10 @@
         const container = $('#mark-modal-container');
         container.innerHTML = `
         <div style="position:fixed;inset:0;background:rgba(0,0,0,0.3);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center;" onclick="markAdmin.closeModal(event)">
-            <div style="background:#0b1416;border:1px solid rgba(239,68,68,0.3);border-radius:16px;padding:40px;width:90%;max-width:440px;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.5);" onclick="event.stopPropagation()">
-                <span class="material-symbols-outlined" style="font-size:56px;color:#ff7a7a;margin-bottom:16px;">warning</span>
-                <h2 style="${T.headline}font-size:24px;color:#ff7a7a;margin:0 0 8px;">Delete Store?</h2>
-                <p style="color:#C7CDD4;font-size:14px;margin:0 0 28px;line-height:1.6;">This will permanently delete <strong>${esc(currentStore.store_name)}</strong> and all conversations.</p>
+            <div style="background:#FFFFFF;border:1px solid rgba(239,68,68,0.3);border-radius:16px;padding:40px;width:90%;max-width:440px;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.5);" onclick="event.stopPropagation()">
+                <span class="material-symbols-outlined" style="font-size:56px;color:#D83A52;margin-bottom:16px;">warning</span>
+                <h2 style="${T.headline}font-size:24px;color:#D83A52;margin:0 0 8px;">Delete Store?</h2>
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 28px;line-height:1.6;">This will permanently delete <strong>${esc(currentStore.store_name)}</strong> and all conversations.</p>
                 <div style="display:flex;gap:12px;justify-content:center;">
                     <button style="${T.btnSecondary}" onclick="markAdmin.closeModal()">Cancel</button>
                     <button style="${T.btnDanger}" onclick="markAdmin.deleteStore()"><span class="material-symbols-outlined" style="font-size:18px;">delete_forever</span> Delete</button>
@@ -2203,7 +2202,7 @@
             const store = getMainStore();
 
             if (!store) {
-                content.innerHTML = `<div style="text-align:center;padding:60px;"><h3 style="${T.headline}font-size:20px;">No store found</h3><p style="color:#C7CDD4;">Set up your store first.</p></div>`;
+                content.innerHTML = `<div style="text-align:center;padding:60px;"><h3 style="${T.headline}font-size:20px;">No store found</h3><p style="color:#4B4F66;">Set up your store first.</p></div>`;
                 return;
             }
 
@@ -2213,12 +2212,12 @@
             content.innerHTML = `
             <div style="margin-bottom:32px;">
                 <h1 style="${T.headline}font-size:48px;line-height:56px;letter-spacing:-0.02em;font-weight:300;margin:0 0 8px;">Conversations</h1>
-                <p style="color:#C7CDD4;font-size:18px;margin:0;">${esc(currentStore.store_name)} -- recent customer interactions.</p>
+                <p style="color:#4B4F66;font-size:18px;margin:0;">${esc(currentStore.store_name)} -- recent customer interactions.</p>
             </div>
             <div id="tab-content"></div>`;
 
             loadConversationsTab(currentStore.store_id);
-        } catch (e) { content.innerHTML = `<p style="color:#9AA3AD;text-align:center;padding:60px;">${esc(e.message)}</p>`; }
+        } catch (e) { content.innerHTML = `<p style="color:#6B6F86;text-align:center;padding:60px;">${esc(e.message)}</p>`; }
     }
 
     /* ================================================================
@@ -2232,18 +2231,18 @@
             content.innerHTML = `
             <div style="margin-bottom:40px;">
                 <h1 style="${T.headline}font-size:48px;line-height:56px;letter-spacing:-0.02em;font-weight:300;margin:0 0 8px;">Settings</h1>
-                <p style="color:#C7CDD4;font-size:18px;margin:0;">Global configuration for Mark AI.</p>
+                <p style="color:#4B4F66;font-size:18px;margin:0;">Global configuration for Mark AI.</p>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:24px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#9AA3AD;">key</span><h3 style="${T.headline}font-size:24px;margin:0;">API Keys</h3></div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">key</span><h3 style="${T.headline}font-size:24px;margin:0;">API Keys</h3></div>
                 <div style="max-width:600px;"><label style="${T.label}">Groq API Key (Global Default)</label>
                     <div style="position:relative;"><input id="g-groq-key" type="password" value="${esc(s.groq_api_key||'')}" placeholder="gsk_..." style="${T.input}" />
-                    <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#9AA3AD;cursor:pointer;font-size:20px;" onclick="const i=document.getElementById('g-groq-key');i.type=i.type==='password'?'text':'password';">visibility_off</span></div>
-                    <p style="font-size:12px;color:#9AA3AD;margin:8px 0 0;">Get one free at <a href="https://console.groq.com" target="_blank" style="color:#2DE2E6;font-weight:600;text-decoration:none;">console.groq.com</a></p>
+                    <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#6B6F86;cursor:pointer;font-size:20px;" onclick="const i=document.getElementById('g-groq-key');i.type=i.type==='password'?'text':'password';">visibility_off</span></div>
+                    <p style="font-size:12px;color:#6B6F86;margin:8px 0 0;">Get one free at <a href="https://console.groq.com" target="_blank" style="color:#7C5CFF;font-weight:600;text-decoration:none;">console.groq.com</a></p>
                 </div>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:24px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#9AA3AD;">record_voice_over</span><h3 style="${T.headline}font-size:24px;margin:0;">Default Voice (Edge TTS)</h3></div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">record_voice_over</span><h3 style="${T.headline}font-size:24px;margin:0;">Default Voice (Edge TTS)</h3></div>
                 <div style="max-width:300px;"><label style="${T.label}">English Voice</label><select id="g-voice-en" style="${T.select}">
                     <option value="en-US-GuyNeural" ${s.default_voice==='en-US-GuyNeural'?'selected':''}>Guy (Male)</option>
                     <option value="en-US-AriaNeural" ${s.default_voice==='en-US-AriaNeural'?'selected':''}>Aria (Female)</option>
@@ -2252,37 +2251,37 @@
                 </select></div>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:24px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#9AA3AD;">widgets</span><h3 style="${T.headline}font-size:24px;margin:0;">Widget Settings</h3></div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">widgets</span><h3 style="${T.headline}font-size:24px;margin:0;">Widget Settings</h3></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:24px;max-width:800px;">
                     <div><label style="${T.label}">Widget Enabled</label><select id="g-widget-enabled" style="${T.select}"><option value="1" ${s.widget_enabled!==false&&s.widget_enabled!=='0'?'selected':''}>Yes</option><option value="0" ${s.widget_enabled===false||s.widget_enabled==='0'?'selected':''}>No</option></select></div>
                     <div><label style="${T.label}">Position</label><select id="g-widget-position" style="${T.select}"><option value="bottom-right" ${s.widget_position==='bottom-right'||!s.widget_position?'selected':''}>Bottom Right</option><option value="bottom-left" ${s.widget_position==='bottom-left'?'selected':''}>Bottom Left</option></select></div>
                     <div><label style="${T.label}">Auto Greet</label><select id="g-auto-greet" style="${T.select}"><option value="1" ${s.auto_greet!==false&&s.auto_greet!=='0'?'selected':''}>Yes</option><option value="0" ${s.auto_greet===false||s.auto_greet==='0'?'selected':''}>No</option></select></div>
                     <div><label style="${T.label}">Accent Color</label>
                         <div style="display:flex;align-items:center;gap:10px;">
-                            <input type="color" id="g-accent-color" value="${esc(s.widget_accent_color || '#2DE2E6')}" style="width:44px;height:44px;border:2px solid #c2c7ca;border-radius:8px;cursor:pointer;padding:2px;background:none;"
+                            <input type="color" id="g-accent-color" value="${esc(s.widget_accent_color || '#7C5CFF')}" style="width:44px;height:44px;border:2px solid #c2c7ca;border-radius:8px;cursor:pointer;padding:2px;background:none;"
                                 oninput="document.getElementById('g-accent-hex').value=this.value;" />
-                            <input type="text" id="g-accent-hex" value="${esc(s.widget_accent_color || '#2DE2E6')}" maxlength="7" style="${T.input}width:90px;padding:10px;font-family:monospace;font-size:13px;"
+                            <input type="text" id="g-accent-hex" value="${esc(s.widget_accent_color || '#7C5CFF')}" maxlength="7" style="${T.input}width:90px;padding:10px;font-family:monospace;font-size:13px;"
                                 oninput="const c=document.getElementById('g-accent-color');if(/^#[0-9a-fA-F]{6}$/.test(this.value))c.value=this.value;" />
                         </div>
-                        <p style="font-size:11px;color:#9AA3AD;margin:4px 0 0;">Chat bubble & robot glow color</p>
+                        <p style="font-size:11px;color:#6B6F86;margin:4px 0 0;">Chat bubble & robot glow color</p>
                     </div>
                     <div><label style="${T.label}">Greeting Sound</label>
                         <input type="text" id="g-greeting-sound" value="${esc(s.greeting_sound_text || 'Ayie!')}" maxlength="30" style="${T.input}" placeholder="Ayie!" />
-                        <p style="font-size:11px;color:#9AA3AD;margin:4px 0 0;">What Mark says when clicked</p>
+                        <p style="font-size:11px;color:#6B6F86;margin:4px 0 0;">What Mark says when clicked</p>
                     </div>
                     <div><label style="${T.label}">Name Celebration Text</label>
                         <input type="text" id="g-celebrate-text" value="${esc(s.name_celebrate_text || 'Welcome')}" maxlength="30" style="${T.input}" placeholder="Welcome" />
-                        <p style="font-size:11px;color:#9AA3AD;margin:4px 0 0;">Shown above the visitor's name on first introduction</p>
+                        <p style="font-size:11px;color:#6B6F86;margin:4px 0 0;">Shown above the visitor's name on first introduction</p>
                     </div>
                     <div><label style="${T.label}">Auto-Hide Delay</label>
                         <input type="number" id="g-idle-timeout" value="${s.idle_timeout || 60}" min="15" max="600" style="${T.input}" />
-                        <p style="font-size:11px;color:#9AA3AD;margin:4px 0 0;">Seconds before Mark closes chat (15-600)</p>
+                        <p style="font-size:11px;color:#6B6F86;margin:4px 0 0;">Seconds before Mark closes chat (15-600)</p>
                     </div>
                 </div>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:32px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span class="material-symbols-outlined" style="font-size:20px;color:#9AA3AD;">visibility</span><h3 style="${T.headline}font-size:24px;margin:0;">Where Mark Appears</h3></div>
-                <p style="color:#C7CDD4;font-size:14px;margin:0 0 20px;">Choose which pages Mark shows on. (Mark never appears in the WordPress or page-builder editor.)</p>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">visibility</span><h3 style="${T.headline}font-size:24px;margin:0;">Where Mark Appears</h3></div>
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 20px;">Choose which pages Mark shows on. (Mark never appears in the WordPress or page-builder editor.)</p>
                 <div style="max-width:380px;margin-bottom:20px;">
                     <label style="${T.label}">Show Mark on</label>
                     <select id="g-display-mode" onchange="markAdmin.toggleDisplayPages()" style="${T.select}">
@@ -2295,37 +2294,37 @@
                     <label style="${T.label}">Select pages</label>
                     <div style="max-height:260px;overflow:auto;border:1px solid rgba(194,199,202,0.4);border-radius:10px;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px;">
                         ${(s.available_pages||[]).length === 0
-                            ? '<p style="color:#9AA3AD;font-size:13px;padding:8px;">No pages found yet — publish pages on your site, then refresh.</p>'
+                            ? '<p style="color:#6B6F86;font-size:13px;padding:8px;">No pages found yet — publish pages on your site, then refresh.</p>'
                             : (s.available_pages||[]).map(p => `
-                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(45,226,230,0.06)'" onmouseleave="this.style.background='transparent'">
-                                <input type="checkbox" class="g-display-page" value="${p.id}" ${(s.widget_display_pages||[]).includes(p.id)?'checked':''} style="accent-color:#2DE2E6;width:15px;height:15px;flex-shrink:0;">
-                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.title)} <span style="color:#9AA3AD;font-size:11px;">(${esc(p.type)})</span></span>
+                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(124,92,255,0.06)'" onmouseleave="this.style.background='transparent'">
+                                <input type="checkbox" class="g-display-page" value="${p.id}" ${(s.widget_display_pages||[]).includes(p.id)?'checked':''} style="accent-color:#7C5CFF;width:15px;height:15px;flex-shrink:0;">
+                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.title)} <span style="color:#6B6F86;font-size:11px;">(${esc(p.type)})</span></span>
                             </label>`).join('')}
                     </div>
                 </div>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:32px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#9AA3AD;">cable</span><h3 style="${T.headline}font-size:24px;margin:0;">Connection Test</h3></div>
-                <p style="color:#C7CDD4;font-size:14px;margin:0 0 16px;">Verify your Groq API key is working.</p>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">cable</span><h3 style="${T.headline}font-size:24px;margin:0;">Connection Test</h3></div>
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 16px;">Verify your Groq API key is working.</p>
                 <button style="${T.btnSecondary}" onclick="markAdmin.testConnection()" id="test-conn-btn"><span class="material-symbols-outlined" style="font-size:18px;">power</span> Test Groq Connection</button>
                 <div id="conn-test-result" style="margin-top:12px;"></div>
             </div>
             <button style="${T.btnPrimary}padding:14px 32px;" onclick="markAdmin.saveGlobalSettings()">Save All Settings</button>`;
         } catch (e) {
-            content.innerHTML = `<div style="text-align:center;padding:60px;color:#9AA3AD;"><span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;">error</span><p style="margin:16px 0;">${esc(e.message)}</p>
+            content.innerHTML = `<div style="text-align:center;padding:60px;color:#6B6F86;"><span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;">error</span><p style="margin:16px 0;">${esc(e.message)}</p>
             <button style="${T.btnSecondary}" onclick="markAdmin.navigate('settings')"><span class="material-symbols-outlined" style="font-size:18px;">refresh</span> Retry</button></div>`;
         }
     }
 
     async function saveGlobalSettings() {
-        const accentColor = ($('#g-accent-hex') || {}).value?.trim() || '#2DE2E6';
+        const accentColor = ($('#g-accent-hex') || {}).value?.trim() || '#7C5CFF';
         const data = {
             groq_api_key: $('#g-groq-key').value.trim(),
             default_voice: $('#g-voice-en').value,
             widget_enabled: $('#g-widget-enabled').value,
             widget_position: $('#g-widget-position').value,
             auto_greet: $('#g-auto-greet').value,
-            widget_accent_color: /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : '#2DE2E6',
+            widget_accent_color: /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : '#7C5CFF',
             greeting_sound_text: ($('#g-greeting-sound') || {}).value?.trim() || 'Ayie!',
             name_celebrate_text: ($('#g-celebrate-text') || {}).value?.trim() || 'Welcome',
             idle_timeout: Math.max(15, Math.min(600, parseInt(($('#g-idle-timeout') || {}).value) || 60)),
@@ -2349,7 +2348,7 @@
     async function testConnection() {
         const btn = $('#test-conn-btn'), result = $('#conn-test-result');
         if (btn) btn.disabled = true;
-        if (result) result.innerHTML = `<span style="color:#9AA3AD;font-size:13px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="display:inline-block;animation:markSpin 0.8s linear infinite;font-size:16px;color:#2DE2E6;">progress_activity</span> Testing connection...</span>`;
+        if (result) result.innerHTML = `<span style="color:#6B6F86;font-size:13px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="display:inline-block;animation:markSpin 0.8s linear infinite;font-size:16px;color:#7C5CFF;">progress_activity</span> Testing connection...</span>`;
         try {
             const data = await api('POST', 'test-connection');
             if (data.connected) {
@@ -2360,18 +2359,18 @@
             } else {
                 result.innerHTML = `<div style="padding:16px;background:rgba(186,26,26,0.05);border:1px solid rgba(186,26,26,0.15);border-radius:8px;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                        <span class="material-symbols-outlined" style="font-size:18px;color:#ff7a7a;">error</span>
-                        <span style="color:#ff7a7a;font-size:13px;font-weight:600;">${esc(data.error)}</span>
+                        <span class="material-symbols-outlined" style="font-size:18px;color:#D83A52;">error</span>
+                        <span style="color:#D83A52;font-size:13px;font-weight:600;">${esc(data.error)}</span>
                     </div>
-                    ${data.hint ? `<p style="font-size:12px;color:#C7CDD4;margin:0;padding-left:26px;line-height:1.5;">
-                        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;color:#2DE2E6;">lightbulb</span>
+                    ${data.hint ? `<p style="font-size:12px;color:#4B4F66;margin:0;padding-left:26px;line-height:1.5;">
+                        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;color:#7C5CFF;">lightbulb</span>
                         <strong>Fix:</strong> ${esc(data.hint)}
                     </p>` : ''}
                 </div>`;
             }
         } catch (e) {
             result.innerHTML = `<div style="padding:12px 16px;background:rgba(186,26,26,0.05);border:1px solid rgba(186,26,26,0.15);border-radius:8px;">
-                <span style="color:#ff7a7a;font-size:13px;">${esc(e.message)}</span>
+                <span style="color:#D83A52;font-size:13px;">${esc(e.message)}</span>
             </div>`;
         }
         if (btn) btn.disabled = false;
@@ -2390,28 +2389,28 @@
         if (!container) return;
         container.innerHTML = `
         <div style="position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="markAdmin.closeModal(event)">
-            <div style="background:#0b1416;border:1px solid rgba(45,226,230,0.18);border-radius:20px;width:90%;max-width:520px;padding:40px;box-shadow:0 24px 80px rgba(0,0,0,0.2);text-align:center;font-family:'Space Grotesk',sans-serif;" onclick="event.stopPropagation()">
-                <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#5CF6FA,#2DE2E6);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+            <div style="background:#FFFFFF;border:1px solid rgba(124,92,255,0.18);border-radius:20px;width:90%;max-width:520px;padding:40px;box-shadow:0 24px 80px rgba(0,0,0,0.2);text-align:center;font-family:'Plus Jakarta Sans',sans-serif;" onclick="event.stopPropagation()">
+                <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
                     <span class="material-symbols-outlined" style="color:white;font-size:32px;">rocket_launch</span>
                 </div>
                 <h2 style="${T.headline}font-size:24px;font-weight:600;margin:0 0 8px;">Welcome to Mark AI!</h2>
-                <p style="color:#C7CDD4;font-size:14px;margin:0 0 28px;line-height:1.6;">Here is a quick overview of your admin pages:</p>
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 28px;line-height:1.6;">Here is a quick overview of your admin pages:</p>
                 <div style="text-align:left;display:flex;flex-direction:column;gap:14px;margin-bottom:28px;">
                     <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;flex-shrink:0;margin-top:1px;">dashboard</span>
-                        <div><strong style="font-size:14px;">Dashboard</strong><br/><span style="font-size:13px;color:#C7CDD4;">Conversation trends, peak hours, and a quick store summary.</span></div>
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;flex-shrink:0;margin-top:1px;">dashboard</span>
+                        <div><strong style="font-size:14px;">Dashboard</strong><br/><span style="font-size:13px;color:#4B4F66;">Conversation trends, peak hours, and a quick store summary.</span></div>
                     </div>
                     <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;flex-shrink:0;margin-top:1px;">storefront</span>
-                        <div><strong style="font-size:14px;">My Store</strong><br/><span style="font-size:13px;color:#C7CDD4;">Robot name, personality, voice, sales skills, and AI config.</span></div>
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;flex-shrink:0;margin-top:1px;">storefront</span>
+                        <div><strong style="font-size:14px;">My Store</strong><br/><span style="font-size:13px;color:#4B4F66;">Robot name, personality, voice, sales skills, and AI config.</span></div>
                     </div>
                     <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;flex-shrink:0;margin-top:1px;">chat</span>
-                        <div><strong style="font-size:14px;">Conversations</strong><br/><span style="font-size:13px;color:#C7CDD4;">All chat logs between Mark and your visitors.</span></div>
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;flex-shrink:0;margin-top:1px;">chat</span>
+                        <div><strong style="font-size:14px;">Conversations</strong><br/><span style="font-size:13px;color:#4B4F66;">All chat logs between Mark and your visitors.</span></div>
                     </div>
                     <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;flex-shrink:0;margin-top:1px;">settings</span>
-                        <div><strong style="font-size:14px;">Settings</strong><br/><span style="font-size:13px;color:#C7CDD4;">API key, widget color, position, greeting sound, and connection test.</span></div>
+                        <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;flex-shrink:0;margin-top:1px;">settings</span>
+                        <div><strong style="font-size:14px;">Settings</strong><br/><span style="font-size:13px;color:#4B4F66;">API key, widget color, position, greeting sound, and connection test.</span></div>
                     </div>
                 </div>
                 <button style="${T.btnPrimary}padding:12px 32px;" onclick="markAdmin.endTour()">Got it!</button>
