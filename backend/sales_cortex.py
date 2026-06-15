@@ -50,6 +50,21 @@ def _hit(text: str, keywords) -> bool:
     return any(k in text for k in keywords)
 
 
+# ── visitor framework: first-time vs returning (whole conversation) ──
+# Injected on EVERY turn (not just the greeting) so Mark's whole posture —
+# pace, what to assume, what to ask — adapts to who the visitor is.
+VISITOR_NEW = (
+    "VISITOR=FIRST-TIME: They don't know you yet. Open warm, one-line intro, learn their "
+    "name, then ONE discovery question before pitching. Earn trust first, then recommend. "
+    "Never assume prior context — establish the need this turn."
+)
+VISITOR_RETURNING = (
+    "VISITOR=RETURNING: They've met you before. Greet by name, skip the intro and the "
+    "name question, acknowledge they're back, and move faster to a tailored next step or "
+    "recommendation. Don't re-discover what you can reasonably assume — be efficient and warm."
+)
+
+
 # ── stage machine (heuristic) ────────────────────────────────
 def detect_stage(messages, signals) -> str:
     users = _user_messages(messages)
@@ -89,8 +104,12 @@ def has_buying_signal(messages) -> bool:
 
 
 # ── the one function chat_endpoint calls ─────────────────────
-def build_cortex_block(messages, persona: str) -> str:
-    """Return a compact <sales_doctrine> block for THIS turn, or '' if disabled."""
+def build_cortex_block(messages, persona: str, returning: bool = False) -> str:
+    """Return a compact <sales_doctrine> block for THIS turn, or '' if disabled.
+
+    `returning` selects the first-time vs returning-visitor playbook so Mark's
+    whole posture (not just the greeting) adapts to who is talking to him.
+    """
     if not ENABLED or not DOCTRINE:
         return ""
     try:
@@ -99,6 +118,7 @@ def build_cortex_block(messages, persona: str) -> str:
         stage = detect_stage(messages, signals)
 
         parts = ["<sales_doctrine>", DOCTRINE["core"]]
+        parts.append(VISITOR_RETURNING if returning else VISITOR_NEW)
 
         stage_block = DOCTRINE["stages"].get(stage)
         if stage_block:

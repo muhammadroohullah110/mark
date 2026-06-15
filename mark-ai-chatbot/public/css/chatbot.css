@@ -67,7 +67,7 @@
 /* ── TALKING MODE: robot centered (mid-screen), caption + big mic below ── */
 #mark-widget.mark-talking {
     width: 280px !important; height: 280px !important;
-    left: 50% !important; top: 36vh !important;
+    left: 50% !important; top: 40vh !important;
     transform: translate(-50%, -50%) !important;
     cursor: default !important;
     filter: drop-shadow(0 0 26px rgba(var(--mark-accent-rgb),0.5))
@@ -77,16 +77,16 @@
 
 @media (max-width:768px) {
     #mark-widget { width:90px; height:90px; }
-    #mark-widget.mark-talking { width:200px !important; height:200px !important; top:30vh !important; }
+    #mark-widget.mark-talking { width:200px !important; height:200px !important; top:34vh !important; }
 }
 @media (min-width:769px) and (max-width:1024px) {
     #mark-widget { width:100px; height:100px; }
-    #mark-widget.mark-talking { width:240px !important; height:240px !important; top:33vh !important; }
+    #mark-widget.mark-talking { width:240px !important; height:240px !important; top:37vh !important; }
 }
 
 /* ── ROBOT NAME LABEL (below the hero robot) ── */
 #mark-robot-label {
-    position: fixed; top: calc(36vh + 140px + 8px); left: 50%;
+    position: fixed; top: calc(40vh + 140px + 8px); left: 50%;
     transform: translateX(-50%);
     font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6);
     letter-spacing: 0.08em; text-transform: uppercase;
@@ -103,10 +103,10 @@
     50% { opacity: 0.4; }
 }
 @media(max-width:768px) {
-    #mark-robot-label { top: calc(30vh + 100px + 6px); font-size: 11px; }
+    #mark-robot-label { top: calc(34vh + 100px + 6px); font-size: 11px; }
 }
 @media (min-width:769px) and (max-width:1024px) {
-    #mark-robot-label { top: calc(33vh + 120px + 8px); }
+    #mark-robot-label { top: calc(37vh + 120px + 8px); }
 }
 
 /* ── HINT BUBBLE ── */
@@ -216,6 +216,7 @@ a.mark-link {
 }
 a.mark-link:hover { filter: brightness(1.08); transform: translateY(-1px); }
 a.mark-link:active { transform: translateY(0); }
+a.mark-link:focus-visible { outline: 2px solid var(--mark-accent-light); outline-offset: 2px; }
 
 /* User messages — right aligned */
 .mark-msg-user {
@@ -381,7 +382,7 @@ a.mark-link:active { transform: translateY(0); }
     display: none !important;
 }
 
-/* ── NAME CELEBRATION OVERLAY ── */
+/* ── NAME CELEBRATION OVERLAY — premium welcome moment ── */
 #mark-celebration {
     position: fixed; inset: 0;
     z-index: 10020;
@@ -391,67 +392,112 @@ a.mark-link:active { transform: translateY(0); }
     opacity: 0;
     transition: opacity 0.4s ease;
 }
-#mark-celebration.mark-show {
-    opacity: 1;
+#mark-celebration.mark-show { opacity: 1; }
+
+/* Dim + blur the page so the name truly pops on ANY site background */
+#mark-celebration .mark-celeb-scrim {
+    position: absolute; inset: 0;
+    background: radial-gradient(120% 120% at 50% 45%, rgba(4,12,16,0.62) 0%, rgba(4,12,16,0.82) 100%);
+    -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+    animation: markCelebScrim 0.5s ease forwards;
+    opacity: 0;
+}
+/* Soft accent glow behind the name */
+#mark-celebration .mark-celeb-glow {
+    position: absolute; width: 60vw; max-width: 620px; aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(var(--mark-accent-rgb),0.40) 0%, rgba(var(--mark-accent-rgb),0) 62%);
+    filter: blur(8px);
+    animation: markCelebGlow 1.2s cubic-bezier(0.22,1,0.36,1) forwards;
+    opacity: 0;
+}
+/* Expanding ring burst — the "pop" the moment the name lands */
+#mark-celebration .mark-celeb-ring {
+    position: absolute;
+    width: 80px; height: 80px; border-radius: 50%;
+    border: 2px solid rgba(var(--mark-accent-rgb),0.85);
+    box-shadow: 0 0 28px rgba(var(--mark-accent-rgb),0.5);
+    animation: markCelebRing 1s cubic-bezier(0.16,1,0.3,1) forwards;
+    opacity: 0;
+}
+#mark-celebration .mark-celeb-stack {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column; align-items: center;
 }
 #mark-celebration .mark-celeb-name {
-    font-family: 'Outfit', -apple-system, sans-serif;
-    font-size: clamp(40px, 8vw, 72px);
-    font-weight: 800;
+    font-family: 'Space Grotesk', 'Outfit', -apple-system, sans-serif;
+    font-size: clamp(44px, 9vw, 88px);
+    font-weight: 700;
     letter-spacing: -0.03em;
-    line-height: 1.1;
+    line-height: 1.05;
     text-align: center;
-    background: linear-gradient(180deg, #1a1a1a 0%, #6b7280 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, var(--mark-accent-light) 55%, var(--mark-accent) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: markCelebName 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards;
+    filter: drop-shadow(0 4px 30px rgba(var(--mark-accent-rgb),0.55));
+    animation: markCelebName 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards;
+    animation-delay: 0.12s;
     opacity: 0;
 }
 #mark-celebration .mark-celeb-welcome {
-    font-family: 'Outfit', -apple-system, sans-serif;
-    font-size: clamp(14px, 2.5vw, 18px);
-    font-weight: 400;
-    color: rgba(255,255,255,0.5);
-    letter-spacing: 0.15em;
+    font-family: 'Space Grotesk', 'Outfit', -apple-system, sans-serif;
+    font-size: clamp(13px, 2.5vw, 17px);
+    font-weight: 500;
+    color: rgba(255,255,255,0.78);
+    letter-spacing: 0.32em;
     text-transform: uppercase;
-    margin-bottom: 8px;
-    animation: markCelebLabel 0.4s ease forwards;
-    animation-delay: 0.1s;
+    margin-bottom: 14px;
+    animation: markCelebLabel 0.5s ease forwards;
+    animation-delay: 0.05s;
     opacity: 0;
 }
 #mark-celebration .mark-celeb-line {
-    width: 40px; height: 2px;
+    width: 0; height: 2px;
     background: linear-gradient(90deg, transparent, var(--mark-accent-light), transparent);
-    margin-top: 12px;
-    animation: markCelebLine 0.8s ease forwards;
-    animation-delay: 0.3s;
+    margin-top: 18px;
+    animation: markCelebLine 0.9s cubic-bezier(0.22,1,0.36,1) forwards;
+    animation-delay: 0.32s;
     opacity: 0;
 }
-/* Particles */
+/* Confetti */
 .mark-celeb-particle {
     position: absolute;
-    width: 4px; height: 4px;
-    border-radius: 50%;
     opacity: 0;
-    animation: markParticleFloat 1.4s ease-out forwards;
+    box-shadow: 0 0 8px rgba(var(--mark-accent-rgb),0.5);
+    animation: markParticleBurst 1.6s cubic-bezier(0.12,0.7,0.2,1) forwards;
 }
 
+@keyframes markCelebScrim { 0%{opacity:0} 100%{opacity:1} }
+@keyframes markCelebGlow {
+    0%   { opacity: 0; transform: scale(0.6); }
+    60%  { opacity: 1; }
+    100% { opacity: 0.9; transform: scale(1); }
+}
+@keyframes markCelebRing {
+    0%   { opacity: 0.9; transform: scale(0.3); }
+    100% { opacity: 0; transform: scale(7); }
+}
 @keyframes markCelebName {
-    0%   { opacity: 0; transform: translateY(20px) scale(0.9); }
+    0%   { opacity: 0; transform: translateY(26px) scale(0.86); }
     100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes markCelebLabel {
-    0%   { opacity: 0; transform: translateY(8px); }
-    100% { opacity: 1; transform: translateY(0); }
+    0%   { opacity: 0; transform: translateY(10px); letter-spacing: 0.5em; }
+    100% { opacity: 1; transform: translateY(0); letter-spacing: 0.32em; }
 }
 @keyframes markCelebLine {
     0%   { opacity: 0; width: 0; }
-    100% { opacity: 0.6; width: 60px; }
+    100% { opacity: 0.7; width: 72px; }
 }
-@keyframes markParticleFloat {
-    0%   { opacity: 1; transform: translate(0, 0) scale(1); }
-    100% { opacity: 0; transform: translate(var(--px, 30px), var(--py, -60px)) scale(0); }
+@keyframes markParticleBurst {
+    0%   { opacity: 1; transform: translate(0,0) scale(1) rotate(0deg); }
+    100% { opacity: 0; transform: translate(var(--px,30px), var(--py,-60px)) scale(0.2) rotate(220deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #mark-celebration .mark-celeb-ring,
+    #mark-celebration .mark-celeb-glow { animation: none; opacity: 0.6; }
+    #mark-celebration .mark-celeb-name { animation: markCelebLabel 0.4s ease forwards; }
 }
 
 /* ── LOADING INDICATOR (minimal, non-intrusive) ── */

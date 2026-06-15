@@ -451,6 +451,7 @@ class ChatRequest(BaseModel):
     user_language: Optional[str] = "en"
     store_id: Optional[str] = None
     stream: Optional[bool] = False
+    is_returning: Optional[bool] = False   # client flags a known/returning visitor
 
 class TTSRequest(BaseModel):
     text: str
@@ -1051,8 +1052,13 @@ async def chat_endpoint(request: Request, body: ChatRequest):
 
     # Sales Cortex: universal elite-sales DOCTRINE (stage + persona + objection).
     # Pure-python, ~300 tokens, kill-switch via env SALES_CORTEX=0.
+    # Returning visitor if the client flagged it OR a returning-marker is present.
+    is_returning = bool(getattr(body, "is_returning", False)) or any(
+        isinstance(c.get("content"), str) and c["content"].startswith("[Returning visitor")
+        for c in cleaned
+    )
     try:
-        cortex_block = sales_cortex.build_cortex_block(cleaned, detected_persona)
+        cortex_block = sales_cortex.build_cortex_block(cleaned, detected_persona, returning=is_returning)
         if cortex_block:
             messages_for_api[0]["content"] += "\n" + cortex_block
     except Exception as e:

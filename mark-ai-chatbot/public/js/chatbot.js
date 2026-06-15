@@ -374,35 +374,50 @@
         if (celebrationShown || !celebrationEl) return;
         celebrationShown = true;
 
-        // Create particles
-        const particleColors = ['#fc9b6c', '#954921', '#e8c547', '#fff', '#f59e0b'];
+        // Respect reduced-motion: show a calm static reveal, no confetti burst.
+        const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        // Confetti burst — keyed to the store's accent so it feels on-brand, with
+        // a couple of bright highlights for sparkle. Radial spray from center.
+        const accent = (getComputedStyle(document.documentElement).getPropertyValue('--mark-accent') || '#2DE2E6').trim();
+        const accentLight = (getComputedStyle(document.documentElement).getPropertyValue('--mark-accent-light') || '#5CF6FA').trim();
+        const particleColors = [accent, accentLight, '#FFFFFF', accent, '#FFE08A'];
         let particlesHTML = '';
-        for (let i = 0; i < 16; i++) {
+        const COUNT = reduce ? 0 : 28;
+        for (let i = 0; i < COUNT; i++) {
             const color = particleColors[i % particleColors.length];
-            const px = (Math.random() - 0.5) * 200;
-            const py = -40 - Math.random() * 120;
-            const delay = Math.random() * 0.5;
-            const size = 3 + Math.random() * 4;
+            const ang = (Math.PI * 2 * i) / COUNT + (Math.random() - 0.5) * 0.4;
+            const dist = 120 + Math.random() * 180;
+            const px = Math.cos(ang) * dist;
+            const py = Math.sin(ang) * dist - 30;          // bias slightly upward
+            const delay = Math.random() * 0.18;
+            const size = 5 + Math.random() * 7;
+            const rot = (Math.random() * 360) | 0;
             particlesHTML += '<div class="mark-celeb-particle" style="' +
                 'background:' + color + ';' +
                 'width:' + size + 'px;height:' + size + 'px;' +
-                'left:calc(50% + ' + (Math.random() - 0.5) * 40 + 'px);' +
-                'top:50%;' +
-                '--px:' + px + 'px;--py:' + py + 'px;' +
-                'animation-delay:' + delay + 's;' +
+                'border-radius:' + (i % 3 === 0 ? '2px' : '50%') + ';' +
+                'left:50%;top:50%;transform:rotate(' + rot + 'deg);' +
+                '--px:' + px.toFixed(0) + 'px;--py:' + py.toFixed(0) + 'px;' +
+                'animation-delay:' + delay.toFixed(2) + 's;' +
                 '"></div>';
         }
 
         const esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
         const celebText = esc(CFG.celebrateText || 'Welcome');
         celebrationEl.innerHTML =
+            '<div class="mark-celeb-scrim"></div>' +
+            '<div class="mark-celeb-ring"></div>' +
+            '<div class="mark-celeb-glow"></div>' +
             particlesHTML +
-            '<div class="mark-celeb-welcome">' + celebText + '</div>' +
-            '<div class="mark-celeb-name">' + esc(name) + '</div>' +
-            '<div class="mark-celeb-line"></div>';
+            '<div class="mark-celeb-stack">' +
+                '<div class="mark-celeb-welcome">' + celebText + '</div>' +
+                '<div class="mark-celeb-name">' + esc(name) + '</div>' +
+                '<div class="mark-celeb-line"></div>' +
+            '</div>';
         celebrationEl.classList.add('mark-show');
 
-        // Fade out after 2.5s
+        // Fade out after 2.6s
         setTimeout(() => {
             celebrationEl.style.transition = 'opacity 0.6s ease';
             celebrationEl.style.opacity = '0';
@@ -412,7 +427,7 @@
                 celebrationEl.style.transition = '';
                 celebrationEl.innerHTML = '';
             }, 600);
-        }, 2500);
+        }, 2600);
     }
 
     // ============================================================
@@ -1273,10 +1288,22 @@
         while ((m = URL_IN_TEXT.exec(text)) !== null) {
             if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
             const url = m[0];
+            // Href-LESS pill: Mark never "gives a link" — clicking REDIRECTS in the
+            // same tab. With NO href attribute the browser shows nothing on hover
+            // (no status-bar URL, nothing to copy) — it reads as a true redirect.
             const a = document.createElement('a');
-            a.href = url;                       // no target → navigates same tab (redirect)
+            a.setAttribute('role', 'button');
+            a.tabIndex = 0;
+            a.dataset.url = url;
             a.textContent = _prettyLinkLabel(url) + ' →';
             a.className = 'mark-link';
+            const go = (e) => {
+                if (e) e.preventDefault();
+                trackEvent('link_clicked', { url: url.slice(0, 120) });
+                window.location.assign(url);     // real redirect, same tab
+            };
+            a.addEventListener('click', go);
+            a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') go(e); });
             el.appendChild(a);
             last = m.index + m[0].length;
         }
@@ -1594,7 +1621,8 @@
                         messages: messages,
                         user_language: detectedLanguage,
                         store_id: STORE_ID,
-                        stream: true
+                        stream: true,
+                        is_returning: !!(loadMemory().name)   // known visitor → returning playbook
                     }),
                     signal: AbortSignal.timeout(12000)
                 });
@@ -1758,7 +1786,7 @@
         if (chatArea) {
             chatArea.addEventListener('click', (e) => {
                 const a = e.target.closest ? e.target.closest('a.mark-link') : null;
-                if (a) trackEvent('link_clicked', { url: (a.getAttribute('href') || '').slice(0, 120) });
+                if (a) trackEvent('link_clicked', { url: (a.dataset.url || a.getAttribute('href') || '').slice(0, 120) });
             });
         }
 

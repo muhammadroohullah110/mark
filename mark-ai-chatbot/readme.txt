@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,14 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.5.0 =
+* Product links now REDIRECT in place — no raw URL is ever shown (href-less, status-bar-clean) so Mark "takes you there" instead of pasting a link
+* Premium name-celebration: accent confetti burst, glowing ring, blurred scrim, spring reveal (respects reduced-motion)
+* Robot re-centered in talking mode for a tighter, more cohesive layout with the caption
+* First-time vs returning visitor sales framework: Mark adapts pace + posture across the whole conversation (Sales Cortex)
+* Voice Speed control in the Voice tab (very slow to very fast), previewable before saving
+* Admin: dark theme now fills the full screen — no white gap at the bottom; centered loaders
 
 = 1.2.0 =
 * Draco-compressed 3D model (5.2MB to 431KB — 92% faster loading)

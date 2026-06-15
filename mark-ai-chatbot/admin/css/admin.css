@@ -9,6 +9,15 @@
 
 /* Google Fonts loaded via wp_enqueue_style in class-mark-ai-admin.php */
 
+/* -- Fill the ENTIRE WP content area with our dark theme --
+   This stylesheet only loads on Mark AI pages, so it's safe to style WP's own
+   containers. Without this, WP's white #wpbody-content shows below our app
+   (the "white space at the bottom" gap) whenever a page's content is short. */
+html.wp-toolbar { background: #050507; }
+#wpcontent, #wpbody, #wpbody-content { background: #050507 !important; }
+#wpbody-content { padding-bottom: 0 !important; }
+#wpfooter { color: #5b6770; }   /* keep WP footer legible on dark */
+
 /* -- Reset WP Admin Styles Inside Our App -- */
 #mark-ai-app {
     font-family: 'Space Grotesk', -apple-system, sans-serif;
@@ -17,6 +26,10 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.6;
+    min-height: calc(100vh - 32px);   /* fill viewport — no dead space below */
+}
+#mark-ai-app .mark-ai-app-root {
+    min-height: calc(100vh - 60px) !important;   /* dark theme reaches the bottom */
 }
 
 #mark-ai-app *,

@@ -134,7 +134,7 @@
 
     /** Cute robot head loader — replaces boring spinners */
     function robotLoader(text = 'Loading...', size = 32) {
-        return `<div style="display:flex;align-items:center;gap:12px;color:#9AA3AD;padding:40px;">
+        return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#9AA3AD;padding:40px;min-height:55vh;text-align:center;">
             <div style="animation:markRobotBob 1s ease-in-out infinite;">
                 <svg width="${size}" height="${size}" viewBox="0 0 20 14" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <line x1="10" y1="0.5" x2="10" y2="3" stroke="#2DE2E6" stroke-width="1" stroke-linecap="round"/>
@@ -1921,11 +1921,15 @@
                         <option value="en-US-JennyNeural" ${s.tts_voice==='en-US-JennyNeural'?'selected':''}>Jenny (Female, US Friendly)</option>
                         <option value="en-US-DavisNeural" ${s.tts_voice==='en-US-DavisNeural'?'selected':''}>Davis (Male, US Casual)</option>
                     </select></div>
-                    <div><label style="${T.label}">Speech Rate</label><select id="s-tts-rate" style="${T.select}">
-                        <option value="-20%" ${s.tts_rate==='-20%'?'selected':''}>Slow (-20%)</option><option value="-10%" ${s.tts_rate==='-10%'?'selected':''}>Slightly Slow</option>
-                        <option value="+0%" ${!s.tts_rate||s.tts_rate==='+0%'?'selected':''}>Normal</option><option value="+10%" ${s.tts_rate==='+10%'?'selected':''}>Slightly Fast</option>
+                    <div><label style="${T.label}">Voice Speed</label><select id="s-tts-rate" style="${T.select}">
+                        <option value="-30%" ${s.tts_rate==='-30%'?'selected':''}>Very Slow (-30%)</option>
+                        <option value="-20%" ${s.tts_rate==='-20%'?'selected':''}>Slow (-20%)</option>
+                        <option value="-10%" ${s.tts_rate==='-10%'?'selected':''}>Slightly Slow (-10%)</option>
+                        <option value="+0%" ${!s.tts_rate||s.tts_rate==='+0%'?'selected':''}>Normal</option>
+                        <option value="+10%" ${s.tts_rate==='+10%'?'selected':''}>Slightly Fast (+10%)</option>
                         <option value="+20%" ${s.tts_rate==='+20%'?'selected':''}>Fast (+20%)</option>
-                    </select></div>
+                        <option value="+35%" ${s.tts_rate==='+35%'?'selected':''}>Very Fast (+35%)</option>
+                    </select><span style="font-size:12px;color:#9AA3AD;margin-top:4px;display:block;">How fast Mark speaks. Preview below before saving.</span></div>
                     <div><label style="${T.label}">Pitch</label><select id="s-tts-pitch" style="${T.select}">
                         <option value="-10Hz" ${s.tts_pitch==='-10Hz'?'selected':''}>Lower</option>
                         <option value="+0Hz" ${!s.tts_pitch||s.tts_pitch==='+0Hz'?'selected':''}>Normal</option>
