@@ -41,6 +41,7 @@ class Mark_AI_Widget {
             'three-gltf-loader',
             'three-draco-loader',
             'mark-ai-animator',
+            'mark-ai-rive',
             'mark-ai-brain',
             'mark-ai-chatbot',
         ];
@@ -115,10 +116,10 @@ class Mark_AI_Widget {
         }
         $settings = get_option('mark_ai_settings', []);
 
-        // Google Fonts (Outfit for the robot UI) — display=swap already set
+        // Google Fonts — Space Grotesk (brand font, matches admin/markai.shop) + Outfit fallback
         wp_enqueue_style(
             'mark-ai-outfit-font',
-            'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap',
+            'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Outfit:wght@300;400;600;800&display=swap',
             [],
             null
         );
@@ -163,6 +164,16 @@ class Mark_AI_Widget {
             'mark-ai-animator',
             MARK_AI_URL . 'public/js/mark-animator.js',
             ['three-js'],
+            MARK_AI_VERSION,
+            true
+        );
+
+        // Mark Rive (real designer-authored motion — INERT unless a .riv URL is set;
+        // on successful load it bridges markAnimator → Rive. See MARK_RIVE_SPEC.md)
+        wp_enqueue_script(
+            'mark-ai-rive',
+            MARK_AI_URL . 'public/js/rive-animator.js',
+            [],
             MARK_AI_VERSION,
             true
         );
@@ -242,6 +253,9 @@ class Mark_AI_Widget {
             'scaleDesktop'     => max( 1, min( 10, intval( $active_store['widget_scale_desktop'] ?? 5 ) ) ),
             'scaleMobile'      => max( 1, min( 10, intval( $active_store['widget_scale_mobile']  ?? 5 ) ) ),
             'pluginVersion'    => MARK_AI_VERSION,
+            // Rive (real motion) — empty = inert (Three.js robot). Set a .riv URL to
+            // activate; the asset must follow MARK_RIVE_SPEC.md.
+            'riveUrl'          => esc_url_raw( $settings['rive_url'] ?? '' ),
         ]);
     }
 

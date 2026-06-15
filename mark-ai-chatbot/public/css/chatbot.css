@@ -8,7 +8,7 @@
 #mark-ai-chatbot-root {
     position: fixed;
     z-index: 99999;
-    font-family: 'Outfit', -apple-system, sans-serif;
+    font-family: 'Space Grotesk', 'Outfit', -apple-system, sans-serif;
     /* Warm brand palette — overridden by JS from admin settings */
     --mark-accent: #954921;
     --mark-accent-rgb: 149, 73, 33;
@@ -281,7 +281,7 @@ a.mark-link:focus-visible { outline: 2px solid var(--mark-accent-light); outline
     border: none;
     background: transparent;
     color: #fff; font-size: 14px;
-    font-family: 'Outfit', -apple-system, sans-serif;
+    font-family: 'Space Grotesk', 'Outfit', -apple-system, sans-serif;
     outline: none;
 }
 #mark-text-input::placeholder { color: rgba(255,255,255,0.3); }
@@ -512,7 +512,7 @@ a.mark-link:focus-visible { outline: 2px solid var(--mark-accent-light); outline
     z-index: 99999;
     transition: opacity 0.5s ease, transform 0.5s ease;
     box-shadow: 0 4px 20px rgba(0,0,0,0.08), 0 0 0 1px rgba(var(--mark-accent-rgb),0.05);
-    font-family: 'Outfit', -apple-system, sans-serif;
+    font-family: 'Space Grotesk', 'Outfit', -apple-system, sans-serif;
 }
 .mark-loading-overlay.mark-hidden { opacity: 0; pointer-events: none; transform: translateY(10px) scale(0.95); }
 .mark-loading-text {
@@ -536,7 +536,7 @@ a.mark-link:focus-visible { outline: 2px solid var(--mark-accent-light); outline
 }
 .mark-lead-input {
     flex: 1; padding: 8px 12px; border: 1.5px solid rgba(var(--mark-accent-rgb),0.3);
-    border-radius: 20px; font-size: 13px; font-family: 'Outfit', sans-serif;
+    border-radius: 20px; font-size: 13px; font-family: 'Space Grotesk', 'Outfit', sans-serif;
     background: rgba(255,255,255,0.9); outline: none; color: #1a1a2e;
     transition: border-color 0.2s;
 }
@@ -544,7 +544,7 @@ a.mark-link:focus-visible { outline: 2px solid var(--mark-accent-light); outline
 .mark-lead-submit {
     padding: 8px 16px; border: none; border-radius: 20px; cursor: pointer;
     background: var(--mark-accent); color: #fff; font-size: 12px;
-    font-weight: 600; font-family: 'Outfit', sans-serif;
+    font-weight: 600; font-family: 'Space Grotesk', 'Outfit', sans-serif;
     transition: opacity 0.2s; white-space: nowrap;
 }
 .mark-lead-submit:hover { opacity: 0.85; }

@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,10 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.5.1 =
+* Rive integration scaffolding for real, designer-authored robot motion (inert until a .riv asset is supplied — see MARK_RIVE_SPEC.md)
+* Widget font upgraded to Space Grotesk (brand-consistent with the admin)
 
 = 1.5.0 =
 * Product links now REDIRECT in place — no raw URL is ever shown (href-less, status-bar-clean) so Mark "takes you there" instead of pasting a link
