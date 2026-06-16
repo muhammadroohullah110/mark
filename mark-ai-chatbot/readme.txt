@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.6.1 =
+* New dashboard layout — "Command Center": agent hero (Mark as your live salesman), a responsive bento grid, plain-English labels, sales-journey + who's-shopping + recent-chats + Mark's-tip tiles. Fully responsive (desktop + mobile). Keeps the Aurora colors.
 
 = 1.6.0 =
 * Brand-new "Aurora" admin design — light, premium-fintech: violet→pink gradient hero, white rounded cards, gradient stat numbers, gradient icon chips, Plus Jakarta Sans. A full departure from the dark theme.

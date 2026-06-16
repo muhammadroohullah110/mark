@@ -215,6 +215,23 @@
                 color:#FFFFFF;
             }
             .mark-icon-chip .material-symbols-outlined { font-size:22px; }
+            /* ── Command Center bento (responsive: 4 → 2 → 1 col) ── */
+            .mark-bento { display:grid; grid-template-columns:repeat(4,1fr); grid-auto-rows:132px; gap:18px; }
+            .mark-bento .b-2 { grid-column:span 2; }
+            .mark-bento .b-r2 { grid-row:span 2; }
+            .mark-tile { display:flex; flex-direction:column; overflow:hidden; }
+            .mark-tile .tt { font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8A8FA8;display:flex;align-items:center;gap:7px;margin-bottom:12px; }
+            .mark-tile .tt .material-symbols-outlined { font-size:16px;color:#7C5CFF; }
+            @media (max-width:1024px){
+                .mark-bento { grid-template-columns:repeat(2,1fr); grid-auto-rows:auto; }
+                .mark-bento .b-2 { grid-column:span 2; }
+                .mark-bento .b-r2 { grid-row:auto; }
+                .mark-tile { min-height:150px; }
+            }
+            @media (max-width:600px){
+                .mark-bento { grid-template-columns:1fr; }
+                .mark-bento .b-2 { grid-column:span 1; }
+            }
             @media (prefers-reduced-motion: reduce) {
                 .mark-gradient-text { animation:none; }
                 .mark-stagger > * { animation:none; }
@@ -713,86 +730,101 @@
 
             destroyCharts();
 
+            const ccName  = store ? esc(store.assistant_name || 'Mark') : 'Mark';
+            const ccToday = formatNum(dashboardStats.today_conversations);
+            const ccTotal = formatNum(dashboardStats.total_conversations);
+            const ccUrl   = store ? (store.website_url || '').replace(/^https?:\/\//, '') : '';
+
+            // Compact KPI tile
+            const ccKpi = (label, val, icon, id) => `
+                <div class="mark-tile mark-stat-card" style="${T.glassLight}padding:18px 18px 20px;justify-content:space-between;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8A8FA8;">${label}</span>
+                        <span class="mark-icon-chip" style="width:32px;height:32px;border-radius:10px;"><span class="material-symbols-outlined" style="font-size:18px;">${icon}</span></span>
+                    </div>
+                    <div style="${T.statValue}font-size:30px;"${id ? ` id="${id}"` : ''}>${val}</div>
+                </div>`;
+
+            // Mark's tip — honest, derived from real signals (no fabricated numbers)
+            let ccTip, ccTipCta, ccTipNav, ccTipIcon;
+            if (!store || !dashboardStats.total_conversations) {
+                ccTip = `${ccName} is live but hasn't chatted with anyone yet. Open your store and say hi to make sure he's working!`;
+                ccTipCta = store ? 'Open my store' : 'Set up store'; ccTipNav = 'store'; ccTipIcon = 'storefront';
+            } else {
+                ccTip = `The more ${ccName} knows about your store, the better he sells. Add your brand details and best products so he can recommend them.`;
+                ccTipCta = `Train ${ccName}`; ccTipNav = 'training'; ccTipIcon = 'tune';
+            }
+
             content.innerHTML = `
-            <!-- Header -->
-            <div style="margin-bottom:40px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;">
-                <div>
-                    <h1 class="mark-gradient-text" style="${T.headline}font-size:52px;line-height:58px;letter-spacing:-0.025em;font-weight:600;margin:0 0 8px;">Overview</h1>
-                    <p style="font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;color:#4B4F66;line-height:1.6;margin:0;">Monitor your Mark AI performance.</p>
+            <!-- Agent hero -->
+            <div class="mark-rise" style="${T.glass}padding:22px 26px;margin-bottom:18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+                <div style="width:60px;height:60px;border-radius:18px;background:linear-gradient(140deg,#7C5CFF,#B14BF0 60%,#FF6FA8);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 10px 24px rgba(124,92,255,0.4);flex-shrink:0;">
+                    <span class="material-symbols-outlined" style="font-size:34px;">smart_toy</span>
+                </div>
+                <div style="min-width:200px;flex:1;">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                        <span style="${T.headline}font-size:20px;font-weight:800;">${ccName}</span>
+                        ${store && store.is_active
+                            ? `<span style="${T.badgeActive}"><span style="width:6px;height:6px;border-radius:50%;background:#15c07a;animation:markPulse 1.8s ease-in-out infinite;display:inline-block;"></span>Live${ccUrl ? ` · ${esc(ccUrl)}` : ''}</span>`
+                            : renderBadge(false)}
+                    </div>
+                    <div style="color:#6B6F86;font-size:14px;margin-top:5px;line-height:1.5;">
+                        Today ${ccName} handled <strong style="color:#14152A;">${ccToday} chat${dashboardStats.today_conversations == 1 ? '' : 's'}</strong>${dashboardStats.total_conversations ? ` · <strong style="color:#14152A;">${ccTotal}</strong> all-time` : ''}.
+                    </div>
                 </div>
                 <div style="display:flex;gap:10px;">
-                    <button style="${T.btnSecondary}" onclick="markAdmin.startTour()">
-                        <span class="material-symbols-outlined" style="font-size:18px;">school</span> Take a Tour
-                    </button>
-                    ${store ? `<button style="${T.btnSecondary}" onclick="markAdmin.showPreview()">
-                        <span class="material-symbols-outlined" style="font-size:18px;">visibility</span> Preview Widget
-                    </button>` : ''}
+                    ${store ? `<button style="${T.btnSecondary}" onclick="markAdmin.showPreview()"><span class="material-symbols-outlined" style="font-size:18px;">visibility</span> Preview</button>` : ''}
+                    <button style="${T.btnPrimary}" onclick="markAdmin.navigate('${store ? 'training' : 'store'}')"><span class="material-symbols-outlined" style="font-size:18px;">${store ? 'tune' : 'add'}</span> ${store ? ('Train ' + ccName) : 'Set up store'}</button>
                 </div>
             </div>
 
-            <!-- Stats Grid -->
-            <div class="mark-stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;margin-bottom:40px;">
-                ${renderStatCard('Total Conversations', dashboardStats.total_conversations, 'forum')}
-                ${renderStatCard("Today's Chats", dashboardStats.today_conversations, 'chat')}
-                ${renderStatCard('Active Stores', dashboardStats.active_stores, 'bolt')}
-                ${renderStatCard('Total Stores', dashboardStats.total_stores, 'store')}
-            </div>
+            <div class="mark-bento mark-stagger">
+                <!-- Your week (big) -->
+                <div class="mark-tile b-2 b-r2" style="${T.glass}padding:22px;">
+                    <div class="tt"><span class="material-symbols-outlined">insights</span> Your week at a glance</div>
+                    <div style="display:flex;gap:32px;flex-wrap:wrap;margin-bottom:6px;">
+                        <div><div style="${T.statValue}font-size:34px;" id="cc-visitors">—</div><div style="color:#8A8FA8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-top:2px;">Visitors</div></div>
+                        <div><div style="${T.statValue}font-size:34px;" id="cc-weekchats">—</div><div style="color:#8A8FA8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-top:2px;">Chats this week</div></div>
+                    </div>
+                    <div style="flex:1;min-height:130px;position:relative;"><canvas id="mark-chart-trend"></canvas></div>
+                </div>
 
-            <!-- Charts Row -->
-            <div class="mark-stagger" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:40px;" id="mark-charts-row">
-                <div class="mark-lift" style="${T.glass}padding:24px;">
-                    <h3 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 16px;">
-                        <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">trending_up</span>
-                        Conversation Trend (14 days)
-                    </h3>
-                    <div style="height:220px;position:relative;">
-                        <canvas id="mark-chart-trend"></canvas>
-                    </div>
+                ${ccKpi('Chats today', ccToday, 'chat')}
+                ${ccKpi('All-time chats', ccTotal, 'forum')}
+                ${ccKpi('Visitors', '—', 'group', 'cc-kpi-visitors')}
+                ${ccKpi('Stores live', formatNum(dashboardStats.active_stores), 'bolt')}
+
+                <!-- Busiest times -->
+                <div class="mark-tile b-2" style="${T.glass}padding:22px;">
+                    <div class="tt"><span class="material-symbols-outlined">schedule</span> Busiest times</div>
+                    <div style="flex:1;min-height:96px;position:relative;"><canvas id="mark-chart-hours"></canvas></div>
                 </div>
-                <div class="mark-lift" style="${T.glass}padding:24px;">
-                    <h3 style="${T.headline}font-size:16px;font-weight:600;margin:0 0 16px;">
-                        <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:6px;color:#7C5CFF;">schedule</span>
-                        Peak Hours (last 30 days)
-                    </h3>
-                    <div style="height:220px;position:relative;">
-                        <canvas id="mark-chart-hours"></canvas>
-                    </div>
+
+                <!-- Who's shopping -->
+                <div class="mark-tile b-2" id="cc-personas" style="${T.glass}padding:22px;">
+                    <div class="tt"><span class="material-symbols-outlined">groups</span> Who's shopping</div>
+                    <div style="color:#8A8FA8;font-size:13px;">Loading…</div>
+                </div>
+
+                <!-- Recent chats -->
+                <div class="mark-tile b-2 b-r2" id="cc-recent" style="${T.glass}padding:22px;">
+                    <div class="tt"><span class="material-symbols-outlined">bolt</span> Recent chats</div>
+                    <div style="color:#8A8FA8;font-size:13px;">Loading…</div>
+                </div>
+
+                <!-- Mark's tip -->
+                <div class="mark-tile b-2 b-r2" style="background:linear-gradient(135deg,#7C5CFF,#B14BF0 55%,#FF6FA8);border:none;border-radius:20px;padding:24px;color:#fff;box-shadow:0 16px 36px rgba(124,92,255,0.32);">
+                    <div class="tt" style="color:rgba(255,255,255,0.92);"><span class="material-symbols-outlined" style="color:#fff;">lightbulb</span> ${ccName}'s tip</div>
+                    <div style="font-size:16px;font-weight:600;line-height:1.5;margin-bottom:18px;flex:1;">${ccTip}</div>
+                    <button style="background:#fff;color:#5a2fd0;border:none;border-radius:12px;padding:12px 18px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;align-self:flex-start;box-shadow:0 6px 16px rgba(0,0,0,0.12);" onclick="markAdmin.navigate('${ccTipNav}')"><span class="material-symbols-outlined" style="font-size:18px;">${ccTipIcon}</span> ${ccTipCta}</button>
                 </div>
             </div>
-
-            ${store ? `
-            <!-- Quick Store Info -->
-            <div style="${T.glass}padding:32px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
-                    <div>
-                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
-                            <h2 style="${T.headline}font-size:24px;font-weight:600;margin:0;">${esc(store.store_name)}</h2>
-                            ${renderBadge(store.is_active)}
-                        </div>
-                        <p style="color:#4B4F66;font-size:14px;margin:0;">
-                            <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">language</span>
-                            ${esc(store.website_url)}
-                            &nbsp;&middot;&nbsp;
-                            <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">smart_toy</span>
-                            ${esc(store.assistant_name || 'Mark')}
-                        </p>
-                    </div>
-                    <div style="display:flex;gap:12px;">
-                        <button style="${T.btnPrimary}" onclick="markAdmin.navigate('store')">
-                            <span class="material-symbols-outlined" style="font-size:18px;">settings</span> Manage Store
-                        </button>
-                    </div>
-                </div>
-            </div>` : `
-            <div style="${T.glass}padding:48px;text-align:center;">
-                <span class="material-symbols-outlined" style="font-size:48px;color:#6B6F86;opacity:0.5;margin-bottom:12px;">storefront</span>
-                <h3 style="${T.headline}font-size:20px;margin:0 0 8px;">No store configured</h3>
-                <p style="color:#4B4F66;font-size:14px;margin:0;">Go to <strong>My Store</strong> in the sidebar to set up your store.</p>
-            </div>`}
             `;
 
-            // Load charts async (non-blocking)
+            // Charts (trend + busiest times) — non-blocking
             loadDashboardCharts();
+            // Real data for the richer tiles — all guarded, graceful empty states
+            if (store) populateCommandCenter(store);
         } catch (e) {
             content.innerHTML = `
             <div style="text-align:center;padding:80px 20px;">
@@ -804,6 +836,64 @@
                 </button>
             </div>`;
         }
+    }
+
+    // ── Command Center: fill the richer tiles with REAL data (all guarded) ──
+    async function populateCommandCenter(store) {
+        const setNum = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = formatNum(v || 0); };
+        try {
+            const d = await maieFetch(store, '/conversations');
+            setNum('cc-visitors', d.unique_visitors);
+            setNum('cc-kpi-visitors', d.unique_visitors);
+            setNum('cc-weekchats', d.this_week);
+            renderCCRecent(d.recent || []);
+        } catch (e) { renderCCRecent(null); }
+        try {
+            const pb = await maieFetch(store, '/playbook');
+            renderCCPersonas(pb.persona_distribution || []);
+        } catch (e) { renderCCPersonas([]); }
+    }
+
+    function renderCCPersonas(dist) {
+        const el = document.getElementById('cc-personas'); if (!el) return;
+        const head = `<div class="tt"><span class="material-symbols-outlined">groups</span> Who's shopping</div>`;
+        const grand = (dist || []).reduce((a, d) => a + (d.total || 0), 0);
+        if (!grand) {
+            el.innerHTML = head + `<div style="color:#8A8FA8;font-size:13px;line-height:1.5;">Mark is still learning who your shoppers are — this fills in as visitors chat.</div>`;
+            return;
+        }
+        const rows = dist.slice(0, 4).map(d => {
+            const meta = PERSONA_META[d.persona] || { label: d.persona };
+            const share = Math.round((d.total / grand) * 100);
+            return `<div style="margin-bottom:11px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;"><span style="color:#14152A;">${esc(meta.label)}</span><span style="font-weight:700;color:#14152A;">${share}%</span></div>
+                <div style="height:8px;border-radius:999px;background:#EFEFF6;overflow:hidden;"><div style="height:100%;width:${share}%;background:linear-gradient(90deg,#7C5CFF,#FF6FA8);border-radius:999px;"></div></div>
+            </div>`;
+        }).join('');
+        el.innerHTML = head + rows;
+    }
+
+    function renderCCRecent(recent) {
+        const el = document.getElementById('cc-recent'); if (!el) return;
+        const head = `<div class="tt"><span class="material-symbols-outlined">bolt</span> Recent chats</div>`;
+        if (recent === null) {
+            el.innerHTML = head + `<div style="color:#8A8FA8;font-size:13px;">Recent chats will appear once the backend wakes up.</div>`;
+            return;
+        }
+        const items = recent.slice(0, 4);
+        if (!items.length) {
+            el.innerHTML = head + `<div style="color:#8A8FA8;font-size:13px;line-height:1.5;">No chats yet — once visitors talk to Mark, they'll show up here live.</div>`;
+            return;
+        }
+        const rows = items.map(c => {
+            const msg = esc(c.last_user_msg || c.summary || '—');
+            const when = c.created_at ? esc(formatDate(c.created_at)) : '';
+            return `<div style="display:flex;gap:10px;align-items:flex-start;">
+                <div style="width:28px;height:28px;border-radius:9px;background:#F0EEFB;color:#7C5CFF;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="material-symbols-outlined" style="font-size:16px;">person</span></div>
+                <div style="min-width:0;flex:1;"><div style="font-size:13px;line-height:1.35;color:#14152A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">“${msg}”</div><div style="font-size:11px;color:#8A8FA8;margin-top:2px;">${when}</div></div>
+            </div>`;
+        }).join('');
+        el.innerHTML = head + `<div style="display:flex;flex-direction:column;gap:12px;overflow:hidden;">${rows}</div>`;
     }
 
     /* ================================================================
