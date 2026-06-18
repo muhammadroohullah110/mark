@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.7.0
+Stable tag: 1.7.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.7.1 =
+* Smarter, more resilient AI brain — Kimi K2 (on Groq) as the main model with Moonshot Kimi K2 as an independent fallback, so Mark stays up even if one provider has an outage.
 
 = 1.7.0 =
 * No API key needed — Mark now runs on a central backend key. Store owners just configure (name, salesman name, etc.) — the Groq key step is removed from onboarding, AI Config, and Settings.

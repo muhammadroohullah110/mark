@@ -39,19 +39,23 @@ class LLMRouter:
     """
 
     def __init__(self, groq_key: str = "", openai_key: str = "",
+                 moonshot_key: str = "", moonshot_model: str = "kimi-k2-0711-preview",
                  fallback_model: str = "gpt-4o-mini"):
         self.providers = []
         self._groq_client = None
+        self._moonshot_client = None
         self._openai_client = None
         self.fallback_model = fallback_model
+        self.moonshot_model = moonshot_model
 
         # Per-credential breaker buckets — isolate failures by API key.
         self._bkey = {
             "groq": f"groq:{_key_fp(groq_key)}",
+            "moonshot": f"moonshot:{_key_fp(moonshot_key)}",
             "openai": f"openai:{_key_fp(openai_key)}",
         }
 
-        # Primary: Groq
+        # Primary: Groq (hosts Kimi K2 — Kimi quality at Groq speed)
         if groq_key:
             try:
                 from groq import Groq
@@ -60,7 +64,16 @@ class LLMRouter:
             except Exception as e:
                 logger.warning(f"Groq init failed: {e}")
 
-        # Fallback: OpenAI
+        # Fallback 1: Moonshot (Kimi K2, independent provider) — OpenAI-compatible API
+        if moonshot_key:
+            try:
+                from openai import OpenAI
+                self._moonshot_client = OpenAI(api_key=moonshot_key, base_url="https://api.moonshot.ai/v1")
+                self.providers.append("moonshot")
+            except Exception as e:
+                logger.warning(f"Moonshot init failed: {e}")
+
+        # Fallback 2: OpenAI (last resort)
         if openai_key:
             try:
                 from openai import OpenAI
@@ -109,7 +122,24 @@ class LLMRouter:
                 logger.warning(f"Groq failed: {e}")
                 self._record_failure("groq")
 
-        # Fallback: OpenAI
+        # Fallback 1: Moonshot (Kimi K2)
+        if "moonshot" in self.providers and self._is_provider_healthy("moonshot"):
+            try:
+                resp = self._moonshot_client.chat.completions.create(
+                    model=self.moonshot_model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                text = resp.choices[0].message.content
+                self._record_success("moonshot")
+                logger.info("Used Moonshot (Kimi) fallback successfully")
+                return text
+            except Exception as e:
+                logger.warning(f"Moonshot fallback failed: {e}")
+                self._record_failure("moonshot")
+
+        # Fallback 2: OpenAI
         if "openai" in self.providers and self._is_provider_healthy("openai"):
             try:
                 resp = self._openai_client.chat.completions.create(
@@ -155,7 +185,31 @@ class LLMRouter:
                 logger.warning(f"Groq stream failed: {e}")
                 self._record_failure("groq")
 
-        # Fallback: OpenAI streaming
+        # Fallback 1: Moonshot (Kimi K2) streaming
+        if "moonshot" in self.providers and self._is_provider_healthy("moonshot"):
+            try:
+                stream = self._moonshot_client.chat.completions.create(
+                    model=self.moonshot_model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    stream=True,
+                )
+                had_content = False
+                for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if delta and delta.content:
+                        had_content = True
+                        yield delta.content
+                if had_content:
+                    self._record_success("moonshot")
+                    logger.info("Used Moonshot (Kimi) stream fallback")
+                    return
+            except Exception as e:
+                logger.warning(f"Moonshot stream fallback failed: {e}")
+                self._record_failure("moonshot")
+
+        # Fallback 2: OpenAI streaming
         if "openai" in self.providers and self._is_provider_healthy("openai"):
             try:
                 stream = self._openai_client.chat.completions.create(

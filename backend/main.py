@@ -60,7 +60,13 @@ logger = logging.getLogger("mark")
 # ── Default keys from .env (fallback when no tenant) ─────────
 DEFAULT_GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 DEFAULT_OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
+DEFAULT_MOONSHOT_KEY = os.getenv("MOONSHOT_API_KEY", "")
 FALLBACK_MODEL = os.getenv("FALLBACK_LLM_MODEL", "gpt-4o-mini")
+# Fallback brain = Kimi K2 on Moonshot (independent provider, OpenAI-compatible).
+MOONSHOT_MODEL = os.getenv("MOONSHOT_MODEL", "kimi-k2-0711-preview")
+# MAIN brain = Kimi K2 hosted on Groq (Kimi quality + Groq speed). Env-overridable
+# so the exact Groq model id can be tweaked without a code change.
+DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "moonshotai/kimi-k2-instruct")
 
 # ── Response Cache ──────────────────────────────────────────
 response_cache = ResponseCache(max_entries=2000, default_ttl=1800)
@@ -314,12 +320,16 @@ def get_groq_client(tenant: dict | None) -> Groq:
 
 
 def get_llm_router(tenant: dict | None) -> LLMRouter:
-    """Build an LLM router with fallback chain for this tenant."""
+    """Build an LLM router for this tenant.
+    Chain: Groq (Kimi K2 on Groq) → Moonshot (Kimi K2) → OpenAI (last resort)."""
     groq_key = (tenant or {}).get("groq_api_key") or DEFAULT_GROQ_KEY
     openai_key = (tenant or {}).get("openai_api_key") or DEFAULT_OPENAI_KEY
-    if not groq_key and not openai_key:
+    moonshot_key = (tenant or {}).get("moonshot_api_key") or DEFAULT_MOONSHOT_KEY
+    if not (groq_key or openai_key or moonshot_key):
         raise HTTPException(status_code=503, detail="AI not configured. Add an API key.")
-    return LLMRouter(groq_key=groq_key, openai_key=openai_key, fallback_model=FALLBACK_MODEL)
+    return LLMRouter(groq_key=groq_key, openai_key=openai_key,
+                     moonshot_key=moonshot_key, moonshot_model=MOONSHOT_MODEL,
+                     fallback_model=FALLBACK_MODEL)
 
 
 def get_rag(tenant: dict | None) -> MarkRAG | None:
@@ -981,7 +991,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     # Explicit None checks — a deliberately-set 0 (e.g. temperature=0) must not
     # be coalesced away to the default by a falsy `or`.
     _t = (tenant or {})
-    llm_model = _t.get("llm_model") or "llama-3.3-70b-versatile"
+    llm_model = _t.get("llm_model") or DEFAULT_GROQ_MODEL
     max_tokens = _t.get("max_tokens") if _t.get("max_tokens") not in (None, "") else 150
     temperature = _t.get("temperature") if _t.get("temperature") not in (None, "") else 0.72
 

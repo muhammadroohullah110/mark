@@ -2109,6 +2109,7 @@
             <h2 style="${T.headline}font-size:24px;margin:0 0 32px;">Model Parameters</h2>
             <div style="display:flex;flex-direction:column;gap:32px;">
                 <div><label style="${T.label}">AI Model</label><select id="s-llm-model" style="${T.select}">
+                    <option value="moonshotai/kimi-k2-instruct" ${!s.llm_model||s.llm_model==='moonshotai/kimi-k2-instruct'?'selected':''}>Kimi K2 (on Groq) — recommended</option>
                     <option value="llama-3.3-70b-versatile" ${s.llm_model==='llama-3.3-70b-versatile'?'selected':''}>Llama 3.3 70B Versatile</option>
                     <option value="llama-3.1-8b-instant" ${s.llm_model==='llama-3.1-8b-instant'?'selected':''}>Llama 3.1 8B Instant</option>
                     <option value="gemma2-9b-it" ${s.llm_model==='gemma2-9b-it'?'selected':''}>Gemma 2 9B</option>
