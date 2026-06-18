@@ -157,6 +157,7 @@ def _build_schema(pg: bool) -> str:
             tts_voice_urdu TEXT DEFAULT 'ur-PK-AsadNeural',
             tts_rate TEXT DEFAULT '+0%',
             tts_pitch TEXT DEFAULT '+0Hz',
+            plan TEXT DEFAULT 'free',
 
             groq_api_key TEXT DEFAULT '',
             llm_model TEXT DEFAULT 'llama-3.3-70b-versatile',
@@ -301,6 +302,8 @@ _STORE_MIGRATIONS = {
     "auto_learning_enabled": "INTEGER DEFAULT 1",
     "learning_autoapprove": "INTEGER DEFAULT 1",
     "learning_last_run": "REAL DEFAULT 0",
+    # Billing tier: 'free' (Edge voice) or 'premium' (realistic voices + all languages)
+    "plan": "TEXT DEFAULT 'free'",
 }
 
 
@@ -385,7 +388,7 @@ STORE_FIELDS = {
     "store_id", "owner_id", "store_name", "website_url", "assistant_name",
     "personality", "greeting_style", "primary_language", "supported_languages",
     "max_crawl_pages", "idle_timeout", "walking_enabled", "sound_effects",
-    "tts_voice", "tts_voice_urdu", "tts_rate", "tts_pitch",
+    "tts_voice", "tts_voice_urdu", "tts_rate", "tts_pitch", "plan",
     "groq_api_key", "llm_model", "max_tokens", "temperature",
     "max_audio_mb", "max_message_length", "rate_transcribe", "rate_chat",
     "rate_rag", "rate_tts", "custom_system_prompt", "is_active", "updated_at",

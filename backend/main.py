@@ -68,6 +68,13 @@ MOONSHOT_MODEL = os.getenv("MOONSHOT_MODEL", "kimi-k2-0711-preview")
 # so the exact Groq model id can be tweaked without a code change.
 DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "moonshotai/kimi-k2-instruct")
 
+# ── Premium tier voice ──────────────────────────────────────
+# Free plan = Edge TTS (free). Premium plan = realistic engine + all languages.
+# Default premium engine = OpenAI TTS (cheapest realistic); swap via env.
+PREMIUM_TTS = os.getenv("PREMIUM_TTS", "openai")          # 'openai' | 'edge'
+PREMIUM_TTS_MODEL = os.getenv("PREMIUM_TTS_MODEL", "gpt-4o-mini-tts")
+PREMIUM_TTS_VOICE = os.getenv("PREMIUM_TTS_VOICE", "onyx")
+
 # ── Response Cache ──────────────────────────────────────────
 response_cache = ResponseCache(max_entries=2000, default_ttl=1800)
 
@@ -769,6 +776,14 @@ async def transcribe_audio(request: Request, audio: UploadFile = File(...),
         raise HTTPException(status_code=500, detail="Transcription failed.")
 
 
+def _openai_tts_bytes(text: str, voice: str) -> bytes:
+    """Premium realistic voice via OpenAI TTS. Blocking — call in a thread."""
+    from openai import OpenAI
+    client = OpenAI(api_key=DEFAULT_OPENAI_KEY)
+    resp = client.audio.speech.create(model=PREMIUM_TTS_MODEL, voice=voice, input=text[:4000])
+    return resp.read()
+
+
 @app.post("/api/tts")
 async def text_to_speech(request: Request, body: TTSRequest,
                          x_store_id: Optional[str] = Header(None)):
@@ -778,6 +793,20 @@ async def text_to_speech(request: Request, body: TTSRequest,
     custom_rate = get_tenant_rate(tenant, "rate_tts")
     if not tts_limiter.is_allowed(ip, custom_max=custom_rate):
         raise HTTPException(status_code=429, detail="Too many requests.")
+
+    # ── Premium tier → realistic engine (OpenAI TTS). Falls back to Edge on any error.
+    is_premium = (tenant or {}).get("plan") == "premium"
+    if is_premium and PREMIUM_TTS == "openai" and DEFAULT_OPENAI_KEY:
+        try:
+            import asyncio
+            pvoice = body.voice_override or PREMIUM_TTS_VOICE
+            audio = await asyncio.to_thread(_openai_tts_bytes, body.text, pvoice)
+            if audio:
+                return StreamingResponse(iter([audio]), media_type="audio/mpeg",
+                                         headers={"Cache-Control": "no-cache"})
+        except Exception as e:
+            logger.warning(f"Premium TTS failed, falling back to Edge: {e}")
+
     # Allow admin preview to override voice/rate/pitch without saving
     voice = body.voice_override or get_edge_voice(tenant, body.language or "en")
     rate = body.rate_override or (tenant or {}).get("tts_rate") or EDGE_TTS_RATE
