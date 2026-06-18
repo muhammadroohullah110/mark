@@ -597,37 +597,11 @@
                 </p>
             </div>
 
-            <!-- Step: API Key -->
-            <div style="${T.glass}padding:40px;text-align:left;margin-bottom:24px;">
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;">
-                        <span style="color:#fff;font-weight:600;font-size:14px;">1</span>
-                    </div>
-                    <h3 style="${T.headline}font-size:20px;font-weight:600;margin:0;">Connect your AI</h3>
-                </div>
-                <p style="color:#4B4F66;font-size:14px;margin:0 0 20px;line-height:1.6;">
-                    Mark uses <strong>Groq</strong> for blazing-fast AI responses. It's free — just grab an API key:
-                </p>
-                <ol style="color:#4B4F66;font-size:14px;line-height:2;margin:0 0 20px;padding-left:20px;">
-                    <li>Go to <a href="https://console.groq.com" target="_blank" style="color:#7C5CFF;font-weight:600;text-decoration:none;">console.groq.com</a></li>
-                    <li>Sign up (free) and create an API key</li>
-                    <li>Paste it below</li>
-                </ol>
-                <div>
-                    <label style="${T.label}">Groq API Key</label>
-                    <div style="position:relative;">
-                        <input id="onboard-key" type="password" placeholder="gsk_..." style="${T.input}" />
-                        <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#6B6F86;cursor:pointer;font-size:20px;"
-                              onclick="const i=document.getElementById('onboard-key');i.type=i.type==='password'?'text':'password';">visibility_off</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step: Customize -->
+            <!-- Step: Set up your salesman -->
             <div style="${T.glass}padding:40px;text-align:left;margin-bottom:32px;">
                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#7C5CFF);display:flex;align-items:center;justify-content:center;">
-                        <span style="color:#fff;font-weight:600;font-size:14px;">2</span>
+                    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7C5CFF,#B14BF0);display:flex;align-items:center;justify-content:center;">
+                        <span style="color:#fff;font-weight:600;font-size:14px;">1</span>
                     </div>
                     <h3 style="${T.headline}font-size:20px;font-weight:600;margin:0;">Customize your robot</h3>
                 </div>
@@ -666,22 +640,14 @@
     }
 
     async function completeSetup() {
-        const apiKey    = ($('#onboard-key') || {}).value?.trim();
         const storeName = ($('#onboard-store-name') || {}).value?.trim();
         const url       = ($('#onboard-url') || {}).value?.trim();
         const assistant = ($('#onboard-assistant') || {}).value?.trim() || 'Mark';
         const personality = ($('#onboard-personality') || {}).value || 'friendly';
 
-        if (!apiKey || apiKey.length < 10) {
-            toast('Please enter a valid Groq API key.', 'error');
-            return;
-        }
-
+        // No API key needed — Mark's AI runs centrally on the backend.
         try {
-            // 1. Save global API key
-            await api('POST', 'settings', { groq_api_key: apiKey });
-
-            // 2. Update the store
+            // Save the store configuration
             const store = getMainStore();
             if (store) {
                 await api('PUT', 'stores/' + store.store_id, {
@@ -692,13 +658,8 @@
                 });
             }
 
-            // 3. Test connection
-            const test = await api('POST', 'test-connection');
-            if (test.connected) {
-                toast('Mark AI is live! Your robot companion is ready.', 'success');
-            } else {
-                toast('Settings saved, but API key test failed: ' + (test.error || 'Unknown error'), 'error');
-            }
+            try { localStorage.setItem('mark_ai_onboarded', '1'); } catch(_) {}
+            toast('All set! ' + assistant + ' is now live on your store.', 'success');
 
             // Reload dashboard then start tour
             navigate('dashboard');
@@ -722,8 +683,12 @@
             stores = dashboardStats.stores || [];
             const store = getMainStore();
 
-            // No API key yet → show onboarding
-            if (!dashboardStats.has_api_key) {
+            // Show onboarding only until the store is set up once (no API key needed —
+            // Mark runs on the central backend key). Existing/configured stores skip it.
+            let _onboarded = false;
+            try { _onboarded = !!localStorage.getItem('mark_ai_onboarded'); } catch(_) {}
+            const _configured = !!(store && store.website_url) || !!dashboardStats.has_api_key;
+            if (!_onboarded && !_configured) {
                 content.innerHTML = renderOnboarding();
                 return;
             }
@@ -2143,11 +2108,7 @@
         <div style="${T.glass}padding:40px;">
             <h2 style="${T.headline}font-size:24px;margin:0 0 32px;">Model Parameters</h2>
             <div style="display:flex;flex-direction:column;gap:32px;">
-                <div><label style="${T.label}">Groq API Key</label>
-                    <div style="position:relative;"><input id="s-groq-key" type="password" value="${esc(s.groq_api_key||'')}" placeholder="gsk_... (leave empty to use global key)" style="${T.input}" />
-                    <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#6B6F86;cursor:pointer;font-size:20px;" onclick="const i=document.getElementById('s-groq-key');i.type=i.type==='password'?'text':'password';">visibility_off</span></div>
-                    <p style="font-size:12px;color:#6B6F86;margin:6px 0 0;">Get your free key at <a href="https://console.groq.com" target="_blank" style="color:#7C5CFF;font-weight:600;text-decoration:none;">console.groq.com</a></p></div>
-                <div><label style="${T.label}">LLM Model</label><select id="s-llm-model" style="${T.select}">
+                <div><label style="${T.label}">AI Model</label><select id="s-llm-model" style="${T.select}">
                     <option value="llama-3.3-70b-versatile" ${s.llm_model==='llama-3.3-70b-versatile'?'selected':''}>Llama 3.3 70B Versatile</option>
                     <option value="llama-3.1-8b-instant" ${s.llm_model==='llama-3.1-8b-instant'?'selected':''}>Llama 3.1 8B Instant</option>
                     <option value="gemma2-9b-it" ${s.llm_model==='gemma2-9b-it'?'selected':''}>Gemma 2 9B</option>
@@ -2180,7 +2141,7 @@
         }
 
         const data = {
-            groq_api_key: $('#s-groq-key').value, llm_model: $('#s-llm-model').value,
+            llm_model: $('#s-llm-model').value,
             max_tokens: maxTokens, temperature: temperature,
             custom_system_prompt: $('#s-custom-prompt').value,
         };
@@ -2324,14 +2285,6 @@
                 <p style="color:#4B4F66;font-size:18px;margin:0;">Global configuration for Mark AI.</p>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:24px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">key</span><h3 style="${T.headline}font-size:24px;margin:0;">API Keys</h3></div>
-                <div style="max-width:600px;"><label style="${T.label}">Groq API Key (Global Default)</label>
-                    <div style="position:relative;"><input id="g-groq-key" type="password" value="${esc(s.groq_api_key||'')}" placeholder="gsk_..." style="${T.input}" />
-                    <span class="material-symbols-outlined" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#6B6F86;cursor:pointer;font-size:20px;" onclick="const i=document.getElementById('g-groq-key');i.type=i.type==='password'?'text':'password';">visibility_off</span></div>
-                    <p style="font-size:12px;color:#6B6F86;margin:8px 0 0;">Get one free at <a href="https://console.groq.com" target="_blank" style="color:#7C5CFF;font-weight:600;text-decoration:none;">console.groq.com</a></p>
-                </div>
-            </div>
-            <div style="${T.glass}padding:32px;margin-bottom:24px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">record_voice_over</span><h3 style="${T.headline}font-size:24px;margin:0;">Default Voice (Edge TTS)</h3></div>
                 <div style="max-width:300px;"><label style="${T.label}">English Voice</label><select id="g-voice-en" style="${T.select}">
                     <option value="en-US-GuyNeural" ${s.default_voice==='en-US-GuyNeural'?'selected':''}>Guy (Male)</option>
@@ -2394,9 +2347,9 @@
                 </div>
             </div>
             <div style="${T.glass}padding:32px;margin-bottom:32px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">cable</span><h3 style="${T.headline}font-size:24px;margin:0;">Connection Test</h3></div>
-                <p style="color:#4B4F66;font-size:14px;margin:0 0 16px;">Verify your Groq API key is working.</p>
-                <button style="${T.btnSecondary}" onclick="markAdmin.testConnection()" id="test-conn-btn"><span class="material-symbols-outlined" style="font-size:18px;">power</span> Test Groq Connection</button>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#6B6F86;">cable</span><h3 style="${T.headline}font-size:24px;margin:0;">Health Check</h3></div>
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 16px;">Make sure Mark's AI is up and responding.</p>
+                <button style="${T.btnSecondary}" onclick="markAdmin.testConnection()" id="test-conn-btn"><span class="material-symbols-outlined" style="font-size:18px;">power</span> Test Mark</button>
                 <div id="conn-test-result" style="margin-top:12px;"></div>
             </div>
             <button style="${T.btnPrimary}padding:14px 32px;" onclick="markAdmin.saveGlobalSettings()">Save All Settings</button>`;
@@ -2409,7 +2362,6 @@
     async function saveGlobalSettings() {
         const accentColor = ($('#g-accent-hex') || {}).value?.trim() || '#7C5CFF';
         const data = {
-            groq_api_key: $('#g-groq-key').value.trim(),
             default_voice: $('#g-voice-en').value,
             widget_enabled: $('#g-widget-enabled').value,
             widget_position: $('#g-widget-position').value,
@@ -2500,7 +2452,7 @@
                     </div>
                     <div style="display:flex;align-items:flex-start;gap:12px;">
                         <span class="material-symbols-outlined" style="font-size:22px;color:#7C5CFF;flex-shrink:0;margin-top:1px;">settings</span>
-                        <div><strong style="font-size:14px;">Settings</strong><br/><span style="font-size:13px;color:#4B4F66;">API key, widget color, position, greeting sound, and connection test.</span></div>
+                        <div><strong style="font-size:14px;">Settings</strong><br/><span style="font-size:13px;color:#4B4F66;">Widget color, position, greeting sound, and a health check.</span></div>
                     </div>
                 </div>
                 <button style="${T.btnPrimary}padding:12px 32px;" onclick="markAdmin.endTour()">Got it!</button>

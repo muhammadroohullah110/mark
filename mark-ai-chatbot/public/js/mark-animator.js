@@ -49,6 +49,7 @@ class MarkAnimator {
     _reset() {
         if (this.robot) {
             this.robot.rotation.x = 0;
+            this.robot.rotation.y = 0;
             this.robot.rotation.z = 0;
         }
         this._removeBlushLight();
@@ -73,9 +74,13 @@ class MarkAnimator {
         }
     }
 
-    // ── IDLE — gentle float ─────────────────────────────────────
+    // ── IDLE — alive: float + slow look-around + breathing tilts ──
+    // Visibly 3D even at rest, so Mark never looks frozen.
     _idle(t) {
-        this.robot.position.y = this.basePos.y + Math.sin(t * 1.0) * 0.12;
+        this.robot.position.y = this.basePos.y + Math.sin(t * 1.0) * 0.16;   // bob
+        this.robot.rotation.y = Math.sin(t * 0.45) * 0.40;                   // slow look left/right (3D turn)
+        this.robot.rotation.x = Math.sin(t * 0.7) * 0.05;                    // gentle breathing nod
+        this.robot.rotation.z = Math.sin(t * 0.6) * 0.05;                    // subtle sway
     }
 
     // ── SPEAK — visible head bob & nod while talking ────────────

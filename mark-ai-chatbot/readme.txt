@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.1
+Stable tag: 1.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,11 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.7.0 =
+* No API key needed — Mark now runs on a central backend key. Store owners just configure (name, salesman name, etc.) — the Groq key step is removed from onboarding, AI Config, and Settings.
+* Mark never goes silent — he now always answers product, price, and stock questions from the catalog (or points to the closest match) instead of dodging.
+* Widget robot is bigger, better centered, and visibly alive — real 3D idle movement (slow look-around + breathing), not a frozen model.
 
 = 1.6.1 =
 * New dashboard layout — "Command Center": agent hero (Mark as your live salesman), a responsive bento grid, plain-English labels, sales-journey + who's-shopping + recent-chats + Mark's-tip tiles. Fully responsive (desktop + mobile). Keeps the Aurora colors.
