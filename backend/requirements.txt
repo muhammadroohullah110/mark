@@ -10,4 +10,5 @@ numpy
 aiofiles
 edge-tts
 openai
+stripe
 psycopg2-binary

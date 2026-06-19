@@ -158,6 +158,9 @@ def _build_schema(pg: bool) -> str:
             tts_rate TEXT DEFAULT '+0%',
             tts_pitch TEXT DEFAULT '+0Hz',
             plan TEXT DEFAULT 'free',
+            premium_voice TEXT DEFAULT '',
+            stripe_customer_id TEXT DEFAULT '',
+            stripe_subscription_id TEXT DEFAULT '',
 
             groq_api_key TEXT DEFAULT '',
             llm_model TEXT DEFAULT 'llama-3.3-70b-versatile',
@@ -304,6 +307,9 @@ _STORE_MIGRATIONS = {
     "learning_last_run": "REAL DEFAULT 0",
     # Billing tier: 'free' (Edge voice) or 'premium' (realistic voices + all languages)
     "plan": "TEXT DEFAULT 'free'",
+    "premium_voice": "TEXT DEFAULT ''",          # chosen realistic voice (premium engine)
+    "stripe_customer_id": "TEXT DEFAULT ''",
+    "stripe_subscription_id": "TEXT DEFAULT ''",
 }
 
 
@@ -389,6 +395,7 @@ STORE_FIELDS = {
     "personality", "greeting_style", "primary_language", "supported_languages",
     "max_crawl_pages", "idle_timeout", "walking_enabled", "sound_effects",
     "tts_voice", "tts_voice_urdu", "tts_rate", "tts_pitch", "plan",
+    "premium_voice", "stripe_customer_id", "stripe_subscription_id",
     "groq_api_key", "llm_model", "max_tokens", "temperature",
     "max_audio_mb", "max_message_length", "rate_transcribe", "rate_chat",
     "rate_rag", "rate_tts", "custom_system_prompt", "is_active", "updated_at",

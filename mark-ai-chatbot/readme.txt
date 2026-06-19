@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.7.1
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.8.0 =
+* Premium voice tier — "Upgrade to Premium" unlocks ultra-realistic voices + a premium voice picker (Voice tab). Free tier keeps the free Edge voice. Secure Stripe checkout; plan badge shows your current tier.
 
 = 1.7.1 =
 * Smarter, more resilient AI brain — Kimi K2 (on Groq) as the main model with Moonshot Kimi K2 as an independent fallback, so Mark stays up even if one provider has an outage.

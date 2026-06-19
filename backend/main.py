@@ -46,6 +46,7 @@ from cache import ResponseCache
 from llm_router import LLMRouter
 import learning_engine as maie
 import sales_cortex
+import billing
 
 load_dotenv()
 
@@ -71,9 +72,13 @@ DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "moonshotai/kimi-k2-instruct")
 # ── Premium tier voice ──────────────────────────────────────
 # Free plan = Edge TTS (free). Premium plan = realistic engine + all languages.
 # Default premium engine = OpenAI TTS (cheapest realistic); swap via env.
-PREMIUM_TTS = os.getenv("PREMIUM_TTS", "openai")          # 'openai' | 'edge'
+PREMIUM_TTS = os.getenv("PREMIUM_TTS", "openai")          # 'openai' | 'cartesia' | 'edge'
 PREMIUM_TTS_MODEL = os.getenv("PREMIUM_TTS_MODEL", "gpt-4o-mini-tts")
 PREMIUM_TTS_VOICE = os.getenv("PREMIUM_TTS_VOICE", "onyx")
+# Optional top-tier engine: Cartesia Sonic (set PREMIUM_TTS=cartesia)
+CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY", "")
+CARTESIA_MODEL = os.getenv("CARTESIA_MODEL", "sonic-2")
+CARTESIA_VOICE = os.getenv("CARTESIA_VOICE", "")          # a Cartesia voice id
 
 # ── Response Cache ──────────────────────────────────────────
 response_cache = ResponseCache(max_entries=2000, default_ttl=1800)
@@ -488,6 +493,7 @@ class SyncVoiceRequest(BaseModel):
     tts_voice: Optional[str] = None
     tts_rate: Optional[str] = None
     tts_pitch: Optional[str] = None
+    premium_voice: Optional[str] = None
 
 class RAGSearchRequest(BaseModel):
     query: str
@@ -780,8 +786,33 @@ def _openai_tts_bytes(text: str, voice: str) -> bytes:
     """Premium realistic voice via OpenAI TTS. Blocking — call in a thread."""
     from openai import OpenAI
     client = OpenAI(api_key=DEFAULT_OPENAI_KEY)
-    resp = client.audio.speech.create(model=PREMIUM_TTS_MODEL, voice=voice, input=text[:4000])
+    resp = client.audio.speech.create(model=PREMIUM_TTS_MODEL, voice=voice or "onyx", input=text[:4000])
     return resp.read()
+
+
+def _cartesia_tts_bytes(text: str, voice: str, language: str = "en") -> bytes:
+    """Premium realistic voice via Cartesia Sonic. Blocking — call in a thread."""
+    vid = voice or CARTESIA_VOICE
+    if not vid:
+        return b""   # no voice id configured → let caller fall back to Edge
+    r = http_requests.post(
+        "https://api.cartesia.ai/tts/bytes",
+        headers={
+            "Cartesia-Version": "2024-11-13",
+            "X-API-Key": CARTESIA_API_KEY,
+            "Content-Type": "application/json",
+        },
+        json={
+            "model_id": CARTESIA_MODEL,
+            "transcript": text[:4000],
+            "voice": {"mode": "id", "id": vid},
+            "output_format": {"container": "mp3", "sample_rate": 44100, "bit_rate": 128000},
+            "language": (language or "en")[:2],
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.content
 
 
 @app.post("/api/tts")
@@ -794,13 +825,17 @@ async def text_to_speech(request: Request, body: TTSRequest,
     if not tts_limiter.is_allowed(ip, custom_max=custom_rate):
         raise HTTPException(status_code=429, detail="Too many requests.")
 
-    # ── Premium tier → realistic engine (OpenAI TTS). Falls back to Edge on any error.
+    # ── Premium tier → realistic engine. Falls back to Edge on any error/missing config.
     is_premium = (tenant or {}).get("plan") == "premium"
-    if is_premium and PREMIUM_TTS == "openai" and DEFAULT_OPENAI_KEY:
+    if is_premium:
         try:
             import asyncio
-            pvoice = body.voice_override or PREMIUM_TTS_VOICE
-            audio = await asyncio.to_thread(_openai_tts_bytes, body.text, pvoice)
+            pvoice = body.voice_override or (tenant or {}).get("premium_voice") or PREMIUM_TTS_VOICE
+            audio = None
+            if PREMIUM_TTS == "openai" and DEFAULT_OPENAI_KEY:
+                audio = await asyncio.to_thread(_openai_tts_bytes, body.text, pvoice)
+            elif PREMIUM_TTS == "cartesia" and CARTESIA_API_KEY:
+                audio = await asyncio.to_thread(_cartesia_tts_bytes, body.text, pvoice, body.language or "en")
             if audio:
                 return StreamingResponse(iter([audio]), media_type="audio/mpeg",
                                          headers={"Cache-Control": "no-cache"})
@@ -1196,9 +1231,61 @@ async def sync_voice(body: SyncVoiceRequest,
     if body.tts_voice: updates["tts_voice"] = body.tts_voice
     if body.tts_rate: updates["tts_rate"] = body.tts_rate
     if body.tts_pitch: updates["tts_pitch"] = body.tts_pitch
+    if body.premium_voice is not None: updates["premium_voice"] = body.premium_voice
     if updates:
         update_store(store_id, **updates)
     return {"status": "ok", "updated": list(updates.keys())}
+
+
+# ── Billing: premium tier (Stripe) ──────────────────────────
+class CheckoutRequest(BaseModel):
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
+
+
+@app.post("/api/billing/checkout")
+async def billing_checkout(body: CheckoutRequest, x_store_id: Optional[str] = Header(None),
+                           user=Depends(verify_store_token_or_user)):
+    """Start a Stripe Checkout for the premium voice tier. Store-token authed."""
+    store_id = _sync_store_id(user, x_store_id)
+    if not billing.is_configured():
+        return {"configured": False, "message": "Premium upgrade is coming soon."}
+    tenant = resolve_tenant(store_id)
+    if tenant and tenant.get("plan") == "premium":
+        return {"configured": True, "already_premium": True}
+    try:
+        url = billing.create_checkout_session(
+            store_id=store_id,
+            store_name=(tenant or {}).get("store_name", ""),
+            success_url=body.success_url or "",
+            cancel_url=body.cancel_url or "",
+        )
+        return {"configured": True, "url": url}
+    except Exception as e:
+        logger.error(f"Checkout failed: {e}")
+        raise HTTPException(status_code=500, detail="Could not start checkout.")
+
+
+@app.post("/api/billing/webhook")
+async def billing_webhook(request: Request):
+    """Stripe webhook → flips a store's plan on payment events. Signature-verified."""
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = billing.parse_event(payload, sig)
+    except Exception as e:
+        logger.warning(f"Stripe webhook verify failed: {e}")
+        raise HTTPException(status_code=400, detail="Invalid webhook")
+    try:
+        change = billing.plan_change_from_event(event)
+        if change:
+            store_id, new_plan, extra = change
+            if store_id:
+                update_store(store_id, plan=new_plan, **extra)
+                logger.info(f"Billing: store {store_id} -> {new_plan}")
+    except Exception as e:
+        logger.error(f"Billing webhook handling failed: {e}")
+    return {"received": True}
 
 
 class SyncTrainingRequest(BaseModel):

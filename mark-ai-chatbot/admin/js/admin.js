@@ -1999,13 +1999,41 @@
        TAB: VOICE
        ================================================================ */
     function renderVoiceTab(s) {
+        const isPremium = (s.plan === 'premium');
+        const pv = s.premium_voice || 'onyx';
+        const pvoices = [
+            ['onyx','Onyx — deep male'], ['echo','Echo — calm male'], ['fable','Fable — expressive male'],
+            ['nova','Nova — warm female'], ['shimmer','Shimmer — bright female'], ['coral','Coral — lively female'],
+            ['sage','Sage — soft female'], ['alloy','Alloy — neutral'],
+        ];
+        const banner = isPremium
+            ? `<div style="${T.glass}padding:18px 22px;margin-bottom:24px;display:flex;align-items:center;gap:14px;border:1px solid rgba(124,92,255,0.35);">
+                   <span class="material-symbols-outlined" style="color:#7C5CFF;font-size:26px;">workspace_premium</span>
+                   <div><div style="font-weight:700;color:#14152A;">Premium active</div><div style="font-size:13px;color:#6B6F86;">Realistic voices &amp; all languages unlocked.</div></div>
+               </div>`
+            : `<div style="background:linear-gradient(135deg,#7C5CFF,#B14BF0 55%,#FF6FA8);border-radius:18px;padding:22px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;color:#fff;box-shadow:0 14px 34px rgba(124,92,255,0.3);">
+                   <div style="display:flex;align-items:center;gap:14px;">
+                       <span class="material-symbols-outlined" style="font-size:30px;">workspace_premium</span>
+                       <div><div style="font-weight:800;font-size:17px;">Upgrade to Premium</div><div style="font-size:13px;opacity:0.95;">Unlock ultra-realistic voices + more languages for your salesman.</div></div>
+                   </div>
+                   <button style="background:#fff;color:#5a2fd0;border:none;border-radius:12px;padding:11px 20px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;" onclick="markAdmin.upgradePlan()"><span class="material-symbols-outlined" style="font-size:18px;">bolt</span> Upgrade</button>
+               </div>`;
         return `
+        ${banner}
         <div style="display:grid;grid-template-columns:1fr 320px;gap:40px;">
             <div style="${T.glassLight}padding:40px;">
                 <h3 style="${T.headline}font-size:24px;margin:0 0 8px;">Voice Configuration</h3>
-                <p style="color:#4B4F66;font-size:14px;margin:0 0 32px;">Powered by <span style="color:#7C5CFF;font-weight:600;">Edge TTS</span> -- free, no API key needed.</p>
+                <p style="color:#4B4F66;font-size:14px;margin:0 0 32px;">${isPremium ? 'Premium <span style="color:#7C5CFF;font-weight:600;">realistic voices</span> are active.' : 'Powered by <span style="color:#7C5CFF;font-weight:600;">Edge TTS</span> -- free, no API key needed.'}</p>
+                ${isPremium ? `
+                <div style="margin-bottom:24px;">
+                    <label style="${T.label}">Premium Voice <span style="color:#7C5CFF;">&#9733;</span></label>
+                    <select id="s-premium-voice" style="${T.select}">
+                        ${pvoices.map(v => `<option value="${v[0]}" ${pv===v[0]?'selected':''}>${esc(v[1])}</option>`).join('')}
+                    </select>
+                    <span style="font-size:12px;color:#6B6F86;margin-top:4px;display:block;">Ultra-realistic voice used on your store.</span>
+                </div>` : ''}
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
-                    <div><label style="${T.label}">English Voice</label><select id="s-tts-voice" style="${T.select}">
+                    <div><label style="${T.label}">${isPremium ? 'Fallback Voice (free)' : 'English Voice'}</label><select id="s-tts-voice" style="${T.select}">
                         <option value="en-GB-RyanNeural" ${!s.tts_voice||s.tts_voice==='en-US-GuyNeural'||s.tts_voice==='en-GB-RyanNeural'?'selected':''}>Ryan (Male, British) — default</option>
                         <option value="en-GB-SoniaNeural" ${s.tts_voice==='en-GB-SoniaNeural'?'selected':''}>Sonia (Female, British)</option>
                         <option value="en-US-GuyNeural" ${s.tts_voice==='en-US-GuyNeural'?'':''}>Guy (Male, US Warm)</option>
@@ -2046,6 +2074,8 @@
 
     async function saveVoice() {
         const data = { tts_voice: $('#s-tts-voice').value, tts_rate: $('#s-tts-rate').value, tts_pitch: $('#s-tts-pitch').value };
+        const pvEl = $('#s-premium-voice');
+        if (pvEl) data.premium_voice = pvEl.value;   // only present on premium plan
         try {
             await api('PUT', 'stores/' + currentStore.store_id, data);
             currentStore = { ...currentStore, ...data };
@@ -2054,15 +2084,38 @@
             const token = globalSettings.api_token;
             if (remoteId && token) {
                 const backendUrl = globalSettings.backend_url || (markAI || {}).backendUrl || 'https://mark-udfz.onrender.com';
+                const syncBody = { tts_voice: data.tts_voice, tts_rate: data.tts_rate, tts_pitch: data.tts_pitch };
+                if (pvEl) syncBody.premium_voice = pvEl.value;
                 fetch(backendUrl + '/api/sync-voice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId, 'X-Store-Token': token },
-                    body: JSON.stringify({ tts_voice: data.tts_voice, tts_rate: data.tts_rate, tts_pitch: data.tts_pitch })
+                    body: JSON.stringify(syncBody)
                 }).catch(() => {});
             }
             toast('Voice settings saved!', 'success');
         }
         catch (e) { toast(e.message, 'error'); }
+    }
+
+    // E1/E4 — start the premium upgrade (Stripe checkout via backend).
+    async function upgradePlan() {
+        try {
+            const s = globalSettings || {};
+            const backendUrl = s.backend_url || (markAI || {}).backendUrl || 'https://mark-udfz.onrender.com';
+            const token = s.api_token || '';
+            const remoteId = s.remote_store_id || '';
+            if (!token || !remoteId) { toast('Connect your store first, then upgrade.', 'info'); return; }
+            toast('Opening secure checkout...', 'info');
+            const res = await fetch(backendUrl + '/api/billing/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId, 'X-Store-Token': token },
+                body: JSON.stringify({})
+            });
+            const d = await res.json();
+            if (d && d.url) { window.open(d.url, '_blank'); }
+            else if (d && d.already_premium) { toast('You are already on Premium!', 'success'); }
+            else { toast((d && d.message) || 'Premium upgrade is coming soon.', 'info'); }
+        } catch (e) { toast('Could not start upgrade. Please try again.', 'error'); }
     }
 
     async function testVoice() {
@@ -2480,6 +2533,7 @@
         startTour, endTour,
         updateSizePreview,
         trainPlaybook, toggleLearning,
+        upgradePlan,
     };
 
     /* ================================================================
