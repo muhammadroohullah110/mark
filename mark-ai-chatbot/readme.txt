@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.1
+Stable tag: 1.9.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.2 =
+* Mark's Brain rebuilt as a single 2-column hub — Train + Sales style on the left, What Mark learned on the right, with the AI model tucked into a collapsible Advanced. Matches the new design.
 
 = 1.9.1 =
 * Admin redesign Step 2 — streamlined navigation 10 → 6 (Home · Mark's Brain · Voice · Conversations · Appearance · Plan), matching the new design. Mark's Brain merges Training + Sales style + Auto-Learning (+ Advanced). New Plan page. Appearance combines store profile, widget look, and where Mark appears. The old API-key/AI-Config clutter is gone (AI model lives under Mark's Brain → Advanced).

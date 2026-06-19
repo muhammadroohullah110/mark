@@ -232,6 +232,15 @@
                 .mark-bento { grid-template-columns:1fr; }
                 .mark-bento .b-2 { grid-column:span 1; }
             }
+            /* Mark's Brain — 2-column hub (left wider) */
+            .mark-brain-grid { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:24px; align-items:start; }
+            @media (max-width:1024px){ .mark-brain-grid { grid-template-columns:1fr; } }
+            /* Collapsible Advanced */
+            details.mark-adv { margin-top:24px; border:1px solid rgba(45,226,230,0.12); border-radius:14px; overflow:hidden; background:rgba(255,255,255,0.02); }
+            details.mark-adv > summary { cursor:pointer; padding:16px 20px; font-family:'Space Grotesk',sans-serif; font-weight:600; color:#9AA3AD; list-style:none; display:flex; align-items:center; gap:8px; }
+            details.mark-adv > summary::-webkit-details-marker { display:none; }
+            details.mark-adv[open] > summary { color:#5CF6FA; border-bottom:1px solid rgba(45,226,230,0.12); }
+            details.mark-adv > div { padding:20px; }
             @media (prefers-reduced-motion: reduce) {
                 .mark-gradient-text { animation:none; }
                 .mark-stagger > * { animation:none; }
@@ -899,21 +908,28 @@
         });
     }
 
-    // ── Mark's Brain (merges Train + Sales style + What Mark learned + Advanced) ──
-    let brainTab = 'training';
+    // ── Mark's Brain — single 2-column hub (Train + Sales left · Learning right),
+    //    AI model tucked into a collapsible "Advanced". Reuses the existing section
+    //    renders so every save handler keeps working. Matches the Stitch screen.
     async function loadBrainPage() { withStore(() => renderBrainPageContent()); }
     function renderBrainPageContent() {
         const s = currentStore; if (!s) return;
-        const tabs = [['training','Train','model_training'],['sales','Sales style','sell'],['learning','What Mark learned','psychology'],['advanced','Advanced','tune']];
-        const nav = tabs.map(t => `<button onclick="markAdmin.brainTab('${t[0]}')" style="${brainTab===t[0]?T.tabBtnActive:T.tabBtn}display:inline-flex;align-items:center;gap:6px;"><span class="material-symbols-outlined" style="font-size:18px;">${t[2]}</span>${t[1]}</button>`).join('');
-        $('#mark-page-content').innerHTML = _pageHead("Mark's Brain", "Train Mark on your brand, set his sales style, and see what he's learned.")
-            + `<div style="display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:28px;overflow-x:auto;">${nav}</div>`
-            + `<div id="brain-content"></div>`;
-        const c = $('#brain-content');
-        if (brainTab === 'training')      { c.innerHTML = renderTrainingTab(s); initTrainingTab(s); }
-        else if (brainTab === 'sales')    { c.innerHTML = renderSalesTab(s); }
-        else if (brainTab === 'learning') { c.innerHTML = renderLearningTab(s); loadPlaybook(s); }
-        else if (brainTab === 'advanced') { c.innerHTML = renderAITab(s); }
+        $('#mark-page-content').innerHTML = _pageHead("Mark's Brain", "Train Mark on your brand, set his sales style, and review what he's learned.")
+            + `<div class="mark-brain-grid mark-stagger">
+                   <div style="display:flex;flex-direction:column;gap:24px;min-width:0;">
+                       ${renderTrainingTab(s)}
+                       ${renderSalesTab(s)}
+                   </div>
+                   <div style="display:flex;flex-direction:column;gap:24px;min-width:0;">
+                       ${renderLearningTab(s)}
+                   </div>
+               </div>
+               <details class="mark-adv">
+                   <summary><span class="material-symbols-outlined" style="font-size:18px;">tune</span> Advanced (AI model &amp; system prompt)</summary>
+                   <div>${renderAITab(s)}</div>
+               </details>`;
+        initTrainingTab(s);
+        loadPlaybook(s);
     }
 
     // ── Appearance (store profile + how Mark looks + where he appears) ──
@@ -2640,7 +2656,6 @@
         updateSizePreview,
         trainPlaybook, toggleLearning,
         upgradePlan,
-        brainTab: (t) => { brainTab = t; renderBrainPageContent(); },
     };
 
     /* ================================================================
