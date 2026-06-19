@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.8.0
+Stable tag: 1.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.0 =
+* Admin redesign — Step 1: matches the new Stitch design system (neon-cyan markai.shop brand, Space Grotesk + JetBrains Mono, glass cards, animated cyan ambience). Home = "Command Center". Streamlined navigation + remaining pages rolling out next.
 
 = 1.8.0 =
 * Premium voice tier — "Upgrade to Premium" unlocks ultra-realistic voices + a premium voice picker (Voice tab). Free tier keeps the free Edge voice. Secure Stripe checkout; plan badge shows your current tier.

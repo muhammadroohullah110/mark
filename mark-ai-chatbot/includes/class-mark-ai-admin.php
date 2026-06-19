@@ -85,8 +85,8 @@ class Mark_AI_Admin {
             echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
         }, 1);
 
-        // Google Fonts — Plus Jakarta Sans (Aurora design system — light, premium-fintech)
-        wp_enqueue_style('mark-ai-fonts', 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap', [], null);
+        // Google Fonts — Space Grotesk + JetBrains Mono (Neon-Cyan design system, matches markai.shop)
+        wp_enqueue_style('mark-ai-fonts', 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap', [], null);
 
         // Material Icons (only the weights we use: 400, filled=0)
         wp_enqueue_style('material-icons', 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap', [], null);
@@ -142,23 +142,23 @@ class Mark_AI_Admin {
      */
     private function render_app_shell($page) {
         ?>
-        <div id="mark-ai-app" data-page="<?php echo esc_attr($page); ?>" style="background:#F4F5FA;border-radius:14px;overflow:hidden;">
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:460px;color:#6B6F86;gap:18px;background:radial-gradient(800px 400px at 50% 0%, rgba(124,92,255,0.08), transparent 60%);">
+        <div id="mark-ai-app" data-page="<?php echo esc_attr($page); ?>" style="background:#050507;border-radius:14px;overflow:hidden;">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:460px;color:#9AA3AD;gap:18px;background:radial-gradient(800px 400px at 50% 0%, rgba(45,226,230,0.08), transparent 60%);">
                 <div class="mark-robot-loader">
                     <svg width="56" height="56" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <line x1="10" y1="1" x2="10" y2="3.5" stroke="#7C5CFF" stroke-width="1.2" stroke-linecap="round"/>
-                        <circle cx="10" cy="1" r="1" fill="#FF6FA8"/>
-                        <rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="#7C5CFF"/>
-                        <circle cx="7.2" cy="8" r="1.8" fill="#FFFFFF"/>
-                        <circle cx="12.8" cy="8" r="1.8" fill="#FFFFFF"/>
-                        <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#FFFFFF" stroke-width="0.8" fill="none" stroke-linecap="round"/>
+                        <line x1="10" y1="1" x2="10" y2="3.5" stroke="#2DE2E6" stroke-width="1.2" stroke-linecap="round"/>
+                        <circle cx="10" cy="1" r="1" fill="#5CF6FA"/>
+                        <rect x="3.5" y="3.5" width="13" height="9" rx="3" fill="#2DE2E6"/>
+                        <circle cx="7.2" cy="8" r="1.8" fill="#04181A"/>
+                        <circle cx="12.8" cy="8" r="1.8" fill="#04181A"/>
+                        <path d="M7.5 10.5 Q10 12.5 12.5 10.5" stroke="#04181A" stroke-width="0.8" fill="none" stroke-linecap="round"/>
                     </svg>
                 </div>
-                <span style="font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:600;color:#6B6F86;letter-spacing:0.02em;">Loading Mark AI...</span>
+                <span style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;color:#9AA3AD;letter-spacing:0.02em;">Loading Mark AI...</span>
             </div>
         </div>
         <style>
-            .mark-robot-loader{animation:markRobotBob 1s ease-in-out infinite;filter:drop-shadow(0 6px 14px rgba(124,92,255,0.4));}
+            .mark-robot-loader{animation:markRobotBob 1s ease-in-out infinite;filter:drop-shadow(0 0 14px rgba(45,226,230,0.5));}
             @keyframes markRobotBob{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-8px) rotate(-5deg)}50%{transform:translateY(0) rotate(0deg)}75%{transform:translateY(-8px) rotate(5deg)}}
         </style>
         <?php
