@@ -250,18 +250,14 @@
         if (!app) return;
 
         const pageMap = {
-            'mark-ai': 'dashboard',
-            'mark-ai-stores': 'store',
-            'mark-ai-analytics': 'analytics',
-            'mark-ai-learning': 'learning',
-            'mark-ai-training': 'training',
-            'mark-ai-sales': 'sales',
+            'mark-ai': 'home',
+            'mark-ai-brain': 'brain',
             'mark-ai-voice': 'voice',
-            'mark-ai-ai': 'ai',
             'mark-ai-conversations': 'conversations',
-            'mark-ai-settings': 'settings',
+            'mark-ai-appearance': 'appearance',
+            'mark-ai-plan': 'plan',
         };
-        currentPage = pageMap[PAGE] || 'dashboard';
+        currentPage = pageMap[PAGE] || 'home';
 
         app.innerHTML = `
         <div class="mark-ai-app-root" style="${T.pageBg}min-height:500px;padding:0;font-family:'Space Grotesk',sans-serif;color:#F5F7FA;-webkit-font-smoothing:antialiased;border-radius:8px;overflow:hidden;">
@@ -290,13 +286,17 @@
         // instances on the previous page keep animation/resize listeners alive
         // on detached canvases (leak when navigating repeatedly).
         destroyCharts();
-        // Store-scoped pages: each sidebar tab loads the store then renders one tab.
-        const STORE_TABS = ['settings', 'analytics', 'learning', 'training', 'sales', 'voice', 'ai'];
-        if (page === 'store') { activeTab = 'settings'; loadStorePage(); return; }
-        if (STORE_TABS.indexOf(page) !== -1) { activeTab = page; loadStorePage(); return; }
+        // Streamlined 6-page IA (matches the Stitch design).
         switch (page) {
+            case 'brain':         loadBrainPage(); break;
+            case 'voice':         loadVoicePage(); break;
             case 'conversations': loadConversationsPage(); break;
-            case 'settings':      loadSettingsPage(); break;
+            case 'appearance':    loadAppearancePage(); break;
+            case 'plan':          loadPlanPage(); break;
+            // legacy aliases → map to the new pages so old buttons still work
+            case 'store': case 'settings': case 'analytics': loadAppearancePage(); break;
+            case 'training': case 'sales': case 'learning': case 'ai': loadBrainPage(); break;
+            case 'home':
             default:              loadDashboardPage(); break;
         }
     }
@@ -862,7 +862,113 @@
     }
 
     /* ================================================================
-       PAGE: STORE (Single store detail)
+       STREAMLINED 6-PAGE IA  (Home · Mark's Brain · Voice ·
+       Conversations · Appearance · Plan) — matches the Stitch design.
+       ================================================================ */
+    async function withStore(cb) {
+        const content = $('#mark-page-content');
+        content.innerHTML = robotLoader('Loading…');
+        try {
+            const data = await api('GET', 'dashboard'); stores = data.stores || [];
+            const store = getMainStore();
+            if (!store) { content.innerHTML = _noStoreHtml(); return; }
+            const sd = await api('GET', 'stores/' + store.store_id);
+            currentStore = sd.store || sd;
+            cb(currentStore);
+        } catch (e) {
+            content.innerHTML = `<div style="${T.glassLight}padding:40px;text-align:center;color:#9AA3AD;">Failed to load: ${esc(e.message)}</div>`;
+        }
+    }
+    function _noStoreHtml() {
+        return `<div style="text-align:center;padding:60px;">
+            <span class="material-symbols-outlined" style="font-size:48px;color:#9AA3AD;opacity:0.5;">storefront</span>
+            <h3 style="${T.headline}font-size:20px;margin:12px 0 4px;">No store yet</h3>
+            <p style="color:#C7CDD4;margin:0 0 20px;">Finish setup on Home first.</p>
+            <button style="${T.btnPrimary}" onclick="markAdmin.navigate('home')"><span class="material-symbols-outlined" style="font-size:18px;">home</span> Go to Home</button></div>`;
+    }
+    function _pageHead(title, sub) {
+        return `<div style="margin-bottom:28px;">
+            <h1 class="mark-gradient-text" style="${T.headline}font-size:40px;line-height:46px;letter-spacing:-0.02em;font-weight:600;margin:0 0 6px;">${esc(title)}</h1>
+            ${sub ? `<p style="font-size:16px;color:#C7CDD4;margin:0;">${esc(sub)}</p>` : ''}</div>`;
+    }
+
+    // ── Voice ──
+    async function loadVoicePage() {
+        withStore((s) => {
+            $('#mark-page-content').innerHTML = _pageHead('Voice', 'Choose how Mark sounds on your store.') + renderVoiceTab(s);
+        });
+    }
+
+    // ── Mark's Brain (merges Train + Sales style + What Mark learned + Advanced) ──
+    let brainTab = 'training';
+    async function loadBrainPage() { withStore(() => renderBrainPageContent()); }
+    function renderBrainPageContent() {
+        const s = currentStore; if (!s) return;
+        const tabs = [['training','Train','model_training'],['sales','Sales style','sell'],['learning','What Mark learned','psychology'],['advanced','Advanced','tune']];
+        const nav = tabs.map(t => `<button onclick="markAdmin.brainTab('${t[0]}')" style="${brainTab===t[0]?T.tabBtnActive:T.tabBtn}display:inline-flex;align-items:center;gap:6px;"><span class="material-symbols-outlined" style="font-size:18px;">${t[2]}</span>${t[1]}</button>`).join('');
+        $('#mark-page-content').innerHTML = _pageHead("Mark's Brain", "Train Mark on your brand, set his sales style, and see what he's learned.")
+            + `<div style="display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:28px;overflow-x:auto;">${nav}</div>`
+            + `<div id="brain-content"></div>`;
+        const c = $('#brain-content');
+        if (brainTab === 'training')      { c.innerHTML = renderTrainingTab(s); initTrainingTab(s); }
+        else if (brainTab === 'sales')    { c.innerHTML = renderSalesTab(s); }
+        else if (brainTab === 'learning') { c.innerHTML = renderLearningTab(s); loadPlaybook(s); }
+        else if (brainTab === 'advanced') { c.innerHTML = renderAITab(s); }
+    }
+
+    // ── Appearance (store profile + how Mark looks + where he appears) ──
+    async function loadAppearancePage() {
+        withStore(async (s) => {
+            let g = globalSettings || {};
+            try { g = await api('GET', 'settings'); globalSettings = g; } catch (e) {}
+            $('#mark-page-content').innerHTML = _pageHead('Appearance', 'Your store profile, how Mark looks, and where he appears.')
+                + renderSettingsTab(s)
+                + `<div style="height:24px;"></div>`
+                + _globalSettingsCards(g);
+        });
+    }
+
+    // ── Plan (subscription / premium) ──
+    async function loadPlanPage() {
+        withStore((s) => {
+            const premium = (s.plan === 'premium');
+            const feat = (txt, on) => `<li style="display:flex;align-items:center;gap:10px;font-size:14px;color:${on ? '#F5F7FA' : '#9AA3AD'};padding:7px 0;"><span class="material-symbols-outlined" style="font-size:18px;color:${on ? '#4ade80' : '#9AA3AD'};">${on ? 'check_circle' : 'remove'}</span>${txt}</li>`;
+            $('#mark-page-content').innerHTML = _pageHead('Plan', 'Your subscription and what Mark can do.') + `
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:28px;">
+                <span style="${T.label}margin:0;">Current plan</span>
+                <span style="${premium ? T.badgeActive : T.badgeInactive}">${premium ? '&#10022; Premium' : 'Free'}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;">
+                <div class="mark-lift" style="${T.glass}padding:32px;">
+                    <h3 style="${T.headline}font-size:22px;margin:0 0 4px;">Free</h3>
+                    <p style="color:#9AA3AD;font-size:14px;margin:0 0 18px;">Everything to get Mark selling.</p>
+                    <ul style="list-style:none;padding:0;margin:0 0 18px;">
+                        ${feat('AI chat + product recommendations', true)}
+                        ${feat('Free Edge voice', true)}
+                        ${feat('Auto-learning &amp; analytics', true)}
+                        ${feat('Realistic premium voices', false)}
+                    </ul>
+                    ${!premium ? `<span style="${T.badgeInactive}">Your current plan</span>` : ''}
+                </div>
+                <div class="mark-lift" style="${T.glass}padding:32px;border:1px solid rgba(45,226,230,0.4);">
+                    <h3 style="${T.headline}font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="color:#2DE2E6;">workspace_premium</span>Premium</h3>
+                    <p style="color:#9AA3AD;font-size:14px;margin:0 0 18px;">Ultra-realistic voice &amp; more.</p>
+                    <ul style="list-style:none;padding:0;margin:0 0 18px;">
+                        ${feat('Everything in Free', true)}
+                        ${feat('Ultra-realistic voices', true)}
+                        ${feat('More languages', true)}
+                        ${feat('Priority support', true)}
+                    </ul>
+                    ${premium
+                        ? `<span style="${T.badgeActive}">&#10022; Active</span>`
+                        : `<button style="${T.btnPrimary}width:100%;justify-content:center;" onclick="markAdmin.upgradePlan()"><span class="material-symbols-outlined" style="font-size:18px;">bolt</span> Upgrade to Premium</button>`}
+                </div>
+            </div>`;
+        });
+    }
+
+    /* ================================================================
+       PAGE: STORE (legacy single-store detail — kept for openStore/delete)
        ================================================================ */
     async function loadStorePage() {
         const content = $('#mark-page-content');
@@ -2328,16 +2434,10 @@
     /* ================================================================
        PAGE: SETTINGS (Global)
        ================================================================ */
-    async function loadSettingsPage() {
-        const content = $('#mark-page-content');
-        try {
-            globalSettings = await api('GET', 'settings');
-            const s = globalSettings;
-            content.innerHTML = `
-            <div style="margin-bottom:40px;">
-                <h1 style="${T.headline}font-size:48px;line-height:56px;letter-spacing:-0.02em;font-weight:300;margin:0 0 8px;">Settings</h1>
-                <p style="color:#C7CDD4;font-size:18px;margin:0;">Global configuration for Mark AI.</p>
-            </div>
+    // Global widget-look cards (Default voice, Widget settings, Where Mark appears,
+    // Health check) — reused by both the legacy Settings page AND the new Appearance page.
+    function _globalSettingsCards(s) {
+        return `
             <div style="${T.glass}padding:32px;margin-bottom:24px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:24px;"><span class="material-symbols-outlined" style="font-size:20px;color:#9AA3AD;">record_voice_over</span><h3 style="${T.headline}font-size:24px;margin:0;">Default Voice (Edge TTS)</h3></div>
                 <div style="max-width:300px;"><label style="${T.label}">English Voice</label><select id="g-voice-en" style="${T.select}">
@@ -2407,9 +2507,15 @@
                 <div id="conn-test-result" style="margin-top:12px;"></div>
             </div>
             <button style="${T.btnPrimary}padding:14px 32px;" onclick="markAdmin.saveGlobalSettings()">Save All Settings</button>`;
+    }
+
+    async function loadSettingsPage() {
+        const content = $('#mark-page-content');
+        try {
+            globalSettings = await api('GET', 'settings');
+            content.innerHTML = _pageHead('Settings', 'Global configuration for Mark AI.') + _globalSettingsCards(globalSettings);
         } catch (e) {
-            content.innerHTML = `<div style="text-align:center;padding:60px;color:#9AA3AD;"><span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;">error</span><p style="margin:16px 0;">${esc(e.message)}</p>
-            <button style="${T.btnSecondary}" onclick="markAdmin.navigate('settings')"><span class="material-symbols-outlined" style="font-size:18px;">refresh</span> Retry</button></div>`;
+            content.innerHTML = `<div style="text-align:center;padding:60px;color:#9AA3AD;"><span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;">error</span><p style="margin:16px 0;">${esc(e.message)}</p></div>`;
         }
     }
 
@@ -2534,6 +2640,7 @@
         updateSizePreview,
         trainPlaybook, toggleLearning,
         upgradePlan,
+        brainTab: (t) => { brainTab = t; renderBrainPageContent(); },
     };
 
     /* ================================================================

@@ -28,17 +28,13 @@ class Mark_AI_Admin {
             26
         );
 
-        // Submenus — each store tab is now a first-class sidebar item.
-        add_submenu_page('mark-ai', 'Dashboard',     'Dashboard',     'manage_options', 'mark-ai',               [$this, 'render_dashboard']);
-        add_submenu_page('mark-ai', 'My Store',      'My Store',      'manage_options', 'mark-ai-stores',        [$this, 'render_stores']);
-        add_submenu_page('mark-ai', 'Analytics',     'Analytics',     'manage_options', 'mark-ai-analytics',     [$this, 'render_analytics']);
-        add_submenu_page('mark-ai', 'Auto-Learning', 'Auto-Learning', 'manage_options', 'mark-ai-learning',      [$this, 'render_learning']);
-        add_submenu_page('mark-ai', 'Mark Training', 'Mark Training', 'manage_options', 'mark-ai-training',      [$this, 'render_training']);
-        add_submenu_page('mark-ai', 'Sales Skills',  'Sales Skills',  'manage_options', 'mark-ai-sales',         [$this, 'render_sales']);
+        // Streamlined 6-item navigation (matches the Stitch design).
+        add_submenu_page('mark-ai', 'Home',          'Home',          'manage_options', 'mark-ai',               [$this, 'render_dashboard']);
+        add_submenu_page('mark-ai', "Mark's Brain",  "Mark's Brain",  'manage_options', 'mark-ai-brain',         [$this, 'render_brain']);
         add_submenu_page('mark-ai', 'Voice',         'Voice',         'manage_options', 'mark-ai-voice',         [$this, 'render_voice']);
-        add_submenu_page('mark-ai', 'AI Config',     'AI Config',     'manage_options', 'mark-ai-ai',            [$this, 'render_ai']);
         add_submenu_page('mark-ai', 'Conversations', 'Conversations', 'manage_options', 'mark-ai-conversations', [$this, 'render_conversations']);
-        add_submenu_page('mark-ai', 'Settings',      'Settings',      'manage_options', 'mark-ai-settings',      [$this, 'render_settings']);
+        add_submenu_page('mark-ai', 'Appearance',    'Appearance',    'manage_options', 'mark-ai-appearance',    [$this, 'render_appearance']);
+        add_submenu_page('mark-ai', 'Plan',          'Plan',          'manage_options', 'mark-ai-plan',          [$this, 'render_plan']);
     }
 
     /**
@@ -114,28 +110,12 @@ class Mark_AI_Admin {
     /**
      * All pages render a single container — the JS SPA takes over.
      */
-    public function render_dashboard() {
-        $this->render_app_shell('dashboard');
-    }
-
-    public function render_stores() {
-        $this->render_app_shell('stores');
-    }
-
-    public function render_conversations() {
-        $this->render_app_shell('conversations');
-    }
-
-    public function render_settings() {
-        $this->render_app_shell('settings');
-    }
-
-    public function render_analytics() { $this->render_app_shell('analytics'); }
-    public function render_learning()  { $this->render_app_shell('learning'); }
-    public function render_training()  { $this->render_app_shell('training'); }
-    public function render_sales()     { $this->render_app_shell('sales'); }
-    public function render_voice()     { $this->render_app_shell('voice'); }
-    public function render_ai()        { $this->render_app_shell('ai'); }
+    public function render_dashboard()     { $this->render_app_shell('home'); }
+    public function render_brain()         { $this->render_app_shell('brain'); }
+    public function render_voice()         { $this->render_app_shell('voice'); }
+    public function render_conversations() { $this->render_app_shell('conversations'); }
+    public function render_appearance()    { $this->render_app_shell('appearance'); }
+    public function render_plan()          { $this->render_app_shell('plan'); }
 
     /**
      * Render the SPA shell — JS handles everything.
