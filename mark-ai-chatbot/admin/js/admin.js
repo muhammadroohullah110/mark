@@ -770,8 +770,8 @@
                     <div style="flex:1;min-height:130px;position:relative;"><canvas id="mark-chart-trend"></canvas></div>
                 </div>
 
-                ${ccKpi('Chats today', ccToday, 'chat')}
-                ${ccKpi('All-time chats', ccTotal, 'forum')}
+                ${ccKpi('Chats today', ccToday, 'chat', 'cc-kpi-today')}
+                ${ccKpi('All-time chats', ccTotal, 'forum', 'cc-kpi-alltime')}
                 ${ccKpi('Visitors', '—', 'group', 'cc-kpi-visitors')}
                 ${ccKpi('Stores live', formatNum(dashboardStats.active_stores), 'bolt')}
 
@@ -826,9 +826,14 @@
         const setNum = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = formatNum(v || 0); };
         try {
             const d = await maieFetch(store, '/conversations');
+            // All KPIs come from the SAME source (backend) so they stay consistent —
+            // the WP /dashboard mirror is empty (chats log to the backend), which is
+            // why "all-time" showed 0 while "this week" showed real numbers.
             setNum('cc-visitors', d.unique_visitors);
             setNum('cc-kpi-visitors', d.unique_visitors);
             setNum('cc-weekchats', d.this_week);
+            setNum('cc-kpi-today', d.today);
+            setNum('cc-kpi-alltime', d.total_conversations);
             renderCCRecent(d.recent || []);
         } catch (e) { renderCCRecent(null); }
         try {

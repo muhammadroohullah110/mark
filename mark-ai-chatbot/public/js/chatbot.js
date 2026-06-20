@@ -236,7 +236,7 @@
         </div>
 
         <div id="mark-robot-label" class="mark-chat-ui">
-            <span class="mark-status-dot"></span> Mark
+            <span class="mark-status-dot"></span> ${ASSISTANT}
         </div>
 
         <button id="mark-close-btn" class="mark-chat-ui" title="Close">&times;</button>
@@ -329,8 +329,13 @@
     // LOCALSTORAGE MEMORY
     // ============================================================
     function loadMemory() {
-        try { return JSON.parse(localStorage.getItem(MEMORY_KEY)) || {}; }
-        catch { return {}; }
+        try {
+            const m = JSON.parse(localStorage.getItem(MEMORY_KEY)) || {};
+            // Auto-heal: an old bug could save a non-name ("Sorry", "No"…) as the
+            // visitor's name → don't let junk make them a "returning" visitor.
+            if (m.name && !looksLikeName(m.name)) { delete m.name; }
+            return m;
+        } catch { return {}; }
     }
     function saveMemory(data) {
         try {
