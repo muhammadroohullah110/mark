@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.6
+Stable tag: 1.9.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.7 =
+* Fixed wrong chat timestamps (showed "1/21/1970") — Unix seconds were being parsed as milliseconds
 
 = 1.9.6 =
 * Self-heals a previously mis-saved name (e.g. "Sorry") so a first-time visitor is no longer greeted as "returning" with a junk name

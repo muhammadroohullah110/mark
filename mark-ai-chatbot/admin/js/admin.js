@@ -73,11 +73,18 @@
     }
 
     function formatDate(dateStr) {
-        if (!dateStr) return '--';
+        if (!dateStr && dateStr !== 0) return '--';
         try {
-            const d = new Date(dateStr);
+            let v = dateStr;
+            // Numeric Unix timestamp in SECONDS → ms, else it shows "1/21/1970".
+            if (typeof v === 'number' || /^\d+(\.\d+)?$/.test(String(v))) {
+                v = Number(v);
+                if (v > 0 && v < 1e12) v *= 1000;   // seconds → milliseconds
+            }
+            const d = new Date(v);
+            if (isNaN(d.getTime())) return '--';
             return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        } catch (e) { return dateStr; }
+        } catch (e) { return '--'; }
     }
 
     /* ================================================================
