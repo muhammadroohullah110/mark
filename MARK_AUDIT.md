@@ -25,7 +25,7 @@ Backend: FastAPI + Postgres, MAIE learning loop, Stripe billing, RAG (TF-IDF)
 | # | Bug | Status |
 |---|---|---|
 | 1 | **Recent-chat date shows `1/21/1970`** — `created_at` is Unix **seconds**, parsed as **ms**. | ✅ FIXED (formatDate seconds→ms) |
-| 2 | **Dual data path** — chats log to the **backend**, but the WP `/dashboard` mirror is empty, so admin KPIs read 0 while backend tiles read real numbers (the "8 vs 0"). | 🟡 Partly fixed (KPIs now read backend); WP mirror should be deprecated as a source of truth. |
+| 2 | **Dual data path** — chats log to the **backend**, but the WP `/dashboard` mirror is empty, so admin KPIs read 0 while backend tiles read real numbers (the "8 vs 0"). | ✅ FIXED (v1.9.10) — dashboard hero headline, Mark's tip, and KPI tiles all read ONE backend fetch (reused via `populateCommandCenter(store, pre)`); WP mirror is now fallback-only |
 | 3 | **False name capture** — "I'm sorry" → name "Sorry" → wrong "Welcome back" + celebration; cached in localStorage. | ✅ FIXED (looksLikeName + NOT_A_NAME + auto-heal) |
 | 4 | **SECURITY: a live Google API key was pasted in chat history** (`AQ.Ab8RN6Km…`). Must be **rotated** — assume compromised. | ✅ Repo scan clean (no live secret committed); rotation still owner action |
 | 4b | **Admin password hashing was SHA-256 + a FIXED salt** (no per-user salt; graph-surfaced, `database.py`). Fast hash + shared salt → rainbow-table / brute-force risk if DB leaks. | ✅ FIXED — PBKDF2-HMAC-SHA256, 200k iters, per-user random salt; legacy hashes verified + auto-migrated on login (no lockout) |
@@ -68,13 +68,13 @@ Backend: FastAPI + Postgres, MAIE learning loop, Stripe billing, RAG (TF-IDF)
 - [x] Fix the `1/21/1970` date.
 - [x] Scan repo for committed secrets — clean. **(Owner: still rotate the leaked Google key.)**
 - [x] Upgrade admin password hashing to PBKDF2 (graph-surfaced).
-- [ ] Make backend the single analytics source (finish the "8 vs 0" cleanup; deprecate WP-mirror counts).
+- [x] Make backend the single analytics source — "8 vs 0" fixed (v1.9.10); WP mirror is fallback-only.
 
 **Phase 1 — reliability (next)**
 - [x] ~~Warm the backend~~ — owner upgraded to **Render Pro** (cold-start gone).
 - [x] Wire assistant-name + profile sync to the backend tenant.
-- [ ] Durable visitor identity (cookie + backend) → honest counts. *(already localStorage-durable; cookie fallback is the remaining nicety)*
-- [ ] Delete dead admin code (legacy store-tab system).
+- [x] Durable visitor identity — id now persists in localStorage **and** a 1st-party cookie (v1.9.10).
+- [ ] Delete dead admin code (legacy store-tab system). *(spawned as a separate task — backs the openStore/delete path, needs careful verification before removal)*
 
 **Phase 2 — quality**
 - [ ] Eval harness: Cortex buyer-sim (Phase 4/5, the "110% ready" proof) + smoke tests (chat, name, TTS gate, Stripe webhook).
