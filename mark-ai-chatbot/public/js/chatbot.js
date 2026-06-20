@@ -1335,6 +1335,54 @@
         if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
     }
 
+    // ── REDIRECT DIRECTIVE ("GOTO: <url>") ───────────────────────────
+    // Mark never pastes a link in a sentence. When he decides to TAKE the
+    // visitor to a category or product, he ends his reply with a line
+    // `GOTO: <url>`. We strip it (and any stray URL) from what's shown and
+    // spoken, then silently navigate there in the same tab — so it reads as
+    // "Mark took me there", never "here's a link" (and TTS never reads a URL).
+    const GOTO_RE = /(?:^|\n)\s*GOTO:\s*(\S+)[ \t]*$/im;
+    function parseReply(raw) {
+        let redirect = null;
+        let text = String(raw || '');
+        const g = text.match(GOTO_RE);
+        if (g) { redirect = g[1]; text = text.replace(g[0], ' '); }
+        // Belt-and-suspenders: never show or speak a raw URL, and hide any
+        // trailing/partial "GOTO:" fragment (e.g. while still streaming in).
+        text = text
+            .replace(/\n?[ \t]*GOTO:.*$/i, '')
+            .replace(/https?:\/\/[^\s)]+/g, '')
+            .replace(/\(\s*\)/g, '')
+            .replace(/[ \t]{2,}/g, ' ')
+            .replace(/[ \t]+([.,!?])/g, '$1')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+        return { text, redirect };
+    }
+    function scheduleRedirect(url) {
+        if (!url) return;
+        let u;
+        try { u = new URL(url, window.location.href); } catch (_) { return; }
+        // Safety: only ever navigate WITHIN this site (never off-site, even if
+        // the model hallucinates an external URL).
+        if (u.hostname !== window.location.hostname) {
+            MARK_DEBUG && console.log('[Mark] GOTO off-site blocked:', url);
+            return;
+        }
+        trackEvent('mark_redirect', { path: u.pathname.slice(0, 120) });
+        // Brief beat so the visitor reads/hears "taking you there" first.
+        setTimeout(() => { try { window.location.assign(u.href); } catch (_) {} }, 1700);
+    }
+    // Single delivery path for every reply source (stream / backend / WP).
+    function deliverReply(rawReply) {
+        const { text, redirect } = parseReply(rawReply);
+        if (liveCaption) appendLinkified(liveCaption, text);
+        else showCaption(text, true);
+        speak(text);
+        maybeShowLeadForm(rawReply);
+        scheduleRedirect(redirect);
+    }
+
     function showCaption(text, typewriter) {
         if (!text || !liveCaption) return;
         if (typewriter === undefined) typewriter = true;
@@ -1678,7 +1726,7 @@
                                         liveCaption.classList.remove('mark-thinking');
                                         liveCaption.classList.add('mark-show');
                                         liveCaption.style.opacity = '1';
-                                        liveCaption.textContent = fullReply;
+                                        liveCaption.textContent = parseReply(fullReply).text;
                                     }
                                 }
                                 if (evt.done && evt.response) {
@@ -1700,11 +1748,9 @@
                         exchangeCount++;
                         if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
                         saveSessionHistory();
-                        // Finalize the caption in place, linkified.
-                        if (liveCaption) appendLinkified(liveCaption, reply);
-                        else showCaption(reply, true);
-                        speak(reply);
-                        maybeShowLeadForm(reply);
+                        // Finalize: clean text (no raw links), speak, and if Mark
+                        // chose to take them somewhere, silently redirect.
+                        deliverReply(reply);
                         return;
                     }
                 }
@@ -1718,9 +1764,7 @@
                     exchangeCount++;
                     if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
                     saveSessionHistory();
-                    showCaption(reply, true);
-                    speak(reply);
-                    maybeShowLeadForm(reply);
+                    deliverReply(reply);
                     return;
                 }
             } catch(e) {
@@ -1755,9 +1799,7 @@
                 exchangeCount++;
                 if (conversationHistory.length > 16) conversationHistory = conversationHistory.slice(-16);
                 saveSessionHistory();
-                showCaption(reply, true);
-                speak(reply);
-                maybeShowLeadForm(reply);
+                deliverReply(reply);
                 return;
             }
         } catch(e) { /* both failed */ }

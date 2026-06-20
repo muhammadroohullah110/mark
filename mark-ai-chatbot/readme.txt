@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.7
+Stable tag: 1.9.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,11 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.8 =
+* Mark is now centered on screen in talking mode (was sitting too high near the top)
+* No more raw links — Mark never pastes/reads a URL. He describes products by name, asks "which one should I show you?", and silently takes you to the page you pick (voice no longer reads out "https...")
+* Smart category browsing — mention a category Mark has (e.g. "decor") and he takes you straight to that collection page, then asks which item you want and suggests two
 
 = 1.9.7 =
 * Fixed wrong chat timestamps (showed "1/21/1970") — Unix seconds were being parsed as milliseconds

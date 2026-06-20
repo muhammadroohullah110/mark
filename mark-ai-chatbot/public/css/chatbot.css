@@ -67,7 +67,7 @@
 /* ── TALKING MODE: robot centered (mid-screen), caption + big mic below ── */
 #mark-widget.mark-talking {
     width: 280px !important; height: 280px !important;
-    left: 50% !important; top: 33vh !important;
+    left: 50% !important; top: 46vh !important;
     transform: translate(-50%, -50%) !important;
     cursor: default !important;
     filter: drop-shadow(0 0 26px rgba(var(--mark-accent-rgb),0.5))
@@ -77,16 +77,16 @@
 
 @media (max-width:768px) {
     #mark-widget { width:104px; height:104px; }
-    #mark-widget.mark-talking { width:210px !important; height:210px !important; top:30vh !important; }
+    #mark-widget.mark-talking { width:210px !important; height:210px !important; top:44vh !important; }
 }
 @media (min-width:769px) and (max-width:1024px) {
     #mark-widget { width:116px; height:116px; }
-    #mark-widget.mark-talking { width:250px !important; height:250px !important; top:32vh !important; }
+    #mark-widget.mark-talking { width:250px !important; height:250px !important; top:45vh !important; }
 }
 
 /* ── ROBOT NAME LABEL (below the hero robot) ── */
 #mark-robot-label {
-    position: fixed; top: calc(33vh + 142px + 8px); left: 50%;
+    position: fixed; top: calc(46vh - 158px); left: 50%;
     transform: translateX(-50%);
     font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.6);
     letter-spacing: 0.08em; text-transform: uppercase;
@@ -103,10 +103,10 @@
     50% { opacity: 0.4; }
 }
 @media(max-width:768px) {
-    #mark-robot-label { top: calc(30vh + 107px + 6px); font-size: 11px; }
+    #mark-robot-label { top: calc(44vh - 120px); font-size: 11px; }
 }
 @media (min-width:769px) and (max-width:1024px) {
-    #mark-robot-label { top: calc(32vh + 127px + 8px); }
+    #mark-robot-label { top: calc(45vh - 142px); }
 }
 
 /* ── HINT BUBBLE ── */
