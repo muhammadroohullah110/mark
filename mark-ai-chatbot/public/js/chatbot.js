@@ -127,16 +127,31 @@
     const SESSION_ID = 'mark_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
     // Durable per-browser visitor id (survives page loads/navigation) so memory
-    // and analytics stitch the same visitor across pages.
-    function getVisitorId() {
+    // and analytics stitch the same visitor across pages. Stored in BOTH
+    // localStorage AND a 1st-party cookie — if either is cleared, the other
+    // restores the same id, so counts aren't inflated by one returning visitor.
+    function _readCookie(name) {
         try {
-            let v = localStorage.getItem('mark_visitor_id');
-            if (!v) {
-                v = 'mv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
-                localStorage.setItem('mark_visitor_id', v);
-            }
-            return v;
-        } catch { return SESSION_ID; }
+            const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+            return m ? decodeURIComponent(m[1]) : null;
+        } catch (_) { return null; }
+    }
+    function _writeCookie(name, value, days) {
+        try {
+            const exp = new Date(Date.now() + days * 864e5).toUTCString();
+            document.cookie = name + '=' + encodeURIComponent(value) +
+                '; expires=' + exp + '; path=/; SameSite=Lax';
+        } catch (_) {}
+    }
+    function getVisitorId() {
+        const KEY = 'mark_visitor_id';
+        let v = null;
+        try { v = localStorage.getItem(KEY); } catch (_) {}
+        if (!v) v = _readCookie(KEY);
+        if (!v) v = 'mv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+        try { localStorage.setItem(KEY, v); } catch (_) {}
+        _writeCookie(KEY, v, 365);
+        return v;
     }
 
     // ── Analytics — fire-and-forget event tracking ──

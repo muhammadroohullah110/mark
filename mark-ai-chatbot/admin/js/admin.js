@@ -718,8 +718,22 @@
             destroyCharts();
 
             const ccName  = store ? esc(store.assistant_name || 'Mark') : 'Mark';
-            const ccToday = formatNum(dashboardStats.today_conversations);
-            const ccTotal = formatNum(dashboardStats.total_conversations);
+            // SINGLE SOURCE OF TRUTH: chats log to the BACKEND (the WP /dashboard
+            // mirror is empty), so pull live numbers from the backend up front and
+            // fall back to the mirror only if it's unreachable. Reused for the tiles
+            // below so the hero, the tip, and the KPI cards can never disagree.
+            let ccConv = null;
+            let ccTodayN = dashboardStats.today_conversations || 0;
+            let ccTotalN = dashboardStats.total_conversations || 0;
+            if (store) {
+                try {
+                    ccConv = await maieFetch(store, '/conversations');
+                    ccTodayN = ccConv.today || 0;
+                    ccTotalN = ccConv.total_conversations || 0;
+                } catch (_) {}
+            }
+            const ccToday = formatNum(ccTodayN);
+            const ccTotal = formatNum(ccTotalN);
             const ccUrl   = store ? (store.website_url || '').replace(/^https?:\/\//, '') : '';
 
             // Compact KPI tile
@@ -734,7 +748,7 @@
 
             // Mark's tip — honest, derived from real signals (no fabricated numbers)
             let ccTip, ccTipCta, ccTipNav, ccTipIcon;
-            if (!store || !dashboardStats.total_conversations) {
+            if (!store || !ccTotalN) {
                 ccTip = `${ccName} is live but hasn't chatted with anyone yet. Open your store and say hi to make sure he's working!`;
                 ccTipCta = store ? 'Open my store' : 'Set up store'; ccTipNav = 'store'; ccTipIcon = 'storefront';
             } else {
@@ -756,7 +770,7 @@
                             : renderBadge(false)}
                     </div>
                     <div style="color:#9AA3AD;font-size:14px;margin-top:5px;line-height:1.5;">
-                        Today ${ccName} handled <strong style="color:#F5F7FA;">${ccToday} chat${dashboardStats.today_conversations == 1 ? '' : 's'}</strong>${dashboardStats.total_conversations ? ` · <strong style="color:#F5F7FA;">${ccTotal}</strong> all-time` : ''}.
+                        Today ${ccName} handled <strong style="color:#F5F7FA;">${ccToday} chat${ccTodayN == 1 ? '' : 's'}</strong>${ccTotalN ? ` · <strong style="color:#F5F7FA;">${ccTotal}</strong> all-time` : ''}.
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;">
@@ -812,7 +826,7 @@
             // Charts (trend + busiest times) — non-blocking
             loadDashboardCharts();
             // Real data for the richer tiles — all guarded, graceful empty states
-            if (store) populateCommandCenter(store);
+            if (store) populateCommandCenter(store, ccConv);
             // First visit → show the welcome tour once.
             try { if (!localStorage.getItem('mark_ai_tour_complete')) setTimeout(startTour, 900); } catch(_) {}
         } catch (e) {
@@ -829,10 +843,10 @@
     }
 
     // ── Command Center: fill the richer tiles with REAL data (all guarded) ──
-    async function populateCommandCenter(store) {
+    async function populateCommandCenter(store, pre) {
         const setNum = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = formatNum(v || 0); };
         try {
-            const d = await maieFetch(store, '/conversations');
+            const d = pre || await maieFetch(store, '/conversations');
             // All KPIs come from the SAME source (backend) so they stay consistent —
             // the WP /dashboard mirror is empty (chats log to the backend), which is
             // why "all-time" showed 0 while "this week" showed real numbers.

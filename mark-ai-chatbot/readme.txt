@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.9
+Stable tag: 1.9.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,10 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.10 =
+* Dashboard numbers are now fully consistent — the headline ("handled N chats"), Mark's tip, and the KPI tiles all read the same live backend data (no more "0 chats" in one place while another shows the real count)
+* More durable visitor counting — visitor ID now persists in both browser storage and a first-party cookie, so clearing one doesn't double-count a returning shopper
 
 = 1.9.9 =
 * Renaming Mark now updates his REPLIES too (not just the on-screen label) — the new name/personality/sales mode syncs to the AI backend
