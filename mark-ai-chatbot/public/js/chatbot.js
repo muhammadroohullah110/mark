@@ -340,18 +340,37 @@
         } catch {}
     }
 
+    // Words that are NOT names — so "I'm sorry", "I'm good", "sorry", "no" etc.
+    // are never mistaken for the visitor's name (which then wrongly celebrates).
+    const NOT_A_NAME = new Set([
+        'hello','hi','hey','yo','sup','hiya','howdy','hej','hola',
+        'yes','yeah','yep','yup','sure','ok','okay','okey','fine','good','great','nice','cool','awesome','perfect','alright',
+        'no','nope','nah','not','never','none','nothing','nvm',
+        'thanks','thank','thankyou','ty','please','sorry','oops','welcome',
+        'what','whats','who','whos','why','how','when','where','which','whose',
+        'help','stop','wait','hold','done','same','again','more','less','back','next','ready','maybe','really','very',
+        'um','umm','uh','uhh','hmm','hmmm','err','eh','oh','ah','lol','haha','hahaha','idk','dunno',
+        'looking','trying','interested','curious','confused','lost','here','there','just','only','well','now','today','still',
+        'price','prices','pricing','cost','buy','order','product','products','item','items','shipping','delivery','return','returns','refund','discount','deal','sale','size','sizes','color','colour','colors','stock','available','info','details','catalog','store','shop','website','page','link','cart','checkout','payment',
+        'test','testing','english','urdu','hindi','language','salam','salaam','assalam',
+        'goodbye','bye','later','soon','morning','evening','afternoon','night',
+        'mark','assistant','robot','bot','you','your','yours','me','my','mine','this','that','the','and','but','for','with','about','from','want','need','show','find','tell','give','get','can','could','would','will','does','did','yourself','everything','anything','something','nothing',
+    ]);
+    function looksLikeName(w) {
+        const s = (w || '').trim().toLowerCase();
+        return /^[a-z][a-z'’-]{1,17}$/.test(s) && !NOT_A_NAME.has(s);
+    }
+    const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+
     function tryExtractName(text) {
         const patterns = [
-            /(?:my name is|i'm|i am|call me|this is)\s+([a-z]{2,15})/i,
-            /(?:mera naam|naam hai|naam)\s+([a-z]{2,15})/i,
+            /(?:my name is|i'?m called|call me)\s+([a-z'’-]{2,18})/i,
+            /(?:mera naam|naam hai)\s+([a-z'’-]{2,18})/i,
+            /\b(?:i'?m|i am|this is)\s+([a-z'’-]{2,18})\b/i,
         ];
-        const skip = ['hello','hi','hey','yes','no','ok','sure','please','show','find','english','want','need','the','and','but'];
         for (const p of patterns) {
             const m = text.match(p);
-            if (m && m[1]) {
-                const name = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
-                if (!skip.includes(name.toLowerCase())) return name;
-            }
+            if (m && m[1] && looksLikeName(m[1])) return cap(m[1]);
         }
         return null;
     }
@@ -1442,12 +1461,10 @@
         showCaption(text, false);
 
         let name = tryExtractName(text);
-        // Bare-name fallback: when Mark just asked the name, a one-word reply
-        // ("Sara") is the answer even though it has no "my name is" lead-in.
-        if (!name && (awaitingName || lastAssistantAskedName()) && /^[a-z]{2,15}$/i.test(text.trim())) {
-            const low = text.trim().toLowerCase();
-            const skip = ['hello','hi','hey','yes','no','ok','okay','sure','thanks','thank','help','please','what','who','nope','yeah'];
-            if (!skip.includes(low)) name = low.charAt(0).toUpperCase() + low.slice(1);
+        // Bare-name fallback: ONLY right after Mark just asked the name, and only
+        // if it's a single plausible name word ("Sara") — never "sorry"/"no"/etc.
+        if (!name && lastAssistantAskedName() && looksLikeName(text)) {
+            name = cap(text.trim());
         }
         if (name) {
             awaitingName = false;

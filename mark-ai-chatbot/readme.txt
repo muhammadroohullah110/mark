@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.4
+Stable tag: 1.9.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,10 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.5 =
+* Fixed false name detection — Mark no longer mistakes "sorry", "no", "I'm good", etc. for your name (and won't wrongly trigger the name celebration). A name is only captured right after Mark asks, and only when it's a plausible name.
+* Talking robot repositioned to sit cleanly above the chat caption (no overlap)
 
 = 1.9.4 =
 * Clean admin — other plugins' notices (Elementor, Imagify, update nags, etc.) no longer clutter the Mark AI screens
