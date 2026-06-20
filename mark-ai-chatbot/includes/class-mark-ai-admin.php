@@ -81,6 +81,14 @@ class Mark_AI_Admin {
             echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
         }, 1);
 
+        // Keep the Mark AI screens clean — strip OTHER plugins' admin notices
+        // (Elementor/Imagify/update nags etc.) which clutter the dashboard.
+        add_action('in_admin_header', function() {
+            remove_all_actions('user_admin_notices');
+            remove_all_actions('admin_notices');
+            remove_all_actions('all_admin_notices');
+        }, 1000);
+
         // Google Fonts — Space Grotesk + JetBrains Mono (Neon-Cyan design system, matches markai.shop)
         wp_enqueue_style('mark-ai-fonts', 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap', [], null);
 

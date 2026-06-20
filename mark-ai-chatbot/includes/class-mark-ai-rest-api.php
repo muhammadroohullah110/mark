@@ -570,6 +570,45 @@ class Mark_AI_Rest_API {
         ], 200);
     }
 
+    /**
+     * Turnkey fallback: forward a chat to the central backend (which holds the AI key).
+     * Returns the reply string, or null if the backend is unreachable.
+     */
+    private function proxy_chat_to_backend($store_id, $message, $history) {
+        $settings  = get_option('mark_ai_settings', []);
+        $remote_id = $settings['remote_store_id'] ?? $store_id;
+        $token     = $settings['api_token'] ?? '';
+
+        $messages = [];
+        foreach ((array) $history as $h) {
+            if (is_array($h) && !empty($h['role']) && isset($h['content'])) {
+                $messages[] = ['role' => (string) $h['role'], 'content' => (string) $h['content']];
+            }
+        }
+        $messages[] = ['role' => 'user', 'content' => (string) $message];
+
+        $headers = ['Content-Type' => 'application/json'];
+        if ($remote_id) { $headers['X-Store-ID'] = $remote_id; }
+        if ($token)     { $headers['X-Store-Token'] = $token; }
+
+        $resp = wp_remote_post(MARK_AI_BACKEND . '/api/chat', [
+            'timeout' => 28,   // allow for Render cold-start
+            'headers' => $headers,
+            'body'    => wp_json_encode([
+                'messages' => array_slice($messages, -8),
+                'store_id' => $remote_id ?: $store_id,
+                'stream'   => false,
+            ]),
+        ]);
+
+        if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
+            return null;
+        }
+        $data = json_decode(wp_remote_retrieve_body($resp), true);
+        if (!is_array($data)) { return null; }
+        return $data['response'] ?? $data['reply'] ?? $data['message'] ?? null;
+    }
+
     // ── Public Chat (Frontend Widget) ─────────────────
 
     public function handle_chat(WP_REST_Request $request) {
@@ -665,8 +704,14 @@ class Mark_AI_Rest_API {
         }
 
         if (empty($api_key)) {
+            // Turnkey: no local key — Mark's AI runs on the central backend (which holds
+            // the key). Proxy the chat there so the WP fallback still answers properly.
+            $proxied = $this->proxy_chat_to_backend($store_id, $message, $history);
+            if ($proxied !== null && $proxied !== '') {
+                return new WP_REST_Response([ 'reply' => $proxied ], 200);
+            }
             return new WP_REST_Response([
-                'reply' => 'I\'m not fully set up yet! The site owner needs to add an AI key so I can chat properly. In the meantime, feel free to explore the website!',
+                'reply' => 'I\'m just warming up — give me a few seconds and try me again!',
             ], 200);
         }
 

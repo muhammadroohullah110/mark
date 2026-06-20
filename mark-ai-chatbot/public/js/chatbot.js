@@ -15,6 +15,7 @@
     // CONFIG (markAIConfig set by mark-brain.js wp_localize_script)
     // ============================================================
     const CFG = window.markAIConfig || {};
+    const ASSISTANT = (CFG.assistantName || 'Mark').toString().slice(0, 40);
     const PLUGIN_URL = CFG.pluginUrl || '';
     const STORE_ID   = CFG.storeId || '';
     const POSITION   = CFG.position || 'bottom-right';
@@ -850,7 +851,7 @@
         // This eliminates the 2-5s latency for first interaction
         const instantGreet = type === 'returning'
             ? `${name}! Welcome back! How can I help you today?`
-            : "Hey there! I'm Mark. What's your name?";
+            : `Hey there! I'm ${ASSISTANT}. What's your name?`;
         hideThinking();
         showCaption(instantGreet);
         speak(instantGreet);

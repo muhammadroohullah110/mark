@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.3
+Stable tag: 1.9.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,11 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.4 =
+* Clean admin — other plugins' notices (Elementor, Imagify, update nags, etc.) no longer clutter the Mark AI screens
+* Widget now uses your custom assistant name everywhere (not hard-coded "Mark")
+* Turnkey fix — the widget no longer wrongly says "the owner needs to add an AI key"; when needed it falls back through the central backend (which holds the key), with a friendly "warming up" message during cold start
 
 = 1.9.3 =
 * Modern glass toast notifications (icon chip, accent glow, smooth slide) replacing the old flat bar
