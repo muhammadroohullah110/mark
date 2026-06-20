@@ -38,8 +38,8 @@
         pageBg: `background:radial-gradient(1000px 520px at 85% -12%, rgba(45,226,230,0.10), transparent 58%), radial-gradient(820px 520px at -5% 108%, rgba(6,182,199,0.08), transparent 58%), #050507;position:relative;color:#F5F7FA;`,
         glass: `background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.022));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(45,226,230,0.16);box-shadow:0 12px 44px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.07);border-radius:18px;position:relative;overflow:hidden;`,
         glassLight: `background:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(45,226,230,0.11);box-shadow:0 6px 24px rgba(0,0,0,0.38),inset 0 1px 0 rgba(255,255,255,0.05);border-radius:18px;`,
-        input: `background:rgba(255,255,255,0.04);border:1px solid rgba(154,163,173,0.22);color:#F5F7FA;padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:14px;width:100%;outline:none;border-radius:12px;transition:border-color .22s ease,box-shadow .22s ease;`,
-        select: `background:rgba(255,255,255,0.04);border:1px solid rgba(154,163,173,0.22);color:#F5F7FA;padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:14px;width:100%;outline:none;border-radius:12px;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235CF6FA' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;`,
+        input: `background:rgba(255,255,255,0.035);border:1px solid rgba(45,226,230,0.14);color:#F5F7FA;padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:14px;width:100%;outline:none;border-radius:12px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.22);transition:border-color .22s ease,box-shadow .22s ease;`,
+        select: `background:rgba(255,255,255,0.035);border:1px solid rgba(45,226,230,0.14);color:#F5F7FA;padding:12px 14px;font-family:'Space Grotesk',sans-serif;font-size:14px;width:100%;outline:none;border-radius:12px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.22);appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235CF6FA' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;`,
         btnPrimary: `background:linear-gradient(135deg,#2DE2E6,#06B6C7);color:#04181A;border:none;border-radius:12px;padding:12px 24px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform .2s ease,box-shadow .25s ease,filter .2s ease;box-shadow:0 0 15px rgba(45,226,230,0.35);letter-spacing:0.01em;`,
         btnSecondary: `background:rgba(255,255,255,0.05);color:#F5F7FA;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 20px;font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;`,
         btnDanger: `background:rgba(239,68,68,0.1);color:#ff7a7a;border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:10px 20px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .2s ease;`,
@@ -105,24 +105,30 @@
     /* ================================================================
        TOAST
        ================================================================ */
+    function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+
     function toast(message, type = 'success') {
         const existing = document.querySelector('.mark-ai-toast');
-        if (existing) existing.remove();
+        if (existing) { existing.style.transform = 'translateX(120%)'; existing.style.opacity = '0'; setTimeout(() => existing.remove(), 250); }
 
-        const colors = {
-            success: { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.3)', text: '#16a34a', icon: 'check_circle' },
-            error:   { bg: 'rgba(186,26,26,0.1)', border: 'rgba(186,26,26,0.25)', text: '#ff7a7a', icon: 'error' },
-            info:    { bg: 'rgba(79,97,105,0.1)', border: 'rgba(79,97,105,0.25)', text: '#9AA3AD', icon: 'info' },
+        const themes = {
+            success: { accent: '#4ade80', icon: 'check_circle' },
+            error:   { accent: '#ff7a7a', icon: 'error' },
+            info:    { accent: '#2DE2E6', icon: 'info' },
         };
-        const c = colors[type] || colors.info;
+        const c = themes[type] || themes.info;
 
         const el = document.createElement('div');
         el.className = 'mark-ai-toast';
-        el.style.cssText = `position:fixed;top:40px;right:20px;z-index:999999;min-width:320px;padding:16px 20px;border-radius:12px;font-family:'Space Grotesk',sans-serif;font-size:14px;backdrop-filter:blur(16px);border:1px solid ${c.border};background:${c.bg};color:${c.text};transform:translateX(120%);transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;gap:10px;`;
-        el.innerHTML = `<span class="material-symbols-outlined" style="font-size:20px;">${c.icon}</span><span>${esc(message)}</span>`;
+        el.setAttribute('role', 'status');
+        el.style.cssText = `position:fixed;top:24px;right:24px;z-index:999999;max-width:380px;min-width:300px;padding:14px 18px 14px 16px;border-radius:14px;font-family:'Space Grotesk',sans-serif;font-size:14px;line-height:1.45;color:#F5F7FA;background:linear-gradient(180deg,rgba(22,29,29,0.97),rgba(13,21,21,0.97));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(45,226,230,0.18);box-shadow:0 18px 50px rgba(0,0,0,0.55),0 0 26px ${hexA(c.accent, 0.16)},inset 0 1px 0 rgba(255,255,255,0.06);transform:translateX(120%);opacity:0;transition:transform .45s cubic-bezier(0.16,1,0.3,1),opacity .3s ease;display:flex;align-items:center;gap:12px;overflow:hidden;`;
+        el.innerHTML = `
+            <span style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${c.accent};box-shadow:0 0 12px ${c.accent};"></span>
+            <span style="flex-shrink:0;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:${hexA(c.accent, 0.14)};border:1px solid ${hexA(c.accent, 0.3)};color:${c.accent};"><span class="material-symbols-outlined" style="font-size:20px;">${c.icon}</span></span>
+            <span style="flex:1;font-weight:500;">${esc(message)}</span>`;
         document.body.appendChild(el);
-        requestAnimationFrame(() => { el.style.transform = 'translateX(0)'; });
-        setTimeout(() => { el.style.transform = 'translateX(120%)'; setTimeout(() => el.remove(), 400); }, 3500);
+        requestAnimationFrame(() => { el.style.transform = 'translateX(0)'; el.style.opacity = '1'; });
+        setTimeout(() => { el.style.transform = 'translateX(120%)'; el.style.opacity = '0'; setTimeout(() => el.remove(), 450); }, 3800);
     }
 
     /* ================================================================
@@ -747,6 +753,7 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;">
+                    <button style="${T.btnSecondary}" onclick="markAdmin.startTour()"><span class="material-symbols-outlined" style="font-size:18px;">auto_awesome</span> Tour</button>
                     ${store ? `<button style="${T.btnSecondary}" onclick="markAdmin.showPreview()"><span class="material-symbols-outlined" style="font-size:18px;">visibility</span> Preview</button>` : ''}
                     <button style="${T.btnPrimary}" onclick="markAdmin.navigate('${store ? 'training' : 'store'}')"><span class="material-symbols-outlined" style="font-size:18px;">${store ? 'tune' : 'add'}</span> ${store ? ('Train ' + ccName) : 'Set up store'}</button>
                 </div>
@@ -799,6 +806,8 @@
             loadDashboardCharts();
             // Real data for the richer tiles — all guarded, graceful empty states
             if (store) populateCommandCenter(store);
+            // First visit → show the welcome tour once.
+            try { if (!localStorage.getItem('mark_ai_tour_complete')) setTimeout(startTour, 900); } catch(_) {}
         } catch (e) {
             content.innerHTML = `
             <div style="text-align:center;padding:80px 20px;">
@@ -2605,35 +2614,43 @@
     function startTour() {
         const container = $('#mark-modal-container');
         if (!container) return;
+        const card = (num, page, icon, title, desc) => `
+            <button onclick="markAdmin.tourGo('${page}')" class="mark-lift" style="${T.glassLight}padding:18px;text-align:left;cursor:pointer;border:1px solid rgba(45,226,230,0.12);display:flex;flex-direction:column;gap:8px;font-family:'Space Grotesk',sans-serif;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#04181A;background:linear-gradient(135deg,#2DE2E6,#06B6C7);border-radius:6px;padding:2px 7px;">${num}</span>
+                    <span class="material-symbols-outlined" style="font-size:20px;color:#2DE2E6;">${icon}</span>
+                    <span style="font-weight:700;color:#F5F7FA;font-size:15px;">${title}</span>
+                </div>
+                <p style="font-size:13px;color:#9AA3AD;margin:0;line-height:1.5;">${desc}</p>
+            </button>`;
         container.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="markAdmin.closeModal(event)">
-            <div style="background:#0b1416;border:1px solid rgba(45,226,230,0.18);border-radius:20px;width:90%;max-width:520px;padding:40px;box-shadow:0 24px 80px rgba(0,0,0,0.2);text-align:center;font-family:'Space Grotesk',sans-serif;" onclick="event.stopPropagation()">
-                <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#2DE2E6,#2DE2E6);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
-                    <span class="material-symbols-outlined" style="color:white;font-size:32px;">rocket_launch</span>
+        <div style="position:fixed;inset:0;background:radial-gradient(900px 500px at 50% 0%, rgba(45,226,230,0.10), transparent 60%), rgba(5,5,7,0.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto;" onclick="markAdmin.closeModal(event)">
+            <div class="mark-rise" style="${T.glass}width:100%;max-width:860px;padding:40px;font-family:'Space Grotesk',sans-serif;" onclick="event.stopPropagation()">
+                <div style="text-align:center;margin-bottom:32px;">
+                    <div style="display:inline-flex;align-items:center;gap:8px;${T.label}margin-bottom:14px;color:#2DE2E6;"><span class="material-symbols-outlined" style="font-size:18px;">auto_awesome</span> Getting started</div>
+                    <h1 class="mark-gradient-text" style="${T.headline}font-size:clamp(28px,5vw,44px);font-weight:700;letter-spacing:-0.02em;margin:0 0 10px;">Welcome to the Command Center</h1>
+                    <p style="color:#C7CDD4;font-size:15px;line-height:1.6;margin:0 auto;max-width:520px;">Mark is live. Here are the 6 places you'll use — click any to jump in, or take the quick tour.</p>
                 </div>
-                <h2 style="${T.headline}font-size:24px;font-weight:600;margin:0 0 8px;">Welcome to Mark AI!</h2>
-                <p style="color:#C7CDD4;font-size:14px;margin:0 0 28px;line-height:1.6;">Here is a quick overview of your admin pages:</p>
-                <div style="text-align:left;display:flex;flex-direction:column;gap:14px;margin-bottom:28px;">
-                    <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;flex-shrink:0;margin-top:1px;">dashboard</span>
-                        <div><strong style="font-size:14px;">Dashboard</strong><br/><span style="font-size:13px;color:#C7CDD4;">Conversation trends, peak hours, and a quick store summary.</span></div>
-                    </div>
-                    <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;flex-shrink:0;margin-top:1px;">storefront</span>
-                        <div><strong style="font-size:14px;">My Store</strong><br/><span style="font-size:13px;color:#C7CDD4;">Robot name, personality, voice, sales skills, and AI config.</span></div>
-                    </div>
-                    <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;flex-shrink:0;margin-top:1px;">chat</span>
-                        <div><strong style="font-size:14px;">Conversations</strong><br/><span style="font-size:13px;color:#C7CDD4;">All chat logs between Mark and your visitors.</span></div>
-                    </div>
-                    <div style="display:flex;align-items:flex-start;gap:12px;">
-                        <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;flex-shrink:0;margin-top:1px;">settings</span>
-                        <div><strong style="font-size:14px;">Settings</strong><br/><span style="font-size:13px;color:#C7CDD4;">Widget color, position, greeting sound, and a health check.</span></div>
-                    </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-bottom:32px;">
+                    ${card('01','home','space_dashboard','Home',"Live activity, sales funnel, and what Mark did today.")}
+                    ${card('02','brain','psychology',"Mark's Brain","Train his tone, set his sales style, see what he learned.")}
+                    ${card('03','voice','settings_voice','Voice',"Pick how Mark sounds. Free or premium realistic voices.")}
+                    ${card('04','conversations','forum','Conversations',"Read every chat between Mark and your visitors.")}
+                    ${card('05','appearance','palette','Appearance',"Store profile, widget look, and where Mark appears.")}
+                    ${card('06','plan','workspace_premium','Plan',"Your subscription — upgrade for premium voices & more.")}
                 </div>
-                <button style="${T.btnPrimary}padding:12px 32px;" onclick="markAdmin.endTour()">Got it!</button>
+                <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;">
+                    <button style="${T.btnPrimary}padding:13px 30px;" onclick="markAdmin.tourGo('brain')"><span class="material-symbols-outlined" style="font-size:18px;">rocket_launch</span> Start with training Mark</button>
+                    <button style="background:none;border:none;color:#9AA3AD;font-family:'Space Grotesk',sans-serif;font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;" onclick="markAdmin.endTour()">Skip for now</button>
+                </div>
             </div>
         </div>`;
+    }
+
+    function tourGo(page) {
+        try { localStorage.setItem('mark_ai_tour_complete', '1'); } catch(_) {}
+        closeModal();
+        navigate(page);
     }
 
     function endTour() {
@@ -2652,7 +2669,7 @@
         copyCode, copyText, closeModal,
         saveGlobalSettings, testConnection, toggleDisplayPages,
         completeSetup, showPreview,
-        startTour, endTour,
+        startTour, endTour, tourGo,
         updateSizePreview,
         trainPlaybook, toggleLearning,
         upgradePlan,

@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.2
+Stable tag: 1.9.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,11 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.3 =
+* Modern glass toast notifications (icon chip, accent glow, smooth slide) replacing the old flat bar
+* New "Welcome to the Command Center" tour — a getting-started overview of all 6 sections (shows on first visit; "Tour" button on Home)
+* Refined form inputs (cyan-tinted, subtle depth) for a more premium feel
 
 = 1.9.2 =
 * Mark's Brain rebuilt as a single 2-column hub — Train + Sales style on the left, What Mark learned on the right, with the AI model tucked into a collapsible Advanced. Matches the new design.
