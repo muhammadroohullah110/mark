@@ -419,6 +419,10 @@ class Mark_AI_Rest_API {
 
         if (!empty($updates)) {
             Mark_AI_Database::update_store($store_id, $updates);
+            // Keep the backend tenant's talking profile in sync (name / personality /
+            // sales mode) so Mark's REPLIES use the new values — not just the widget
+            // label. Without this, renaming Mark left his answers on the old name.
+            $this->sync_profile_to_backend($updates);
         }
 
         // If website URL changed, trigger RAG re-crawl
@@ -1277,6 +1281,38 @@ class Mark_AI_Rest_API {
                 'store_id'     => $store_id,
                 'groq_api_key' => $key,
             ]),
+        ]);
+    }
+
+    /**
+     * Push the fields that change HOW MARK TALKS (assistant name, personality,
+     * sales mode) to the backend tenant. Turnkey-safe: runs whether or not a
+     * Groq key is present (the key is only included when the user just entered
+     * one). Non-blocking. Fixes Mark's replies still using the old name.
+     */
+    private function sync_profile_to_backend($updates) {
+        $settings  = get_option('mark_ai_settings', []);
+        $token     = $settings['api_token'] ?? '';
+        $remote_id = $settings['remote_store_id'] ?? '';
+        if (!$token || !$remote_id) return;
+
+        $payload = ['store_id' => $remote_id];
+        if (isset($updates['assistant_name'])) $payload['assistant_name'] = $updates['assistant_name'];
+        if (isset($updates['personality']))    $payload['personality']    = $updates['personality'];
+        if (isset($updates['sales_behavior'])) $payload['sales_mode']     = $updates['sales_behavior'];
+        if (!empty($updates['groq_api_key']))  $payload['groq_api_key']   = $updates['groq_api_key'];
+
+        // Only the store_id present → nothing talk-related changed; skip the call.
+        if (count($payload) <= 1) return;
+
+        wp_remote_post(MARK_AI_BACKEND . '/api/sync-settings', [
+            'timeout'  => 5,
+            'blocking' => false,
+            'headers'  => [
+                'Content-Type'  => 'application/json',
+                'X-Store-Token' => $token,
+            ],
+            'body'     => wp_json_encode($payload),
         ]);
     }
 

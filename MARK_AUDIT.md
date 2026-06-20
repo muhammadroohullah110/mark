@@ -27,13 +27,14 @@ Backend: FastAPI + Postgres, MAIE learning loop, Stripe billing, RAG (TF-IDF)
 | 1 | **Recent-chat date shows `1/21/1970`** — `created_at` is Unix **seconds**, parsed as **ms**. | ✅ FIXED (formatDate seconds→ms) |
 | 2 | **Dual data path** — chats log to the **backend**, but the WP `/dashboard` mirror is empty, so admin KPIs read 0 while backend tiles read real numbers (the "8 vs 0"). | 🟡 Partly fixed (KPIs now read backend); WP mirror should be deprecated as a source of truth. |
 | 3 | **False name capture** — "I'm sorry" → name "Sorry" → wrong "Welcome back" + celebration; cached in localStorage. | ✅ FIXED (looksLikeName + NOT_A_NAME + auto-heal) |
-| 4 | **SECURITY: a live Google API key was pasted in chat history** (`AQ.Ab8RN6Km…`). Must be **rotated** — assume compromised. Audit the repo + env so no secret is committed. | ⏳ ACTION on owner (rotate) |
+| 4 | **SECURITY: a live Google API key was pasted in chat history** (`AQ.Ab8RN6Km…`). Must be **rotated** — assume compromised. | ✅ Repo scan clean (no live secret committed); rotation still owner action |
+| 4b | **Admin password hashing was SHA-256 + a FIXED salt** (no per-user salt; graph-surfaced, `database.py`). Fast hash + shared salt → rainbow-table / brute-force risk if DB leaks. | ✅ FIXED — PBKDF2-HMAC-SHA256, 200k iters, per-user random salt; legacy hashes verified + auto-migrated on login (no lockout) |
 
 ### P1 — reliability / consistency
 | # | Bug | Fix |
 |---|---|---|
-| 5 | **Render free tier cold-start** (spins down) → first chat times out → WP fallback. We proxy the fallback now, but cold start still hurts the first impression. | Warm the backend (paid tier or a 5-min cron ping) — see Plan P1. |
-| 6 | **Assistant-name sync gap** — admin name change saves to WP store + (maybe) backend; widget greeting/label fixed, but Mark's **replies** use the *backend* store's `assistant_name`. Verify the admin PUT syncs name to the backend tenant. | Ensure name change → backend `update_store`. |
+| 5 | ~~Render free-tier cold-start~~ | ✅ RESOLVED — owner upgraded to **Render Pro** (warm instance, no spin-down) |
+| 6 | **Assistant-name sync gap** — admin renamed Mark via `PUT stores/{id}` → `update_store`, which never synced to the backend tenant, so Mark's **replies** kept the old name (only the widget label updated). | ✅ FIXED — `update_store` now calls `sync_profile_to_backend()` (name/personality/sales → `/api/sync-settings`), turnkey-safe (not gated on a Groq key) |
 | 7 | **Visitor identity = localStorage** — clearing it makes one tester look like many visitors (inflated counts) and loses "returning". | Move durable visitor id to a 1st-party cookie + backend visitor row. |
 | 8 | **Dead code** — legacy `loadStorePage/renderStoreDetail/renderTab` + old tab system unused after the 6-page redesign. | Delete after confirming `openStore`/delete paths are rewired. |
 
@@ -65,13 +66,14 @@ Backend: FastAPI + Postgres, MAIE learning loop, Stripe billing, RAG (TF-IDF)
 
 **Phase 0 — trust (this week)**
 - [x] Fix the `1/21/1970` date.
-- [ ] **Rotate the leaked Google key**; grep repo + env for any committed secret.
+- [x] Scan repo for committed secrets — clean. **(Owner: still rotate the leaked Google key.)**
+- [x] Upgrade admin password hashing to PBKDF2 (graph-surfaced).
 - [ ] Make backend the single analytics source (finish the "8 vs 0" cleanup; deprecate WP-mirror counts).
 
 **Phase 1 — reliability (next)**
-- [ ] Warm the backend (paid tier or cron keep-alive) — kill cold-start.
-- [ ] Verify/Wire assistant-name + settings sync to the backend tenant.
-- [ ] Durable visitor identity (cookie + backend) → honest counts.
+- [x] ~~Warm the backend~~ — owner upgraded to **Render Pro** (cold-start gone).
+- [x] Wire assistant-name + profile sync to the backend tenant.
+- [ ] Durable visitor identity (cookie + backend) → honest counts. *(already localStorage-durable; cookie fallback is the remaining nicety)*
 - [ ] Delete dead admin code (legacy store-tab system).
 
 **Phase 2 — quality**

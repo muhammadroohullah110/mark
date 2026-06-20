@@ -11,6 +11,7 @@ import os
 import sqlite3
 import uuid
 import hashlib
+import hmac
 import json
 import time
 import logging
@@ -331,22 +332,45 @@ def init_db():
                     logger.info("Migrated stores table: added %s", col)
 
 
+_PBKDF2_ITERATIONS = 200_000
+
+
 def hash_password(password: str) -> str:
-    """Hash password with SHA-256 + salt for security.
-    Uses a fixed prefix salt — upgrade to bcrypt when adding the dependency."""
-    salted = f"mark_ai_salt_{password}_v1"
-    return hashlib.sha256(salted.encode()).hexdigest()
+    """Hash a password with PBKDF2-HMAC-SHA256 and a per-user random salt.
+    Format: ``pbkdf2$<iterations>$<salt_hex>$<hash_hex>``. Stdlib only — no
+    bcrypt dependency. Each call uses a fresh salt, so output is non-deterministic
+    (callers must verify via verify_password_compat, never by string-comparing)."""
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _PBKDF2_ITERATIONS)
+    return f"pbkdf2${_PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
 
 
-def verify_password_compat(password: str, stored_hash: str) -> bool:
-    """Verify password — supports both old (unsalted) and new (salted) hashes."""
-    # Try new salted hash first
-    if hash_password(password) == stored_hash:
+def _legacy_hash_ok(password: str, stored_hash: str) -> bool:
+    """Back-compat check for the two pre-PBKDF2 schemes (fixed-salt, then unsalted)."""
+    if hashlib.sha256(f"mark_ai_salt_{password}_v1".encode()).hexdigest() == stored_hash:
         return True
-    # Fallback: old unsalted hash (for existing users before upgrade)
     if hashlib.sha256(password.encode()).hexdigest() == stored_hash:
         return True
     return False
+
+
+def verify_password_compat(password: str, stored_hash: str) -> bool:
+    """Verify a password against a PBKDF2 hash (new) or a legacy SHA-256 hash."""
+    if stored_hash and stored_hash.startswith("pbkdf2$"):
+        try:
+            _, iters, salt_hex, hash_hex = stored_hash.split("$")
+            dk = hashlib.pbkdf2_hmac(
+                "sha256", password.encode(), bytes.fromhex(salt_hex), int(iters)
+            )
+            return hmac.compare_digest(dk.hex(), hash_hex)
+        except Exception:
+            return False
+    return _legacy_hash_ok(password, stored_hash)
+
+
+def password_needs_upgrade(stored_hash: str) -> bool:
+    """True for legacy (non-PBKDF2) hashes — re-hash these on next successful login."""
+    return not (stored_hash or "").startswith("pbkdf2$")
 
 
 # ── Admin Users ──────────────────────────────────────────────
@@ -370,12 +394,13 @@ def verify_admin(username: str, password: str) -> dict | None:
             (username,)
         ).fetchone()
         if row and verify_password_compat(password, row["password_hash"]):
-            # Upgrade hash if using old format
-            new_hash = hash_password(password)
-            if row["password_hash"] != new_hash:
+            # Transparently migrate legacy SHA-256 hashes to PBKDF2 on login.
+            # (PBKDF2 hashes use a random salt, so we must NOT compare strings —
+            # only re-hash when the stored format is actually a legacy one.)
+            if password_needs_upgrade(row["password_hash"]):
                 db.execute(
                     "UPDATE admin_users SET password_hash = ? WHERE id = ?",
-                    (new_hash, row["id"])
+                    (hash_password(password), row["id"])
                 )
             return dict(row)
         return None
