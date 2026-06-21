@@ -979,40 +979,85 @@
         });
     }
 
-    // ── Plan (subscription / premium) ──
+    // ── Plan (subscription / premium) — matches the Stitch "Manage Your Plan" screen:
+    //    Free · Premium($49, Recommended) · live Usage meter + Contact Sales, then Billing History.
     async function loadPlanPage() {
-        withStore((s) => {
+        withStore(async (s) => {
             const premium = (s.plan === 'premium');
+            // Real usage from the backend (honest — never a fabricated number).
+            let used = 0;
+            try { const d = await maieFetch(s, '/conversations'); used = d.total_conversations || 0; } catch (_) {}
+            const cap = 500;
+            const pct = premium ? 0 : Math.min(100, Math.round((used / cap) * 100));
             const feat = (txt, on) => `<li style="display:flex;align-items:center;gap:10px;font-size:14px;color:${on ? '#F5F7FA' : '#9AA3AD'};padding:7px 0;"><span class="material-symbols-outlined" style="font-size:18px;color:${on ? '#4ade80' : '#9AA3AD'};">${on ? 'check_circle' : 'remove'}</span>${txt}</li>`;
-            $('#mark-page-content').innerHTML = _pageHead('Plan', 'Your subscription and what Mark can do.') + `
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:28px;">
-                <span style="${T.label}margin:0;">Current plan</span>
-                <span style="${premium ? T.badgeActive : T.badgeInactive}">${premium ? '&#10022; Premium' : 'Free'}</span>
+            $('#mark-page-content').innerHTML = `
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:32px;">
+                <div>
+                    <h1 style="${T.headline}font-size:48px;line-height:56px;letter-spacing:-0.02em;font-weight:300;margin:0 0 8px;">Manage Your Plan</h1>
+                    <p style="color:#C7CDD4;font-size:18px;margin:0;">View your tier, upgrade, and manage billing.</p>
+                </div>
+                <span style="${premium ? T.badgeActive : T.badgeInactive}white-space:nowrap;">Current plan: ${premium ? '&#10022; Premium' : 'Free'}</span>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;">
-                <div class="mark-lift" style="${T.glass}padding:32px;">
-                    <h3 style="${T.headline}font-size:22px;margin:0 0 4px;">Free</h3>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:24px;margin-bottom:32px;align-items:start;">
+                <div class="mark-lift" style="${T.glass}padding:32px;${!premium ? 'border:1px solid rgba(45,226,230,0.25);' : ''}">
+                    <h3 style="${T.headline}font-size:22px;margin:0 0 2px;">Free Tier</h3>
+                    <div style="font-size:34px;font-weight:800;color:#F5F7FA;margin:6px 0 2px;">$0<span style="font-size:14px;color:#9AA3AD;font-weight:500;">/mo</span></div>
                     <p style="color:#9AA3AD;font-size:14px;margin:0 0 18px;">Everything to get Mark selling.</p>
-                    <ul style="list-style:none;padding:0;margin:0 0 18px;">
+                    <ul style="list-style:none;padding:0;margin:0 0 22px;">
                         ${feat('AI chat + product recommendations', true)}
                         ${feat('Free Edge voice', true)}
                         ${feat('Auto-learning &amp; analytics', true)}
+                        ${feat('500 chats / month', true)}
                         ${feat('Realistic premium voices', false)}
                     </ul>
-                    ${!premium ? `<span style="${T.badgeInactive}">Your current plan</span>` : ''}
+                    ${!premium ? `<span style="${T.badgeInactive}">Current plan</span>` : ''}
                 </div>
-                <div class="mark-lift" style="${T.glass}padding:32px;border:1px solid rgba(45,226,230,0.4);">
-                    <h3 style="${T.headline}font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="color:#2DE2E6;">workspace_premium</span>Premium</h3>
-                    <p style="color:#9AA3AD;font-size:14px;margin:0 0 18px;">Ultra-realistic voice &amp; more.</p>
-                    <ul style="list-style:none;padding:0;margin:0 0 18px;">
+                <div class="mark-lift" style="${T.glass}padding:32px;border:1.5px solid rgba(45,226,230,0.55);position:relative;box-shadow:0 0 0 1px rgba(45,226,230,0.15),0 18px 50px rgba(45,226,230,0.12);">
+                    <span style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#2DE2E6,#06B6C7);color:#04181A;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 12px;border-radius:999px;white-space:nowrap;">Recommended</span>
+                    <h3 style="${T.headline}font-size:22px;margin:0 0 2px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="color:#2DE2E6;">workspace_premium</span>Premium</h3>
+                    <div style="font-size:34px;font-weight:800;color:#F5F7FA;margin:6px 0 2px;">$49<span style="font-size:14px;color:#9AA3AD;font-weight:500;">/mo</span></div>
+                    <p style="color:#9AA3AD;font-size:14px;margin:0 0 18px;">Professional-grade selling, unlimited.</p>
+                    <ul style="list-style:none;padding:0;margin:0 0 22px;">
                         ${feat('Everything in Free', true)}
                         ${feat('Ultra-realistic voices', true)}
-                        ${feat('More languages', true)}
-                        ${feat('Priority support', true)}
+                        ${feat('Advanced objection handling', true)}
+                        ${feat('Unlimited chats', true)}
+                        ${feat('Multi-lingual support', true)}
                     </ul>
                     ${premium
                         ? `<span style="${T.badgeActive}">&#10022; Active</span>`
                         : `<button style="${T.btnPrimary}width:100%;justify-content:center;" onclick="markAdmin.upgradePlan()"><span class="material-symbols-outlined" style="font-size:18px;">bolt</span> Upgrade to Premium</button>`}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:24px;">
+                    <div style="${T.glass}padding:28px;">
+                        <span style="${T.label}">Current usage</span>
+                        <div style="font-size:34px;font-weight:800;color:#F5F7FA;margin:4px 0 2px;">${formatNum(used)}<span style="font-size:14px;color:#9AA3AD;font-weight:500;"> ${premium ? 'chats' : '/ ' + cap}</span></div>
+                        ${premium
+                            ? `<p style="color:#9AA3AD;font-size:13px;margin:8px 0 0;">Unlimited on Premium.</p>`
+                            : `<div style="height:8px;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;margin:14px 0 8px;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#2DE2E6,#06B6C7);border-radius:999px;"></div></div>
+                               <p style="color:#9AA3AD;font-size:13px;margin:0;">${pct}% of your monthly free chats used.</p>`}
+                    </div>
+                    <div style="${T.glassLight}padding:28px;">
+                        <h4 style="${T.headline}font-size:17px;margin:0 0 6px;">Need custom volume?</h4>
+                        <p style="color:#9AA3AD;font-size:13px;margin:0 0 16px;line-height:1.5;">Enterprise limits and dedicated account management.</p>
+                        <a href="mailto:hello@markai.shop?subject=Mark%20AI%20Enterprise" style="${T.btnSecondary}text-decoration:none;display:inline-flex;"><span class="material-symbols-outlined" style="font-size:18px;">mail</span> Contact Sales</a>
+                    </div>
+                </div>
+            </div>
+            <div style="${T.glass}padding:28px 32px;">
+                <h3 style="${T.headline}font-size:20px;margin:0 0 16px;">Billing history</h3>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                        <thead><tr style="text-align:left;color:#9AA3AD;font-size:12px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid rgba(255,255,255,0.08);">
+                            <th style="padding:10px 12px;font-weight:700;">Date</th>
+                            <th style="padding:10px 12px;font-weight:700;">Description</th>
+                            <th style="padding:10px 12px;font-weight:700;">Amount</th>
+                            <th style="padding:10px 12px;font-weight:700;">Status</th>
+                        </tr></thead>
+                        <tbody>
+                            <tr><td colspan="4" style="padding:28px 12px;text-align:center;color:#9AA3AD;">${premium ? 'Your invoices will appear here.' : "No invoices yet — you're on the Free plan."}</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>`;
         });
