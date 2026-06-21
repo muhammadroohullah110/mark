@@ -3,7 +3,7 @@
  * Plugin Name: Mark AI — Website Companion
  * Plugin URI:  https://github.com/muhammadroohullah110/mark
  * Description: AI-powered 3D robot website companion with voice chat, intelligent navigation, and anti-hallucination. Installs a floating 3D chatbot widget on your site.
- * Version:     1.9.10
+ * Version:     1.9.11
  * Author:      Muhammad Roohullah
  * Author URI:  https://www.linkedin.com/in/medicalairesearcher
  * License:     GPL v2 or later
@@ -21,7 +21,7 @@ if (defined('MARK_AI_VERSION')) {
 }
 
 // ── Plugin Constants ────────────────────────────────────────
-define('MARK_AI_VERSION', '1.9.10');
+define('MARK_AI_VERSION', '1.9.11');
 define('MARK_AI_PATH', plugin_dir_path(__FILE__));
 define('MARK_AI_URL', plugin_dir_url(__FILE__));
 define('MARK_AI_BASENAME', plugin_basename(__FILE__));

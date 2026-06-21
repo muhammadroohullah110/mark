@@ -1707,6 +1707,7 @@
                         messages: messages,
                         user_language: detectedLanguage,
                         store_id: STORE_ID,
+                        assistant_name: ASSISTANT,            // live name → replies match the label
                         stream: true,
                         is_returning: !!(loadMemory().name)   // known visitor → returning playbook
                     }),
@@ -1801,6 +1802,7 @@
                     message: userInput,
                     language: detectedLanguage,
                     store_id: STORE_ID,
+                    assistant_name: ASSISTANT,
                     session_id: SESSION_ID,
                     history: historyForWP
                 }),

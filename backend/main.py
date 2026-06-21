@@ -474,6 +474,7 @@ class ChatRequest(BaseModel):
     store_id: Optional[str] = None
     stream: Optional[bool] = False
     is_returning: Optional[bool] = False   # client flags a known/returning visitor
+    assistant_name: Optional[str] = None   # live name from the widget; wins over the tenant's stored name
 
 class TTSRequest(BaseModel):
     text: str
@@ -1035,7 +1036,10 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     if not chat_limiter.is_allowed(ip, custom_max=custom_rate):
         raise HTTPException(status_code=429, detail="Too many requests.")
     router = get_llm_router(tenant)
-    name = get_assistant_name(tenant)
+    # Prefer the live name the widget sends (matches the on-screen label exactly),
+    # so Mark's replies never lag behind a rename even if the backend tenant hasn't
+    # been synced yet. Fall back to the stored tenant name.
+    name = (getattr(body, "assistant_name", None) or "").strip()[:40] or get_assistant_name(tenant)
     product_context = format_products_context(tenant)
 
     # Build system prompt (lean — every token costs latency)

@@ -4,7 +4,7 @@ Tags: chatbot, ai, voice, 3d-robot, assistant
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.10
+Stable tag: 1.9.11
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Chat messages are sent to the Groq API for AI response generation. No personal v
 4. Voice and text chat interaction
 
 == Changelog ==
+
+= 1.9.11 =
+* Name glitch fixed — Mark's spoken/typed replies now always use his current on-screen name. The widget sends the live name with every message, so renaming him takes effect immediately (no waiting on a backend sync). NOTE: if the name on the robot label still looks old, clear your site/page cache — that label is baked into the cached page HTML.
 
 = 1.9.10 =
 * Dashboard numbers are now fully consistent — the headline ("handled N chats"), Mark's tip, and the KPI tiles all read the same live backend data (no more "0 chats" in one place while another shows the real count)

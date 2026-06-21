@@ -578,7 +578,7 @@ class Mark_AI_Rest_API {
      * Turnkey fallback: forward a chat to the central backend (which holds the AI key).
      * Returns the reply string, or null if the backend is unreachable.
      */
-    private function proxy_chat_to_backend($store_id, $message, $history) {
+    private function proxy_chat_to_backend($store_id, $message, $history, $assistant_name = '') {
         $settings  = get_option('mark_ai_settings', []);
         $remote_id = $settings['remote_store_id'] ?? $store_id;
         $token     = $settings['api_token'] ?? '';
@@ -598,11 +598,12 @@ class Mark_AI_Rest_API {
         $resp = wp_remote_post(MARK_AI_BACKEND . '/api/chat', [
             'timeout' => 28,   // allow for Render cold-start
             'headers' => $headers,
-            'body'    => wp_json_encode([
-                'messages' => array_slice($messages, -8),
-                'store_id' => $remote_id ?: $store_id,
-                'stream'   => false,
-            ]),
+            'body'    => wp_json_encode(array_filter([
+                'messages'       => array_slice($messages, -8),
+                'store_id'       => $remote_id ?: $store_id,
+                'assistant_name' => $assistant_name,   // live name → reply matches the label
+                'stream'         => false,
+            ], function ($v) { return $v !== '' && $v !== null; })),
         ]);
 
         if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
@@ -639,6 +640,7 @@ class Mark_AI_Rest_API {
         $session_id = sanitize_text_field( $body['session_id'] ?? '' );
         $language   = sanitize_text_field( $body['language'] ?? 'en' );
         $store_id   = sanitize_text_field( $body['store_id'] ?? '' );
+        $req_name   = sanitize_text_field( $body['assistant_name'] ?? '' );
         $history    = $body['history'] ?? [];
 
         // ── Validation ──
@@ -686,6 +688,10 @@ class Mark_AI_Rest_API {
             }
         }
 
+        // The widget sends its live on-screen name — prefer it so Mark's reply
+        // always matches the label (no lag after a rename).
+        if ( $req_name !== '' ) { $assistant_name = $req_name; }
+
         // Anti-abuse: a store's own key may ONLY be used from that store's own
         // site. If the request originates from a different host, drop the store
         // key so nobody can drive another store's key by passing its store_id.
@@ -710,7 +716,7 @@ class Mark_AI_Rest_API {
         if (empty($api_key)) {
             // Turnkey: no local key — Mark's AI runs on the central backend (which holds
             // the key). Proxy the chat there so the WP fallback still answers properly.
-            $proxied = $this->proxy_chat_to_backend($store_id, $message, $history);
+            $proxied = $this->proxy_chat_to_backend($store_id, $message, $history, $assistant_name);
             if ($proxied !== null && $proxied !== '') {
                 return new WP_REST_Response([ 'reply' => $proxied ], 200);
             }
