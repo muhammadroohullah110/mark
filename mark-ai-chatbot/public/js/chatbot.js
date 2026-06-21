@@ -1708,6 +1708,7 @@
                         user_language: detectedLanguage,
                         store_id: STORE_ID,
                         assistant_name: ASSISTANT,            // live name → replies match the label
+                        visitor_name: (loadMemory().name || ''), // group this visitor's chats by name
                         stream: true,
                         is_returning: !!(loadMemory().name)   // known visitor → returning playbook
                     }),

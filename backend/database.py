@@ -209,6 +209,7 @@ def _build_schema(pg: bool) -> str:
             exchange_count INTEGER DEFAULT 0,
             last_user_msg TEXT DEFAULT '',
             mark_response TEXT DEFAULT '',
+            visitor_name TEXT DEFAULT '',
             created_at {ts}
         );
         CREATE INDEX IF NOT EXISTS idx_conv_store ON conversations(store_id);
@@ -330,6 +331,18 @@ def init_db():
                 if col not in existing:
                     db.execute(f"ALTER TABLE stores ADD COLUMN {col} {typedef}")
                     logger.info("Migrated stores table: added %s", col)
+
+        # ── conversations: additive column migrations ──
+        _CONV_MIGRATIONS = {"visitor_name": "TEXT DEFAULT ''"}
+        if IS_PG:
+            for col, typedef in _CONV_MIGRATIONS.items():
+                db.execute(f"ALTER TABLE conversations ADD COLUMN IF NOT EXISTS {col} {typedef}")
+        else:
+            ex_conv = {row[1] for row in db.execute("PRAGMA table_info(conversations)").fetchall()}
+            for col, typedef in _CONV_MIGRATIONS.items():
+                if col not in ex_conv:
+                    db.execute(f"ALTER TABLE conversations ADD COLUMN {col} {typedef}")
+                    logger.info("Migrated conversations table: added %s", col)
 
 
 _PBKDF2_ITERATIONS = 200_000
@@ -524,13 +537,15 @@ def delete_store(store_id: str) -> bool:
 # ── Conversations ────────────────────────────────────────────
 
 def log_conversation_db(store_id: str, visitor_hash: str, language: str,
-                        exchange_count: int, last_user_msg: str, mark_response: str):
+                        exchange_count: int, last_user_msg: str, mark_response: str,
+                        visitor_name: str = ""):
     with get_db() as db:
         db.execute(
             """INSERT INTO conversations
-               (store_id, visitor_hash, language, exchange_count, last_user_msg, mark_response)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (store_id, visitor_hash, language, exchange_count, last_user_msg[:500], mark_response[:500])
+               (store_id, visitor_hash, language, exchange_count, last_user_msg, mark_response, visitor_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (store_id, visitor_hash, language, exchange_count,
+             last_user_msg[:500], mark_response[:500], (visitor_name or "")[:80])
         )
 
 
@@ -560,9 +575,9 @@ def get_analytics(store_id: str) -> dict:
         languages = {r["language"]: r["cnt"] for r in lang_rows}
 
         recent = db.execute(
-            """SELECT visitor_hash, language, last_user_msg, mark_response, created_at
+            """SELECT visitor_hash, visitor_name, language, last_user_msg, mark_response, created_at
                FROM conversations WHERE store_id = ?
-               ORDER BY created_at DESC LIMIT 30""",
+               ORDER BY created_at DESC LIMIT 50""",
             (store_id,)
         ).fetchall()
 

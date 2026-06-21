@@ -2363,21 +2363,52 @@
     /* ================================================================
        TAB: CONVERSATIONS
        ================================================================ */
-    function renderConvoCard(c) {
-        const when = c.created_at ? formatDate(c.created_at) : '';
-        return `
-        <div style="${T.glassLight}padding:16px 20px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
-                <span style="display:flex;align-items:center;gap:8px;font-size:12px;color:#9AA3AD;">
-                    <span class="material-symbols-outlined" style="font-size:16px;color:#2DE2E6;">person</span>
-                    Visitor ${esc((c.visitor_hash || '').substring(0, 8) || '—')}
-                    <span style="${T.badgeActive}padding:1px 7px;font-size:10px;">${esc(c.language || 'en')}</span>
-                </span>
-                <span style="font-size:12px;color:#9AA3AD;">${when}</span>
-            </div>
-            <div style="font-size:14px;line-height:1.5;color:#F5F7FA;margin-bottom:6px;"><strong style="color:#2DE2E6;">Visitor:</strong> ${esc(c.last_user_msg || '—')}</div>
-            <div style="font-size:14px;line-height:1.5;color:#C7CDD4;"><strong style="color:#9AA3AD;">Mark:</strong> ${esc(c.mark_response || '—')}</div>
-        </div>`;
+    // Group all recent exchanges BY VISITOR into one expandable card per person —
+    // header shows the visitor's captured name (or a short id) + message count +
+    // last-seen, body is their full back-and-forth thread (oldest → newest).
+    function renderVisitorThreads(convos) {
+        const groups = new Map();
+        for (const c of convos) {
+            const key = c.visitor_hash || '—';
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(c);
+        }
+        const style = `<style>
+            details.mark-convo > summary{list-style:none;}
+            details.mark-convo > summary::-webkit-details-marker{display:none;}
+            details.mark-convo[open] .mark-convo-chev{transform:rotate(180deg);}
+            .mark-convo-chev{transition:transform .2s ease;}
+        </style>`;
+        const cards = [];
+        for (const [key, rows] of groups) {
+            const chrono = rows.slice().reverse();          // oldest → newest for reading
+            let name = '';
+            for (const r of rows) { if (r.visitor_name) { name = r.visitor_name; break; } }
+            const label   = name ? esc(name) : ('Visitor ' + esc((key || '').substring(0, 8)));
+            const lang    = rows[0].language || 'en';
+            const lastWhen= rows[0].created_at ? formatDate(rows[0].created_at) : '';
+            const n       = rows.length;
+            const initial = esc((name ? name.trim().charAt(0) : 'V').toUpperCase());
+            const thread  = chrono.map(c => `
+                <div style="padding:10px 0;border-top:1px solid rgba(255,255,255,0.06);">
+                    <div style="font-size:13px;line-height:1.55;color:#F5F7FA;margin-bottom:4px;"><strong style="color:#2DE2E6;">${label}:</strong> ${esc(c.last_user_msg || '—')}</div>
+                    <div style="font-size:13px;line-height:1.55;color:#C7CDD4;"><strong style="color:#9AA3AD;">Mark:</strong> ${esc(c.mark_response || '—')}</div>
+                </div>`).join('');
+            cards.push(`
+            <details class="mark-convo" style="${T.glassLight}padding:0;overflow:hidden;" ${groups.size <= 2 ? 'open' : ''}>
+                <summary style="display:flex;align-items:center;gap:12px;padding:16px 20px;cursor:pointer;">
+                    <span style="width:38px;height:38px;border-radius:50%;background:linear-gradient(140deg,#2DE2E6,#06B6C7);display:flex;align-items:center;justify-content:center;color:#04181A;font-weight:800;font-size:15px;flex-shrink:0;">${initial}</span>
+                    <span style="flex:1;min-width:0;">
+                        <span style="display:block;font-size:15px;font-weight:700;color:#F5F7FA;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</span>
+                        <span style="font-size:12px;color:#9AA3AD;">${n} message${n === 1 ? '' : 's'} · ${lastWhen}</span>
+                    </span>
+                    <span style="${T.badgeActive}padding:1px 7px;font-size:10px;">${esc(lang)}</span>
+                    <span class="material-symbols-outlined mark-convo-chev" style="font-size:20px;color:#9AA3AD;">expand_more</span>
+                </summary>
+                <div style="padding:0 20px 14px;">${thread}</div>
+            </details>`);
+        }
+        return style + `<div style="display:flex;flex-direction:column;gap:12px;">${cards.join('')}</div>`;
     }
 
     async function loadConversationsTab(storeId) {
@@ -2403,10 +2434,10 @@
                 ${renderMiniStat('This Week', data.this_week || 0, 'date_range')}
                 ${renderMiniStat('Unique Visitors', data.unique_visitors || 0, 'person')}
             </div>
-            <h3 style="${T.headline}font-size:20px;margin:0 0 16px;">Recent Conversations</h3>
+            <h3 style="${T.headline}font-size:20px;margin:0 0 16px;">Conversations by visitor</h3>
             ${convos.length === 0
-                ? `<div style="${T.glassLight}padding:40px;text-align:center;color:#9AA3AD;font-size:14px;">No conversations yet — once visitors chat with Mark, each exchange appears here.</div>`
-                : `<div style="display:flex;flex-direction:column;gap:12px;">${convos.map(renderConvoCard).join('')}</div>`}`;
+                ? `<div style="${T.glassLight}padding:40px;text-align:center;color:#9AA3AD;font-size:14px;">No conversations yet — once visitors chat with Mark, each visitor appears here with their full thread.</div>`
+                : renderVisitorThreads(convos)}`;
         } catch (e) {
             container.innerHTML = `<div style="${T.glassLight}padding:40px;text-align:center;color:#9AA3AD;font-size:14px;">Conversations unavailable — the backend may be waking up. Try again in a moment.</div>`;
         }

@@ -393,14 +393,14 @@ def get_edge_voice(tenant: dict | None, language: str = "en") -> str:
 # ── Conversation Logger ─────────────────────────────────────
 
 def log_conversation(ip: str, messages: list, language: str, response_text: str,
-                     store_id: str | None = None):
+                     store_id: str | None = None, visitor_name: str = ""):
     ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:12]
 
     if store_id:
         try:
             exchange_count = len([m for m in messages if m.get("role") == "user"])
             last_msg = next((m["content"][:200] for m in reversed(messages) if m.get("role") == "user"), "")
-            log_conversation_db(store_id, ip_hash, language, exchange_count, last_msg, response_text[:200])
+            log_conversation_db(store_id, ip_hash, language, exchange_count, last_msg, response_text[:200], visitor_name)
         except Exception as e:
             logger.warning(f"DB log error: {e}")
 
@@ -475,6 +475,7 @@ class ChatRequest(BaseModel):
     stream: Optional[bool] = False
     is_returning: Optional[bool] = False   # client flags a known/returning visitor
     assistant_name: Optional[str] = None   # live name from the widget; wins over the tenant's stored name
+    visitor_name: Optional[str] = None     # the visitor's own captured name (for grouping logs by person)
 
 class TTSRequest(BaseModel):
     text: str
@@ -1159,7 +1160,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         cached = response_cache.get(store_id_str, last_user_msg, rag_snippet, persona=detected_persona)
         if cached:
             logger.info(f"Cache HIT for store {store_id_str}")
-            log_conversation(ip, cleaned, body.user_language, cached, body.store_id)
+            log_conversation(ip, cleaned, body.user_language, cached, body.store_id, body.visitor_name or "")
             return {"response": cached, "cached": True}
 
     # ── Streaming mode: send tokens as SSE for instant display ──
@@ -1179,7 +1180,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
                 complete = ''.join(full_reply)
                 if complete:
                     yield f"data: {json.dumps({'done': True, 'response': complete})}\n\n"
-                    log_conversation(ip, cleaned, body.user_language, complete, body.store_id)
+                    log_conversation(ip, cleaned, body.user_language, complete, body.store_id, body.visitor_name or "")
                     capture_learning_async(tenant, ip, cleaned, complete, body.user_language)
                     # Cache streamed response too (if not special)
                     if not is_special and last_user_msg:
@@ -1203,7 +1204,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         )
         if not reply:
             raise HTTPException(status_code=503, detail="All AI providers unavailable.")
-        log_conversation(ip, cleaned, body.user_language, reply, body.store_id)
+        log_conversation(ip, cleaned, body.user_language, reply, body.store_id, body.visitor_name or "")
         capture_learning_async(tenant, ip, cleaned, reply, body.user_language)
         # Cache the response
         if not is_special and last_user_msg:
