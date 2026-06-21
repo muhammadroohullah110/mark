@@ -65,10 +65,10 @@ DEFAULT_OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 DEFAULT_MOONSHOT_KEY = os.getenv("MOONSHOT_API_KEY", "")
 FALLBACK_MODEL = os.getenv("FALLBACK_LLM_MODEL", "gpt-4o-mini")
 # Fallback brain = Kimi K2 on Moonshot (independent provider, OpenAI-compatible).
-MOONSHOT_MODEL = os.getenv("MOONSHOT_MODEL", "kimi-k2-0711-preview")
+MOONSHOT_MODEL = os.getenv("MOONSHOT_MODEL", "kimi-k2-0905-preview")
 # MAIN brain = Kimi K2 hosted on Groq (Kimi quality + Groq speed). Env-overridable
 # so the exact Groq model id can be tweaked without a code change.
-DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "moonshotai/kimi-k2-instruct")
+DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "moonshotai/kimi-k2-instruct-0905")
 
 # ── Premium tier voice ──────────────────────────────────────
 # Free plan = Edge TTS (free). Premium plan = realistic engine + all languages.
