@@ -48,11 +48,17 @@ def create_checkout_session(store_id: str, store_name: str = "",
 
 
 def parse_event(payload: bytes, sig_header: str):
-    """Verify (if webhook secret set) and parse a Stripe webhook event."""
+    """Verify and parse a Stripe webhook event.
+
+    FAIL-CLOSED: without STRIPE_WEBHOOK_SECRET we REFUSE the webhook. Previously
+    this fell back to json.loads() on UNSIGNED input — meaning anyone could POST
+    a fake 'payment succeeded' event and flip any store to premium for free.
+    Plan changes must come from a Stripe-signed event, never raw JSON.
+    """
+    if not STRIPE_WEBHOOK_SECRET:
+        raise RuntimeError("STRIPE_WEBHOOK_SECRET not configured — refusing unsigned webhook")
     s = _stripe()
-    if STRIPE_WEBHOOK_SECRET:
-        return s.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-    return json.loads(payload)
+    return s.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
 
 
 def plan_change_from_event(event: dict):
