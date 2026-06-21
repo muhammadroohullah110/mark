@@ -69,6 +69,13 @@ MOONSHOT_MODEL = os.getenv("MOONSHOT_MODEL", "kimi-k2-0905-preview")
 # MAIN brain = Kimi K2 hosted on Groq (Kimi quality + Groq speed). Env-overridable
 # so the exact Groq model id can be tweaked without a code change.
 DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "moonshotai/kimi-k2-instruct-0905")
+# Groq key POOL (comma-separated) — scale free/cheap use by adding keys, NOT per-store keys.
+DEFAULT_GROQ_KEYS = [k.strip() for k in os.getenv("GROQ_API_KEYS", "").split(",") if k.strip()]
+# Free fallback providers (resilience net behind the paid primary).
+DEFAULT_CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
+CEREBRAS_MODEL = os.getenv("CEREBRAS_MODEL", "llama-3.3-70b")
+DEFAULT_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 # ── Premium tier voice ──────────────────────────────────────
 # Free plan = Edge TTS (free). Premium plan = realistic engine + all languages.
@@ -88,6 +95,24 @@ FREE_MONTHLY_QUOTA = int(os.getenv("FREE_MONTHLY_QUOTA", "500"))
 PREMIUM_MONTHLY_QUOTA = int(os.getenv("PREMIUM_MONTHLY_QUOTA", "0"))   # 0 = unlimited
 GLOBAL_MONTHLY_CAP = int(os.getenv("GLOBAL_MONTHLY_CAP", "0"))         # 0 = off (global wallet circuit-breaker)
 STORE_RATE_PER_MIN = int(os.getenv("STORE_RATE_PER_MIN", "120"))      # per-store burst guard across IPs
+
+# Pricing tiers → monthly chat quota (0 = unlimited). Maps the price card:
+# Free 500 · Starter 2k · Pro 10k · Business/Premium unlimited. Env-tunable.
+PLAN_QUOTAS = {
+    "free":     FREE_MONTHLY_QUOTA,
+    "starter":  int(os.getenv("STARTER_MONTHLY_QUOTA", "2000")),
+    "pro":      int(os.getenv("PRO_MONTHLY_QUOTA", "10000")),
+    "business": int(os.getenv("BUSINESS_MONTHLY_QUOTA", "0")),
+    "premium":  PREMIUM_MONTHLY_QUOTA,   # legacy alias = top paid tier
+}
+
+def plan_quota(plan: str | None) -> int:
+    """Monthly chat cap for a plan (0 = unlimited). Unknown plan → free cap."""
+    return PLAN_QUOTAS.get((plan or "free").strip().lower(), FREE_MONTHLY_QUOTA)
+
+def plan_is_paid(plan: str | None) -> bool:
+    """Any non-free tier unlocks premium voices/languages."""
+    return (plan or "free").strip().lower() != "free"
 
 # ── Response Cache ──────────────────────────────────────────
 response_cache = ResponseCache(max_entries=2000, default_ttl=1800)
@@ -255,9 +280,32 @@ def _learning_loop():
         time.sleep(INTERVAL)
 
 
+def _check_groq_model():
+    """G5: loudly verify the configured Groq model id actually resolves. A 404 here
+    means chat is SILENTLY running on the Moonshot/other fallback instead of
+    Kimi-on-Groq — a loud CRITICAL log beats a silent downgrade nobody notices."""
+    key = (DEFAULT_GROQ_KEYS[0] if DEFAULT_GROQ_KEYS else DEFAULT_GROQ_KEY)
+    if not key:
+        return
+    try:
+        from groq import Groq
+        Groq(api_key=key).chat.completions.create(
+            model=DEFAULT_GROQ_MODEL,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=1,
+        )
+        logger.info(f"Groq model OK: {DEFAULT_GROQ_MODEL}")
+    except Exception as e:
+        logger.critical(
+            f"GROQ MODEL CHECK FAILED for '{DEFAULT_GROQ_MODEL}': {e} — chat will "
+            f"SILENTLY fall back to Moonshot/others. Fix the GROQ_MODEL env var."
+        )
+
+
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    threading.Thread(target=_check_groq_model, daemon=True).start()
     threading.Thread(target=_prewarm_all_stores, daemon=True).start()
     threading.Thread(target=_auto_reindex_loop, daemon=True).start()
     threading.Thread(target=_cleanup_loop, daemon=True).start()
@@ -343,15 +391,19 @@ def get_groq_client(tenant: dict | None) -> Groq:
 
 def get_llm_router(tenant: dict | None) -> LLMRouter:
     """Build an LLM router for this tenant.
-    Chain: Groq (Kimi K2 on Groq) → Moonshot (Kimi K2) → OpenAI (last resort)."""
-    groq_key = (tenant or {}).get("groq_api_key") or DEFAULT_GROQ_KEY
+    Chain: Groq key POOL (Kimi K2 on Groq) → Moonshot → Cerebras → Gemini → OpenAI."""
+    # Groq pool: tenant key first (rare), then the shared pool, then single key.
+    tk = (tenant or {}).get("groq_api_key")
+    groq_keys = ([tk] if tk else []) + list(DEFAULT_GROQ_KEYS) + ([DEFAULT_GROQ_KEY] if DEFAULT_GROQ_KEY else [])
     openai_key = (tenant or {}).get("openai_api_key") or DEFAULT_OPENAI_KEY
     moonshot_key = (tenant or {}).get("moonshot_api_key") or DEFAULT_MOONSHOT_KEY
-    if not (groq_key or openai_key or moonshot_key):
+    if not (groq_keys or openai_key or moonshot_key or DEFAULT_CEREBRAS_KEY or DEFAULT_GEMINI_KEY):
         raise HTTPException(status_code=503, detail="AI not configured. Add an API key.")
-    return LLMRouter(groq_key=groq_key, openai_key=openai_key,
+    return LLMRouter(groq_keys=groq_keys, openai_key=openai_key,
                      moonshot_key=moonshot_key, moonshot_model=MOONSHOT_MODEL,
-                     fallback_model=FALLBACK_MODEL)
+                     fallback_model=FALLBACK_MODEL,
+                     cerebras_key=DEFAULT_CEREBRAS_KEY, cerebras_model=CEREBRAS_MODEL,
+                     gemini_key=DEFAULT_GEMINI_KEY, gemini_model=GEMINI_MODEL)
 
 
 def get_rag(tenant: dict | None) -> MarkRAG | None:
@@ -847,7 +899,7 @@ async def text_to_speech(request: Request, body: TTSRequest,
         raise HTTPException(status_code=429, detail="Too many requests.")
 
     # ── Premium tier → realistic engine. Falls back to Edge on any error/missing config.
-    is_premium = (tenant or {}).get("plan") == "premium"
+    is_premium = plan_is_paid((tenant or {}).get("plan"))
     if is_premium:
         try:
             import asyncio
@@ -1061,7 +1113,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         raise HTTPException(status_code=429, detail="This store is busy — please slow down.")
     usage_period = time.strftime("%Y-%m", time.gmtime())
     plan = (tenant or {}).get("plan", "free")
-    quota = PREMIUM_MONTHLY_QUOTA if plan == "premium" else FREE_MONTHLY_QUOTA
+    quota = plan_quota(plan)
     over_limit = (quota > 0 and get_usage(usage_store, usage_period) >= quota)
     if not over_limit and GLOBAL_MONTHLY_CAP > 0 and get_usage("__global__", usage_period) >= GLOBAL_MONTHLY_CAP:
         logger.critical("GLOBAL monthly LLM cap (%s) reached — shedding load", GLOBAL_MONTHLY_CAP)
@@ -1559,7 +1611,7 @@ async def get_store_conversations(store_id: str, user=Depends(verify_store_token
         plan = (tenant or {}).get("plan", "free")
         data["plan"] = plan
         data["monthly_used"] = get_usage(store_id, period)
-        data["monthly_limit"] = PREMIUM_MONTHLY_QUOTA if plan == "premium" else FREE_MONTHLY_QUOTA
+        data["monthly_limit"] = plan_quota(plan)
     except Exception:
         pass
     return data

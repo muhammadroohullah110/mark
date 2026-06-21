@@ -1,7 +1,9 @@
 # ============================================================
 # MARK LLM ROUTER — Multi-provider fallback chain
-# Groq (primary) → OpenAI (fallback) → error
-# Ensures zero downtime when any single provider fails.
+#   Groq key POOL (Kimi K2 on Groq) → Moonshot → Cerebras → Gemini → OpenAI
+# Every credential has its own circuit breaker, so one bad/rate-limited key
+# never disables the others. Designed so "lots of cheap/free use" scales by
+# adding more Groq keys to the pool — NOT by making each store bring a key.
 # ============================================================
 
 import os
@@ -9,239 +11,184 @@ import logging
 import time
 import hashlib
 import threading
-from typing import Optional, Generator
+from typing import Optional, Generator, List
 
 logger = logging.getLogger("mark.llm")
 
-# Provider availability tracking — keyed by provider + API-KEY fingerprint, so a
-# breaker trips only for the specific credential that's failing. (Previously
-# keyed by provider name alone, which meant one tenant's bad key disabled that
-# provider for EVERY store. Stores sharing a key correctly share a breaker.)
-_provider_failures: dict[str, list] = {}  # "provider:keyfp" -> [failure timestamps]
-_failures_lock = threading.Lock()         # guards _provider_failures across request threads
-_FAILURE_WINDOW = 300  # 5 min — after this, retry the provider
+# Breaker state keyed by "<provider>#<key-fingerprint>" so it isolates per
+# credential. Module-level so all router instances (per request) share it.
+_provider_failures: dict[str, list] = {}
+_failures_lock = threading.Lock()
+_FAILURE_WINDOW = 300   # 5 min, then retry
+_FAILURE_TRIP = 3       # 3 failures in the window = unhealthy
 
 
 def _key_fp(key: str) -> str:
-    """Short, non-reversible fingerprint of an API key for breaker bucketing."""
     return hashlib.sha256((key or "").encode()).hexdigest()[:10] if key else "none"
 
 
-class LLMRouter:
-    """Routes LLM requests through multiple providers with automatic fallback.
+def _healthy(bkey: str) -> bool:
+    now = time.time()
+    with _failures_lock:
+        recent = [t for t in _provider_failures.get(bkey, []) if now - t < _FAILURE_WINDOW]
+        _provider_failures[bkey] = recent
+        return len(recent) < _FAILURE_TRIP
 
-    Usage:
-        router = LLMRouter(groq_key="...", openai_key="...")
-        response = router.complete(messages, model="llama-3.3-70b-versatile", ...)
-        # or streaming:
-        for chunk in router.stream(messages, model="...", ...):
-            yield chunk
+
+def _fail(bkey: str):
+    with _failures_lock:
+        _provider_failures.setdefault(bkey, []).append(time.time())
+
+
+def _ok(bkey: str):
+    with _failures_lock:
+        _provider_failures[bkey] = []
+
+
+class LLMRouter:
+    """Routes through a Groq key pool, then OpenAI-compatible fallbacks.
+
+        router = LLMRouter(groq_keys=["k1","k2"], moonshot_key="...", gemini_key="...")
+        text = router.complete(messages, model="moonshotai/kimi-k2-instruct-0905")
+        for chunk in router.stream(messages, model="..."): ...
     """
 
-    def __init__(self, groq_key: str = "", openai_key: str = "",
-                 moonshot_key: str = "", moonshot_model: str = "kimi-k2-0711-preview",
-                 fallback_model: str = "gpt-4o-mini"):
-        self.providers = []
-        self._groq_client = None
-        self._moonshot_client = None
-        self._openai_client = None
-        self.fallback_model = fallback_model
-        self.moonshot_model = moonshot_model
-
-        # Per-credential breaker buckets — isolate failures by API key.
-        self._bkey = {
-            "groq": f"groq:{_key_fp(groq_key)}",
-            "moonshot": f"moonshot:{_key_fp(moonshot_key)}",
-            "openai": f"openai:{_key_fp(openai_key)}",
-        }
-
-        # Primary: Groq (hosts Kimi K2 — Kimi quality at Groq speed)
+    def __init__(self, groq_keys: Optional[List[str]] = None, groq_key: str = "",
+                 openai_key: str = "", moonshot_key: str = "",
+                 moonshot_model: str = "kimi-k2-0905-preview",
+                 fallback_model: str = "gpt-4o-mini",
+                 cerebras_key: str = "", cerebras_model: str = "llama-3.3-70b",
+                 gemini_key: str = "", gemini_model: str = "gemini-2.0-flash"):
+        # ── Groq key pool ──────────────────────────────────────
+        keys = list(groq_keys or [])
         if groq_key:
+            keys.append(groq_key)
+        seen = set()
+        keys = [k for k in keys if k and not (k in seen or seen.add(k))]   # dedupe, keep order
+
+        self._groq = []   # [{key, client, bkey}]
+        if keys:
             try:
                 from groq import Groq
-                self._groq_client = Groq(api_key=groq_key)
-                self.providers.append("groq")
+                for k in keys:
+                    try:
+                        self._groq.append({"client": Groq(api_key=k), "bkey": f"groq#{_key_fp(k)}"})
+                    except Exception as e:
+                        logger.warning(f"Groq key init failed: {e}")
             except Exception as e:
-                logger.warning(f"Groq init failed: {e}")
+                logger.warning(f"Groq SDK import failed: {e}")
 
-        # Fallback 1: Moonshot (Kimi K2, independent provider) — OpenAI-compatible API
-        if moonshot_key:
+        # ── OpenAI-compatible fallbacks, in order (cheap/free before paid OpenAI) ──
+        # NOTE: free tiers (Cerebras/Gemini) may train on data → only a resilience
+        # net behind the paid primary; keep customer-chat-sensitive traffic on Groq.
+        self._fallbacks = []   # [{name, client, model, bkey}]
+        for name, key, base_url, mdl in [
+            ("moonshot", moonshot_key, "https://api.moonshot.ai/v1", moonshot_model),
+            ("cerebras", cerebras_key, "https://api.cerebras.ai/v1", cerebras_model),
+            ("gemini",   gemini_key,   "https://generativelanguage.googleapis.com/v1beta/openai/", gemini_model),
+            ("openai",   openai_key,   None, fallback_model),
+        ]:
+            if not key:
+                continue
             try:
                 from openai import OpenAI
-                self._moonshot_client = OpenAI(api_key=moonshot_key, base_url="https://api.moonshot.ai/v1")
-                self.providers.append("moonshot")
+                client = OpenAI(api_key=key, base_url=base_url) if base_url else OpenAI(api_key=key)
+                self._fallbacks.append({"name": name, "client": client, "model": mdl,
+                                        "bkey": f"{name}#{_key_fp(key)}"})
             except Exception as e:
-                logger.warning(f"Moonshot init failed: {e}")
+                logger.warning(f"{name} init failed: {e}")
 
-        # Fallback 2: OpenAI (last resort)
-        if openai_key:
-            try:
-                from openai import OpenAI
-                self._openai_client = OpenAI(api_key=openai_key)
-                self.providers.append("openai")
-            except Exception as e:
-                logger.warning(f"OpenAI init failed: {e}")
+        self.providers = [f"groq-pool({len(self._groq)})"] + [f["name"] for f in self._fallbacks]
+        logger.info(f"LLM Router initialized: {self.providers}")
 
-        logger.info(f"LLM Router initialized with providers: {self.providers}")
-
-    def _is_provider_healthy(self, provider: str) -> bool:
-        """Check if THIS credential has had too many recent failures."""
-        bkey = self._bkey.get(provider, provider)
-        now = time.time()
-        with _failures_lock:
-            recent = [t for t in _provider_failures.get(bkey, []) if now - t < _FAILURE_WINDOW]
-            _provider_failures[bkey] = recent
-            return len(recent) < 3  # 3 failures in 5 min = unhealthy
-
-    def _record_failure(self, provider: str):
-        bkey = self._bkey.get(provider, provider)
-        with _failures_lock:
-            _provider_failures.setdefault(bkey, []).append(time.time())
-
-    def _record_success(self, provider: str):
-        with _failures_lock:
-            _provider_failures[self._bkey.get(provider, provider)] = []  # clear on success
-
-    def complete(self, messages: list, model: str = "llama-3.3-70b-versatile",
+    # ── non-streaming ──────────────────────────────────────────
+    def complete(self, messages: list, model: str = "moonshotai/kimi-k2-instruct-0905",
                  max_tokens: int = 200, temperature: float = 0.7) -> Optional[str]:
-        """Non-streaming completion. Returns response text or None."""
-
-        # Try Groq first
-        if "groq" in self.providers and self._is_provider_healthy("groq"):
+        for g in self._groq:
+            if not _healthy(g["bkey"]):
+                continue
             try:
-                resp = self._groq_client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                text = resp.choices[0].message.content
-                self._record_success("groq")
-                return text
+                resp = g["client"].chat.completions.create(
+                    model=model, messages=messages, max_tokens=max_tokens, temperature=temperature)
+                _ok(g["bkey"])
+                return resp.choices[0].message.content
             except Exception as e:
-                logger.warning(f"Groq failed: {e}")
-                self._record_failure("groq")
+                logger.warning(f"Groq key failed: {e}")
+                _fail(g["bkey"])
 
-        # Fallback 1: Moonshot (Kimi K2)
-        if "moonshot" in self.providers and self._is_provider_healthy("moonshot"):
+        for f in self._fallbacks:
+            if not _healthy(f["bkey"]):
+                continue
             try:
-                resp = self._moonshot_client.chat.completions.create(
-                    model=self.moonshot_model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                text = resp.choices[0].message.content
-                self._record_success("moonshot")
-                logger.info("Used Moonshot (Kimi) fallback successfully")
-                return text
+                resp = f["client"].chat.completions.create(
+                    model=f["model"], messages=messages, max_tokens=max_tokens, temperature=temperature)
+                _ok(f["bkey"])
+                logger.info(f"Used fallback provider: {f['name']}")
+                return resp.choices[0].message.content
             except Exception as e:
-                logger.warning(f"Moonshot fallback failed: {e}")
-                self._record_failure("moonshot")
+                logger.warning(f"Fallback {f['name']} failed: {e}")
+                _fail(f["bkey"])
 
-        # Fallback 2: OpenAI
-        if "openai" in self.providers and self._is_provider_healthy("openai"):
-            try:
-                resp = self._openai_client.chat.completions.create(
-                    model=self.fallback_model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                text = resp.choices[0].message.content
-                self._record_success("openai")
-                logger.info("Used OpenAI fallback successfully")
-                return text
-            except Exception as e:
-                logger.warning(f"OpenAI fallback failed: {e}")
-                self._record_failure("openai")
+        return None
 
-        return None  # all providers failed
-
-    def stream(self, messages: list, model: str = "llama-3.3-70b-versatile",
+    # ── streaming ──────────────────────────────────────────────
+    def stream(self, messages: list, model: str = "moonshotai/kimi-k2-instruct-0905",
                max_tokens: int = 200, temperature: float = 0.7) -> Generator[str, None, None]:
-        """Streaming completion. Yields text chunks."""
-
-        # Try Groq first
-        if "groq" in self.providers and self._is_provider_healthy("groq"):
+        def _run(client, mdl, bkey, label):
             try:
-                stream = self._groq_client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    stream=True,
-                )
-                had_content = False
-                for chunk in stream:
+                s = client.chat.completions.create(
+                    model=mdl, messages=messages, max_tokens=max_tokens,
+                    temperature=temperature, stream=True)
+                had = False
+                for chunk in s:
                     delta = chunk.choices[0].delta
                     if delta and delta.content:
-                        had_content = True
+                        had = True
                         yield delta.content
-                if had_content:
-                    self._record_success("groq")
-                    return
+                if had:
+                    _ok(bkey)
+                    if label:
+                        logger.info(f"Used fallback provider (stream): {label}")
+                    yield "__MARK_OK__"   # sentinel: this provider produced content
             except Exception as e:
-                logger.warning(f"Groq stream failed: {e}")
-                self._record_failure("groq")
+                logger.warning(f"{label or 'Groq'} stream failed: {e}")
+                _fail(bkey)
 
-        # Fallback 1: Moonshot (Kimi K2) streaming
-        if "moonshot" in self.providers and self._is_provider_healthy("moonshot"):
-            try:
-                stream = self._moonshot_client.chat.completions.create(
-                    model=self.moonshot_model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    stream=True,
-                )
-                had_content = False
-                for chunk in stream:
-                    delta = chunk.choices[0].delta
-                    if delta and delta.content:
-                        had_content = True
-                        yield delta.content
-                if had_content:
-                    self._record_success("moonshot")
-                    logger.info("Used Moonshot (Kimi) stream fallback")
-                    return
-            except Exception as e:
-                logger.warning(f"Moonshot stream fallback failed: {e}")
-                self._record_failure("moonshot")
+        for g in self._groq:
+            if not _healthy(g["bkey"]):
+                continue
+            produced = False
+            emitted = 0
+            for piece in _run(g["client"], model, g["bkey"], ""):
+                if piece == "__MARK_OK__":
+                    produced = True
+                    break
+                emitted += 1
+                yield piece
+            if produced or emitted:   # emitted-but-not-produced = mid-stream fail; don't duplicate
+                return
 
-        # Fallback 2: OpenAI streaming
-        if "openai" in self.providers and self._is_provider_healthy("openai"):
-            try:
-                stream = self._openai_client.chat.completions.create(
-                    model=self.fallback_model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    stream=True,
-                )
-                had_content = False
-                for chunk in stream:
-                    delta = chunk.choices[0].delta
-                    if delta and delta.content:
-                        had_content = True
-                        yield delta.content
-                if had_content:
-                    self._record_success("openai")
-                    logger.info("Used OpenAI stream fallback")
-                    return
-            except Exception as e:
-                logger.warning(f"OpenAI stream fallback failed: {e}")
-                self._record_failure("openai")
-
-        # All failed — yield nothing (caller handles empty response)
+        for f in self._fallbacks:
+            if not _healthy(f["bkey"]):
+                continue
+            produced = False
+            emitted = 0
+            for piece in _run(f["client"], f["model"], f["bkey"], f["name"]):
+                if piece == "__MARK_OK__":
+                    produced = True
+                    break
+                emitted += 1
+                yield piece
+            if produced or emitted:
+                return
+        # all failed → yield nothing (caller handles empty)
 
     def status(self) -> dict:
-        """Current provider status."""
         now = time.time()
-        return {
-            provider: {
-                "available": self._is_provider_healthy(provider),
-                "recent_failures": len([t for t in _provider_failures.get(self._bkey.get(provider, provider), []) if now - t < _FAILURE_WINDOW]),
-            }
-            for provider in self.providers
-        }
+        out = {}
+        for i, g in enumerate(self._groq):
+            out[f"groq[{i}]"] = {"healthy": _healthy(g["bkey"])}
+        for f in self._fallbacks:
+            recent = len([t for t in _provider_failures.get(f["bkey"], []) if now - t < _FAILURE_WINDOW])
+            out[f["name"]] = {"healthy": _healthy(f["bkey"]), "recent_failures": recent}
+        return out
