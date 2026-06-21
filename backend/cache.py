@@ -39,20 +39,27 @@ class ResponseCache:
         self._hits = 0
         self._misses = 0
 
-    def _make_key(self, store_id: str, user_msg: str, rag_snippet: str = "", persona: str = "") -> str:
-        """Hash(store + normalized message + rag context + persona) = cache key.
+    def _make_key(self, store_id: str, user_msg: str, rag_snippet: str = "",
+                  persona: str = "", ctx: str = "") -> str:
+        """Hash(store + normalized message + rag context + persona + ctx) = cache key.
 
         Persona is part of the key so MAIE's per-persona personalization is
         preserved on cache hits — a price_hunter and a skeptic asking the same
         question get different cached answers instead of colliding.
+
+        `ctx` carries a cheap signal of the CONVERSATION context (e.g. the
+        previous user turn + new/returning flag). Without it, a context-dependent
+        follow-up like "do you have it in red?" would collide across totally
+        different conversations and serve a wrong cached answer.
         """
         normalized = user_msg.strip().lower()[:300]
-        raw = f"{store_id}|{normalized}|{rag_snippet[:200]}|{persona}"
+        raw = f"{store_id}|{normalized}|{rag_snippet[:200]}|{persona}|{ctx[:160]}"
         return hashlib.md5(raw.encode()).hexdigest()
 
-    def get(self, store_id: str, user_msg: str, rag_snippet: str = "", persona: str = "") -> str | None:
+    def get(self, store_id: str, user_msg: str, rag_snippet: str = "",
+            persona: str = "", ctx: str = "") -> str | None:
         """Return cached response or None."""
-        key = self._make_key(store_id, user_msg, rag_snippet, persona)
+        key = self._make_key(store_id, user_msg, rag_snippet, persona, ctx)
         with self._lock:
             entry = self._cache.get(key)
             if entry is None:
@@ -67,9 +74,10 @@ class ResponseCache:
             self._hits += 1
             return entry["response"]
 
-    def set(self, store_id: str, user_msg: str, rag_snippet: str, response: str, ttl: int = None, persona: str = ""):
+    def set(self, store_id: str, user_msg: str, rag_snippet: str, response: str,
+            ttl: int = None, persona: str = "", ctx: str = ""):
         """Cache a response."""
-        key = self._make_key(store_id, user_msg, rag_snippet, persona)
+        key = self._make_key(store_id, user_msg, rag_snippet, persona, ctx)
         expires = time.time() + (ttl or self.default_ttl)
         with self._lock:
             self._cache[key] = {"response": response, "expires": expires, "store_id": store_id}

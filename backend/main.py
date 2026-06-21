@@ -397,12 +397,17 @@ def log_conversation(ip: str, messages: list, language: str, response_text: str,
     ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:12]
 
     if store_id:
-        try:
-            exchange_count = len([m for m in messages if m.get("role") == "user"])
-            last_msg = next((m["content"][:200] for m in reversed(messages) if m.get("role") == "user"), "")
-            log_conversation_db(store_id, ip_hash, language, exchange_count, last_msg, response_text[:200], visitor_name)
-        except Exception as e:
-            logger.warning(f"DB log error: {e}")
+        # Fire-and-forget: a synchronous DB write here would add latency to the
+        # response path — including the "instant" cache-hit path. Thread it.
+        exchange_count = len([m for m in messages if m.get("role") == "user"])
+        last_msg = next((m["content"][:200] for m in reversed(messages) if m.get("role") == "user"), "")
+        _resp = response_text[:200]
+        def _logdb():
+            try:
+                log_conversation_db(store_id, ip_hash, language, exchange_count, last_msg, _resp, visitor_name)
+            except Exception as e:
+                logger.warning(f"DB log error: {e}")
+        threading.Thread(target=_logdb, daemon=True).start()
 
     if not ENABLE_LOGGING:
         return
@@ -702,7 +707,7 @@ LINK RULE (critical): You NEVER paste, type, write, or read out a URL inside a s
 
 DELIVERY RULE (critical): The step AFTER offering is to actually deliver. If the visitor agrees or names an item, redirect to it (GOTO) instead of re-offering.
 
-ALWAYS ANSWER (critical): EVERY message gets a real reply — you must NEVER go silent, ignore a question, or change the subject. For PRICE, STOCK, SIZE, or any product question: answer straight from the catalog/RAG below. If the exact item isn't listed, give the closest match or the right product/page and say so plainly — e.g. "The [closest product] is [price] and in stock" or "I don't see that exact one, but here's [closest] — want me to show you?". NEVER reply with only "check the website" and NEVER leave a product/price/stock question unanswered. A dodged price question is a failed sale.
+ALWAYS ANSWER (critical): EVERY message gets a real reply — you must NEVER go silent, ignore a question, or change the subject. For PRICE, STOCK, SIZE, or any product question: answer straight from the catalog/RAG below — e.g. "The Portable Iron Steamer is $0.50 and in stock." If the exact item isn't listed, point them to the closest real product or the right page — e.g. "I don't see that exact one, but here's [closest] — want me to show you?". NEVER reply with only "check the website" and NEVER leave a product question unanswered. BUT never INVENT a figure: if a price or stock status is NOT in the catalog/RAG, do NOT guess a number — say you'll take them to the product page for the live price instead. A dodged question loses the sale; a made-up price loses trust — give the real info or the real page, never a guess.
 
 ANTI-HEDGE: You are fully operational. Speak confidently with whatever catalog/RAG/brand data is present. NEVER say "still loading", "loading my catalog", or "ask me again in a bit". Only if you genuinely have ZERO store data this turn, say it ONCE, briefly ("I'm just finishing setup — what are you looking for?") and never repeat it.
 
@@ -1156,8 +1161,15 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     is_special = last_user_msg.startswith("[") or is_affirmation
     store_id_str = body.store_id or "default"
 
+    # Cheap conversation-context signal for the cache key — disambiguates
+    # context-dependent follow-ups ("do you have it in red?") that share the
+    # same text across different conversations, plus new vs returning visitor.
+    _ctx_users = [c["content"] for c in cleaned
+                  if c.get("role") == "user" and not str(c.get("content", "")).startswith("[")]
+    cache_ctx = (_ctx_users[-2][:120] if len(_ctx_users) >= 2 else "") + ("|ret" if is_returning else "")
+
     if not body.stream and not is_special:
-        cached = response_cache.get(store_id_str, last_user_msg, rag_snippet, persona=detected_persona)
+        cached = response_cache.get(store_id_str, last_user_msg, rag_snippet, persona=detected_persona, ctx=cache_ctx)
         if cached:
             logger.info(f"Cache HIT for store {store_id_str}")
             log_conversation(ip, cleaned, body.user_language, cached, body.store_id, body.visitor_name or "")
@@ -1184,7 +1196,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
                     capture_learning_async(tenant, ip, cleaned, complete, body.user_language)
                     # Cache streamed response too (if not special)
                     if not is_special and last_user_msg:
-                        response_cache.set(store_id_str, last_user_msg, rag_snippet, complete, persona=detected_persona)
+                        response_cache.set(store_id_str, last_user_msg, rag_snippet, complete, persona=detected_persona, ctx=cache_ctx)
                 else:
                     yield f"data: {json.dumps({'error': 'All AI providers unavailable'})}\n\n"
             except Exception as e:
@@ -1208,7 +1220,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         capture_learning_async(tenant, ip, cleaned, reply, body.user_language)
         # Cache the response
         if not is_special and last_user_msg:
-            response_cache.set(store_id_str, last_user_msg, rag_snippet, reply, persona=detected_persona)
+            response_cache.set(store_id_str, last_user_msg, rag_snippet, reply, persona=detected_persona, ctx=cache_ctx)
         return {"response": reply}
     except HTTPException:
         raise
