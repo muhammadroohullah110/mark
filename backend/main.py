@@ -40,6 +40,7 @@ from database import (
     get_active_playbook, get_playbook_history, get_signal_count, update_playbook,
     get_persona_distribution, mark_latest_signal_converted,
     save_rag_snapshot, get_rag_snapshot,
+    incr_usage, get_usage,
 )
 from admin_routes import router as admin_router, get_current_user
 from cache import ResponseCache
@@ -79,6 +80,14 @@ PREMIUM_TTS_VOICE = os.getenv("PREMIUM_TTS_VOICE", "onyx")
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY", "")
 CARTESIA_MODEL = os.getenv("CARTESIA_MODEL", "sonic-2")
 CARTESIA_VOICE = os.getenv("CARTESIA_VOICE", "")          # a Cartesia voice id
+
+# ── Cost firewall ───────────────────────────────────────────
+# Per-store MONTHLY message quota (0 = unlimited). This is the wallet guard:
+# a scraped store_id can't drain the shared LLM key past the store's plan limit.
+FREE_MONTHLY_QUOTA = int(os.getenv("FREE_MONTHLY_QUOTA", "500"))
+PREMIUM_MONTHLY_QUOTA = int(os.getenv("PREMIUM_MONTHLY_QUOTA", "0"))   # 0 = unlimited
+GLOBAL_MONTHLY_CAP = int(os.getenv("GLOBAL_MONTHLY_CAP", "0"))         # 0 = off (global wallet circuit-breaker)
+STORE_RATE_PER_MIN = int(os.getenv("STORE_RATE_PER_MIN", "120"))      # per-store burst guard across IPs
 
 # ── Response Cache ──────────────────────────────────────────
 response_cache = ResponseCache(max_entries=2000, default_ttl=1800)
@@ -290,6 +299,7 @@ transcribe_limiter = RateLimiter(RATE_TRANSCRIBE)
 chat_limiter       = RateLimiter(RATE_CHAT)
 rag_limiter        = RateLimiter(RATE_RAG)
 tts_limiter        = RateLimiter(RATE_TTS)
+store_chat_limiter = RateLimiter(STORE_RATE_PER_MIN)   # caps one store_id across rotating IPs
 
 def get_ip(request: Request) -> str:
     # Render (and standard reverse proxies) APPEND the real client IP to the
@@ -1041,6 +1051,41 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     custom_rate = get_tenant_rate(tenant, "rate_chat")
     if not chat_limiter.is_allowed(ip, custom_max=custom_rate):
         raise HTTPException(status_code=429, detail="Too many requests.")
+
+    # ── Cost firewall ──────────────────────────────────────────
+    # /api/chat is public and the shared LLM key is bankrolled by us, so a
+    # scraped store_id must NOT be able to drain it. Two gates:
+    #   (1) per-store burst limit across rotating IPs, (2) monthly spend quota.
+    usage_store = body.store_id or "default"
+    if body.store_id and not store_chat_limiter.is_allowed(usage_store):
+        raise HTTPException(status_code=429, detail="This store is busy — please slow down.")
+    usage_period = time.strftime("%Y-%m", time.gmtime())
+    plan = (tenant or {}).get("plan", "free")
+    quota = PREMIUM_MONTHLY_QUOTA if plan == "premium" else FREE_MONTHLY_QUOTA
+    over_limit = (quota > 0 and get_usage(usage_store, usage_period) >= quota)
+    if not over_limit and GLOBAL_MONTHLY_CAP > 0 and get_usage("__global__", usage_period) >= GLOBAL_MONTHLY_CAP:
+        logger.critical("GLOBAL monthly LLM cap (%s) reached — shedding load", GLOBAL_MONTHLY_CAP)
+        over_limit = True
+    if over_limit:
+        limit_msg = ("I've reached this store's monthly chat limit. Upgrade to Premium for "
+                     "unlimited chats, or check back next month!") if plan != "premium" else \
+                    ("We're seeing very high demand right now — please try again in a moment.")
+        if body.stream:
+            def _limit_stream():
+                yield f"data: {json.dumps({'token': limit_msg})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'response': limit_msg})}\n\n"
+            return StreamingResponse(_limit_stream(), media_type="text/event-stream",
+                                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        return {"response": limit_msg, "limit_reached": True}
+
+    def _bump_usage():
+        try:
+            incr_usage(usage_store, usage_period)
+            if GLOBAL_MONTHLY_CAP > 0:
+                incr_usage("__global__", usage_period)
+        except Exception as e:
+            logger.warning(f"usage incr failed: {e}")
+
     router = get_llm_router(tenant)
     # Prefer the live name the widget sends (matches the on-screen label exactly),
     # so Mark's replies never lag behind a rename even if the backend tenant hasn't
@@ -1194,6 +1239,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
                     yield f"data: {json.dumps({'done': True, 'response': complete})}\n\n"
                     log_conversation(ip, cleaned, body.user_language, complete, body.store_id, body.visitor_name or "")
                     capture_learning_async(tenant, ip, cleaned, complete, body.user_language)
+                    threading.Thread(target=_bump_usage, daemon=True).start()
                     # Cache streamed response too (if not special)
                     if not is_special and last_user_msg:
                         response_cache.set(store_id_str, last_user_msg, rag_snippet, complete, persona=detected_persona, ctx=cache_ctx)
@@ -1218,6 +1264,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
             raise HTTPException(status_code=503, detail="All AI providers unavailable.")
         log_conversation(ip, cleaned, body.user_language, reply, body.store_id, body.visitor_name or "")
         capture_learning_async(tenant, ip, cleaned, reply, body.user_language)
+        threading.Thread(target=_bump_usage, daemon=True).start()
         # Cache the response
         if not is_special and last_user_msg:
             response_cache.set(store_id_str, last_user_msg, rag_snippet, reply, persona=detected_persona, ctx=cache_ctx)
@@ -1503,8 +1550,19 @@ async def get_store_conversations(store_id: str, user=Depends(verify_store_token
     """Recent conversations + summary stats for a store (token/owner auth).
     Reads the BACKEND conversation log (where the live widget actually writes),
     not the WP mirror — that's why the WP admin page showed 0."""
-    _enforce_store_access(store_id, user)
-    return get_analytics(store_id)
+    tenant = _enforce_store_access(store_id, user)
+    data = get_analytics(store_id)
+    # Real monthly usage for the plan meter (the UI previously showed all-time
+    # conversations against a hardcoded cap — misleading). Now it's honest.
+    try:
+        period = time.strftime("%Y-%m", time.gmtime())
+        plan = (tenant or {}).get("plan", "free")
+        data["plan"] = plan
+        data["monthly_used"] = get_usage(store_id, period)
+        data["monthly_limit"] = PREMIUM_MONTHLY_QUOTA if plan == "premium" else FREE_MONTHLY_QUOTA
+    except Exception:
+        pass
+    return data
 
 
 # ── MAIE: Adaptive Learning (playbook) endpoints ─────────────

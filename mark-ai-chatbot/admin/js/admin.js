@@ -984,11 +984,15 @@
     async function loadPlanPage() {
         withStore(async (s) => {
             const premium = (s.plan === 'premium');
-            // Real usage from the backend (honest — never a fabricated number).
-            let used = 0;
-            try { const d = await maieFetch(s, '/conversations'); used = d.total_conversations || 0; } catch (_) {}
-            const cap = 500;
-            const pct = premium ? 0 : Math.min(100, Math.round((used / cap) * 100));
+            // Real MONTHLY usage from the backend (honest — the actual quota counter,
+            // not all-time conversations against a hardcoded cap).
+            let used = 0, cap = 500;
+            try {
+                const d = await maieFetch(s, '/conversations');
+                used = (d.monthly_used != null ? d.monthly_used : (d.total_conversations || 0));
+                cap = d.monthly_limit || 500;
+            } catch (_) {}
+            const pct = (premium || !cap) ? 0 : Math.min(100, Math.round((used / cap) * 100));
             const feat = (txt, on) => `<li style="display:flex;align-items:center;gap:10px;font-size:14px;color:${on ? '#F5F7FA' : '#9AA3AD'};padding:7px 0;"><span class="material-symbols-outlined" style="font-size:18px;color:${on ? '#4ade80' : '#9AA3AD'};">${on ? 'check_circle' : 'remove'}</span>${txt}</li>`;
             $('#mark-page-content').innerHTML = `
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:32px;">

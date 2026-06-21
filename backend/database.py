@@ -286,6 +286,15 @@ def _build_schema(pg: bool) -> str:
             page_count INTEGER DEFAULT 0,
             updated_at {ts}
         );
+
+        -- Cost firewall: per-store monthly LLM-call counter (period='YYYY-MM').
+        -- No FK so the '__global__' pseudo-row (wallet circuit-breaker) is valid.
+        CREATE TABLE IF NOT EXISTS store_usage (
+            store_id TEXT NOT NULL,
+            period TEXT NOT NULL,
+            count INTEGER DEFAULT 0,
+            PRIMARY KEY (store_id, period)
+        );
     """
 
 
@@ -346,6 +355,32 @@ def init_db():
 
 
 _PBKDF2_ITERATIONS = 200_000
+
+
+def incr_usage(store_id: str, period: str) -> int:
+    """Atomically bump a store's monthly LLM-call counter; return the new count.
+    Portable upsert (Postgres + SQLite both support ON CONFLICT)."""
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO store_usage (store_id, period, count) VALUES (?, ?, 1) "
+            "ON CONFLICT(store_id, period) DO UPDATE SET count = store_usage.count + 1",
+            (store_id, period),
+        )
+        row = db.execute(
+            "SELECT count FROM store_usage WHERE store_id = ? AND period = ?",
+            (store_id, period),
+        ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def get_usage(store_id: str, period: str) -> int:
+    """Read a store's LLM-call count for the given month ('YYYY-MM'). 0 if none."""
+    with get_db() as db:
+        row = db.execute(
+            "SELECT count FROM store_usage WHERE store_id = ? AND period = ?",
+            (store_id, period),
+        ).fetchone()
+    return int(row[0]) if row else 0
 
 
 def hash_password(password: str) -> str:
