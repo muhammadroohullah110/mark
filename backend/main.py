@@ -47,6 +47,7 @@ from cache import ResponseCache
 from llm_router import LLMRouter
 import learning_engine as maie
 import sales_cortex
+import sales_boost
 import billing
 
 load_dotenv()
@@ -1251,6 +1252,14 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     except Exception as e:
         logger.warning(f"Cortex inject skipped: {e}")
 
+    # Sales Boost: the compact "closer" directive (Hormozi value-framing + Elliott close).
+    try:
+        boost = sales_boost.sales_directive(tenant)
+        if boost:
+            messages_for_api[0]["content"] += "\n" + boost
+    except Exception as e:
+        logger.warning(f"Sales Boost inject skipped: {e}")
+
     # ── Cache check (skip for init/returning/streaming) ──
     rag_snippet = ""
     if len(messages_for_api) > 1 and messages_for_api[1].get("role") == "system":
@@ -1287,6 +1296,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
                     yield f"data: {json.dumps({'token': token})}\n\n"
 
                 complete = ''.join(full_reply)
+                complete = sales_boost.scrub(complete, tenant)   # safety net on the final/cached/logged copy
                 if complete:
                     yield f"data: {json.dumps({'done': True, 'response': complete})}\n\n"
                     log_conversation(ip, cleaned, body.user_language, complete, body.store_id, body.visitor_name or "")
@@ -1314,6 +1324,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
         )
         if not reply:
             raise HTTPException(status_code=503, detail="All AI providers unavailable.")
+        reply = sales_boost.scrub(reply, tenant)   # neutralize any fabricated offer
         log_conversation(ip, cleaned, body.user_language, reply, body.store_id, body.visitor_name or "")
         capture_learning_async(tenant, ip, cleaned, reply, body.user_language)
         threading.Thread(target=_bump_usage, daemon=True).start()
