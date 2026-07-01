@@ -384,7 +384,7 @@ class Mark_AI_Rest_API {
             // Widget size scale (1-10)
             'widget_scale_desktop', 'widget_scale_mobile',
             // Mark Training fields
-            'brand_description', 'priority_products', 'seasonal_products',
+            'brand_description', 'priority_products', 'seasonal_products', 'offers',
         ];
 
         $updates = [];
@@ -403,7 +403,7 @@ class Mark_AI_Rest_API {
                     $value = $value ? 1 : 0;
                 } elseif ( $key === 'website_url' ) {
                     $value = esc_url_raw( $value );
-                } elseif ( in_array( $key, [ 'custom_system_prompt', 'brand_description', 'priority_products', 'seasonal_products' ], true ) ) {
+                } elseif ( in_array( $key, [ 'custom_system_prompt', 'brand_description', 'priority_products', 'seasonal_products', 'offers' ], true ) ) {
                     $value = wp_kses_post( $value );
                 } elseif ( $key === 'groq_api_key' ) {
                     // Don't overwrite with masked value

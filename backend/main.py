@@ -823,6 +823,14 @@ EMOJI: Avoid emoji unless the visitor uses them first.
     if seasonal_ctx and seasonal_ctx.strip():
         prompt += f"\n<seasonal_context>\nCurrent seasonal info from the owner:\n{seasonal_ctx.strip()[:1500]}\nUse this for timely, relevant conversations.\n</seasonal_context>\n"
 
+    offers_txt = (tenant or {}).get("offers", "")
+    if offers_txt and offers_txt.strip():
+        prompt += (f"\n<offers>\nThese are the store's REAL, owner-approved offers, bundles, guarantees, and "
+                   f"promo codes — the ONLY ones you may present. Use them to CLOSE: stack the value, name the "
+                   f"guarantee to reverse the buyer's risk, and mention any urgency the owner stated:\n"
+                   f"{offers_txt.strip()[:1500]}\n"
+                   f"NEVER offer any discount, code, price, or guarantee that is NOT listed here.\n</offers>\n")
+
     if product_context and product_context.strip():
         prompt += f"\n== PRODUCT CATALOG ==\n{product_context}\n"
 
@@ -1432,6 +1440,7 @@ class SyncTrainingRequest(BaseModel):
     brand_description: Optional[str] = None
     priority_products: Optional[str] = None
     seasonal_products: Optional[str] = None
+    offers: Optional[str] = None
 
 @app.post("/api/sync-training")
 async def sync_training(body: SyncTrainingRequest,
@@ -1443,6 +1452,7 @@ async def sync_training(body: SyncTrainingRequest,
     if body.brand_description is not None: updates["brand_description"] = body.brand_description[:5000]
     if body.priority_products is not None: updates["priority_products"] = body.priority_products[:2000]
     if body.seasonal_products is not None: updates["seasonal_products"] = body.seasonal_products[:2000]
+    if body.offers is not None: updates["offers"] = body.offers[:2000]
     if updates:
         update_store(store_id, **updates)
         # Invalidate cache since training data changed

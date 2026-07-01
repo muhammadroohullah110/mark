@@ -1352,6 +1352,7 @@
         const brandInfo = s.brand_description || '';
         const seasonalProducts = s.seasonal_products || '';
         const priorityProducts = s.priority_products || '';
+        const offers = s.offers || '';
         return `
         <div style="${T.glassLight}padding:40px;">
             <h3 style="${T.headline}font-size:24px;margin:0 0 4px;">
@@ -1408,6 +1409,15 @@
                 </div>
                 <p style="font-size:13px;color:#9AA3AD;margin:0 0 12px;">Current season, events, or promotions Mark should know about. Update this regularly.</p>
                 <textarea id="tt-seasonal" style="${T.input}min-height:80px;resize:vertical;line-height:1.6;" placeholder="Example: It's Ramadan season — our Iftar Boxes are selling fast. Free delivery on orders above Rs 3,000. Eid sale starts next week with 30% off on all dry fruits.">${esc(seasonalProducts)}</textarea>
+            </div>
+
+            <div style="margin-bottom:40px;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                    <span class="material-symbols-outlined" style="font-size:22px;color:#2DE2E6;">redeem</span>
+                    <label style="${T.label}margin:0;">Offers &amp; Guarantees <span style="color:#2DE2E6;">— Mark's closing power</span></label>
+                </div>
+                <p style="font-size:13px;color:#9AA3AD;margin:0 0 12px;">Your REAL bundles, guarantees, promo codes, and urgency. Mark will use these to close — and he will <strong>never</strong> invent any discount or promise that isn't written here. (Leave blank if you don't run offers.)</p>
+                <textarea id="tt-offers" style="${T.input}min-height:100px;resize:vertical;line-height:1.6;" placeholder="Example: Bundle — buy the Summer Kit + free tote for Rs 4,999. Promo code SUMMER15 = 15% off orders over Rs 3,000 (ends Friday). Guarantee: 30-day free returns, no questions. Free shipping over Rs 2,500.">${esc(offers)}</textarea>
             </div>
 
             <!-- Save Button -->
@@ -1496,16 +1506,19 @@
         const brandInfo = document.getElementById('tt-brand-info')?.value || '';
         const priorityProducts = document.getElementById('tt-priority-products')?.value || '';
         const seasonalProducts = document.getElementById('tt-seasonal')?.value || '';
+        const offers = document.getElementById('tt-offers')?.value || '';
 
         try {
             await api('PUT', 'stores/' + currentStore.store_id, {
                 brand_description: brandInfo,
                 priority_products: priorityProducts,
                 seasonal_products: seasonalProducts,
+                offers: offers,
             });
             currentStore.brand_description = brandInfo;
             currentStore.priority_products = priorityProducts;
             currentStore.seasonal_products = seasonalProducts;
+            currentStore.offers = offers;
 
             // Also sync to backend (token-authenticated)
             const remoteId = globalSettings.remote_store_id;
@@ -1515,7 +1528,7 @@
                 fetch(backendUrl + '/api/sync-training', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId, 'X-Store-Token': token },
-                    body: JSON.stringify({ brand_description: brandInfo, priority_products: priorityProducts, seasonal_products: seasonalProducts })
+                    body: JSON.stringify({ brand_description: brandInfo, priority_products: priorityProducts, seasonal_products: seasonalProducts, offers: offers })
                 }).catch(() => {});
             }
 

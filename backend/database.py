@@ -191,6 +191,7 @@ def _build_schema(pg: bool) -> str:
             brand_description TEXT DEFAULT '',
             priority_products TEXT DEFAULT '',
             seasonal_products TEXT DEFAULT '',
+            offers TEXT DEFAULT '',
 
             api_token TEXT DEFAULT '',
 
@@ -321,6 +322,7 @@ _STORE_MIGRATIONS = {
     "premium_voice": "TEXT DEFAULT ''",          # chosen realistic voice (premium engine)
     "stripe_customer_id": "TEXT DEFAULT ''",
     "stripe_subscription_id": "TEXT DEFAULT ''",
+    "offers": "TEXT DEFAULT ''",   # S2: owner-defined offers/bundles/guarantees/promo codes
 }
 
 
@@ -476,7 +478,7 @@ STORE_FIELDS = {
     "sales_mode", "sales_greeting", "sales_cta_text", "sales_cta_url",
     "sales_objection_handling", "sales_cross_sell", "sales_urgency_triggers",
     "sales_tone", "sales_followup_enabled", "sales_max_suggestions",
-    "brand_description", "priority_products", "seasonal_products",
+    "brand_description", "priority_products", "seasonal_products", "offers",
     "auto_learning_enabled", "learning_autoapprove", "learning_last_run",
 }
 

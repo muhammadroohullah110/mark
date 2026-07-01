@@ -48,7 +48,7 @@ _PCT_RE = re.compile(r"\b\d{1,3}\s?%\s*(?:off|discount)\b", re.I)
 def _configured_offers(tenant: dict | None) -> str:
     t = tenant or {}
     return " ".join(str(t.get(k, "") or "") for k in
-                    ("sales_cta_text", "seasonal_products", "priority_products", "brand_description")).lower()
+                    ("offers", "sales_cta_text", "seasonal_products", "priority_products", "brand_description")).lower()
 
 
 def scrub(text: str, tenant: dict | None = None) -> str:

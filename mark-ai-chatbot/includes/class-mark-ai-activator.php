@@ -99,6 +99,7 @@ class Mark_AI_Activator {
             brand_description longtext DEFAULT '',
             priority_products longtext DEFAULT '',
             seasonal_products longtext DEFAULT '',
+            offers longtext DEFAULT '',
             is_active tinyint(1) NOT NULL DEFAULT 1,
             owner_id bigint(20) UNSIGNED NOT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
