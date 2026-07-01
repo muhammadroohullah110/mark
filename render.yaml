@@ -1,0 +1,67 @@
+# Render Blueprint (Infrastructure as Code) for Mark's backend.
+# Declares TWO isolated environments so a bad change hits STAGING first, never
+# all live stores at once (kills the multi-tenant blast radius).
+#
+#   staging  <- deploys from the `staging` branch  -> its OWN DB, test here
+#   prod     <- deploys from the `main`   branch  -> real stores
+#
+# Adopt: Render Dashboard -> New -> Blueprint -> point at this repo. Secrets
+# (sync:false) are set per-service in the dashboard, NEVER committed here.
+# (Your existing manually-created prod service is unaffected until you adopt this.)
+
+databases:
+  - name: mark-db-staging
+    plan: free
+    databaseName: mark_staging
+    ipAllowList: []          # only reachable inside Render
+
+services:
+  # ---------- PRODUCTION ----------
+  - type: web
+    name: mark-backend
+    runtime: python
+    plan: starter
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Secrets — set in the dashboard, never in this file:
+      - { key: DATABASE_URL, sync: false }
+      - { key: GROQ_API_KEY, sync: false }
+      - { key: GROQ_API_KEYS, sync: false }
+      - { key: MOONSHOT_API_KEY, sync: false }
+      - { key: OPENAI_API_KEY, sync: false }
+      - { key: STRIPE_SECRET_KEY, sync: false }
+      - { key: STRIPE_PRICE_ID, sync: false }
+      - { key: STRIPE_WEBHOOK_SECRET, sync: false }
+
+  # ---------- STAGING ----------
+  - type: web
+    name: mark-backend-staging
+    runtime: python
+    plan: free
+    branch: staging
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mark-db-staging
+          property: connectionString
+      # Use cheaper/test keys for staging; set in dashboard:
+      - { key: GROQ_API_KEY, sync: false }
+      - { key: MOONSHOT_API_KEY, sync: false }
+      - { key: OPENAI_API_KEY, sync: false }
+      - { key: STRIPE_SECRET_KEY, sync: false }     # Stripe TEST-mode key
+      - { key: STRIPE_PRICE_ID, sync: false }
+      - { key: STRIPE_WEBHOOK_SECRET, sync: false }

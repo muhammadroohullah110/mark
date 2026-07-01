@@ -1,0 +1,51 @@
+name: CI
+
+# Gate every change: syntax-compile the whole stack + prove the sales brain
+# still makes the right calls (offline, no API keys) BEFORE it can reach prod.
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.1"
+
+      # ---- fast fail: syntax compile the whole stack ----
+      - name: Python compile
+        run: python -m py_compile backend/*.py backend/evals/*.py
+
+      - name: JS syntax check
+        run: |
+          for f in mark-ai-chatbot/public/js/*.js mark-ai-chatbot/admin/js/*.js; do
+            echo "node --check $f"; node --check "$f";
+          done
+
+      - name: PHP lint
+        run: |
+          for f in mark-ai-chatbot/*.php mark-ai-chatbot/includes/*.php; do
+            echo "php -l $f"; php -l "$f";
+          done
+
+      # ---- sales-brain regression gate (offline, no keys) ----
+      - name: Install backend deps
+        run: pip install -r backend/requirements.txt
+
+      - name: Sales brain eval (gate >= 90%)
+        run: python backend/evals/run_cortex_eval.py
