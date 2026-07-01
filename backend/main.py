@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, Header, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
 from typing import List, Optional
@@ -77,6 +77,12 @@ DEFAULT_CEREBRAS_KEY = os.getenv("CEREBRAS_API_KEY", "")
 CEREBRAS_MODEL = os.getenv("CEREBRAS_MODEL", "llama-3.3-70b")
 DEFAULT_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+# ── Universal embed (custom sites + Shopify share this ONE core) ──
+BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "https://mark-udfz.onrender.com").rstrip("/")
+# Where the widget's public assets are served from (default: repo via jsDelivr CDN).
+EMBED_ASSET_BASE = os.getenv("EMBED_ASSET_BASE",
+    "https://cdn.jsdelivr.net/gh/muhammadroohullah110/mark@main/mark-ai-chatbot/public/")
 
 # ── Premium tier voice ──────────────────────────────────────
 # Free plan = Edge TTS (free). Premium plan = realistic engine + all languages.
@@ -1038,6 +1044,80 @@ async def auto_register(body: RegisterRequest):
         "api_token": token,
         "message": "Registered successfully",
     }
+
+
+# ── Universal embed core (custom sites + Shopify inject the SAME widget) ──
+def _embed_provision(url: str) -> dict:
+    """Get or auto-provision the store for a domain (same pattern as /api/register).
+    Turnkey: any site that loads embed.js gets a store + a background RAG crawl."""
+    url = (url if url.startswith("http") else "https://" + url).rstrip("/")
+    store = get_store_by_url(url)
+    if not store:
+        import secrets as _secrets
+        token = _secrets.token_hex(32)
+        sid = create_store(owner_id=0, store_name=urlparse(url).netloc or "My Store",
+                           website_url=url, assistant_name="Mark", api_token=token)
+        with _rag_lock:
+            if len(_rag_instances) < MAX_RAG_INSTANCES:
+                r = MarkRAG(url, max_pages=MAX_CRAWL_PAGES)
+                _rag_instances[sid] = r
+                threading.Thread(target=_init_rag, args=(sid, r), daemon=True).start()
+        store = get_store(sid)
+        logger.info(f"Embed auto-provisioned store for {url}")
+    return store
+
+
+@app.get("/api/embed/config")
+async def embed_config(request: Request, site: str = ""):
+    """Config for the universal widget on ANY (non-WP) site. Provisions on first hit."""
+    domain = (site or "").strip()
+    if not domain:
+        origin = request.headers.get("Origin") or request.headers.get("Referer") or ""
+        domain = urlparse(origin).netloc or origin.strip()
+    if not domain:
+        raise HTTPException(status_code=400, detail="site (domain) is required")
+    store = _embed_provision(domain)
+    return {
+        "store_id": store["store_id"],
+        "assistant_name": store.get("assistant_name", "Mark"),
+        "backend_url": BACKEND_PUBLIC_URL,
+        "asset_base": EMBED_ASSET_BASE,
+        "accent": "#7C5CFF",
+        "idle_timeout": max(15, int(store.get("idle_timeout") or 60)),
+        "plan": store.get("plan", "free"),
+    }
+
+
+@app.get("/embed.js")
+async def embed_loader():
+    """One-line install for ANY site (custom or Shopify):
+        <script src="{BACKEND}/embed.js" data-site="mystore.com" async></script>
+    Resolves config, then injects the same 3D widget used on WordPress."""
+    js = """(function(){
+  var cur = document.currentScript;
+  var site = (cur && (cur.getAttribute('data-site') || cur.getAttribute('data-store'))) || location.hostname;
+  var BACKEND = "%BACKEND%";
+  function load(src, cb){ var s=document.createElement('script'); s.src=src; s.defer=true; s.onload=cb; s.onerror=cb; document.head.appendChild(s); }
+  function chain(list){ (function n(i){ if(i>=list.length) return; load(list[i], function(){ n(i+1); }); })(0); }
+  fetch(BACKEND + "/api/embed/config?site=" + encodeURIComponent(site)).then(function(r){return r.json();}).then(function(cfg){
+    if(!cfg || !cfg.store_id) return;
+    var A = cfg.asset_base;
+    window.markAIConfig = { restUrl:"", nonce:"", pluginUrl:A, modelCdnUrl:A+"model/", language:"en",
+      autoGreet:true, position:"bottom-right", storeId:cfg.store_id, backendUrl:cfg.backend_url,
+      accentColor:cfg.accent||"#7C5CFF", greetingSoundText:"Ayie!", celebrateText:"Welcome",
+      idleTimeout:cfg.idle_timeout||60, scaleDesktop:5, scaleMobile:5, pluginVersion:"embed" };
+    var css=document.createElement('link'); css.rel='stylesheet'; css.href=A+"css/chatbot.css"; document.head.appendChild(css);
+    var root=document.createElement('div'); root.id="mark-ai-chatbot-root"; root.setAttribute('data-position','bottom-right'); document.body.appendChild(root);
+    chain([
+      "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+      "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js",
+      "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js",
+      A+"js/mark-animator.js", A+"js/rive-animator.js", A+"js/mark-brain.js", A+"js/chatbot.js"
+    ]);
+  }).catch(function(){});
+})();""".replace("%BACKEND%", BACKEND_PUBLIC_URL)
+    return Response(content=js, media_type="application/javascript",
+                    headers={"Cache-Control": "public, max-age=300"})
 
 
 class SyncSettingsRequest(BaseModel):
