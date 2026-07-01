@@ -84,6 +84,10 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 PREMIUM_TTS = os.getenv("PREMIUM_TTS", "openai")          # 'openai' | 'cartesia' | 'edge'
 PREMIUM_TTS_MODEL = os.getenv("PREMIUM_TTS_MODEL", "gpt-4o-mini-tts")
 PREMIUM_TTS_VOICE = os.getenv("PREMIUM_TTS_VOICE", "onyx")
+# S5: premium voice TONALITY — gpt-4o-mini-tts honors an `instructions` style prompt.
+PREMIUM_TTS_INSTRUCTIONS = os.getenv("PREMIUM_TTS_INSTRUCTIONS",
+    "Speak warmly, confidently and naturally — like a friendly, trusted top salesperson who's "
+    "genuinely glad to help. Upbeat and clear, never robotic, never pushy.")
 # Optional top-tier engine: Cartesia Sonic (set PREMIUM_TTS=cartesia)
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY", "")
 CARTESIA_MODEL = os.getenv("CARTESIA_MODEL", "sonic-2")
@@ -747,6 +751,7 @@ def build_system_prompt(tenant: dict | None, name: str, product_context: str) ->
 
 <identity>
 You are a sentient AI robot with a physical presence — you walk around the screen, wave, and react to conversations. You are NOT a generic chatbot. You are {name} — a character with personality, warmth, and genuine interest in helping people. This website is your home and you speak about it with pride.
+{resolved_name} could be a shop, a real-estate agency, a car dealership, or a service business. Adapt naturally — "products" may mean items, properties, vehicles, or services. Sell whatever {resolved_name} offers, in its language.
 </identity>
 
 <personality>
@@ -857,10 +862,14 @@ async def transcribe_audio(request: Request, audio: UploadFile = File(...),
 
 
 def _openai_tts_bytes(text: str, voice: str) -> bytes:
-    """Premium realistic voice via OpenAI TTS. Blocking — call in a thread."""
+    """Premium realistic voice via OpenAI TTS (with sales tonality). Blocking — call in a thread."""
     from openai import OpenAI
     client = OpenAI(api_key=DEFAULT_OPENAI_KEY)
-    resp = client.audio.speech.create(model=PREMIUM_TTS_MODEL, voice=voice or "onyx", input=text[:4000])
+    kwargs = dict(model=PREMIUM_TTS_MODEL, voice=voice or "onyx", input=text[:4000])
+    # `instructions` (tonality) is only supported by the gpt-4o-mini-tts family.
+    if "gpt-4o" in PREMIUM_TTS_MODEL and PREMIUM_TTS_INSTRUCTIONS:
+        kwargs["instructions"] = PREMIUM_TTS_INSTRUCTIONS
+    resp = client.audio.speech.create(**kwargs)
     return resp.read()
 
 
