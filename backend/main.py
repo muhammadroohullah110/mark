@@ -645,8 +645,32 @@ def _normalize_products(raw: list) -> list:
     return out
 
 
+def _normalize_shopify_products(raw: list, base: str) -> list:
+    """Map Shopify's PUBLIC /products.json objects to the SAME flat shape Mark
+    uses (same provider contract as _normalize_products for WooCommerce)."""
+    import re as _re
+    import html as _html
+    out = []
+    for p in (raw or []):
+        variants = p.get("variants") or []
+        v0 = variants[0] if variants else {}
+        price = str(v0.get("price", "") or "")
+        in_stock = any(v.get("available", True) for v in variants) if variants else True
+        desc = _html.unescape(_re.sub(r"<[^>]+>", "", p.get("body_html") or ""))
+        out.append({
+            "name": p.get("title", ""),
+            "price": price,
+            "description": desc.strip()[:160],
+            "stock_status": "instock" if in_stock else "outofstock",
+            "permalink": f"{base}/products/{p.get('handle', '')}",
+        })
+    return out
+
+
 def _fetch_tenant_products_background(tenant: dict):
-    """Background thread: fetch a tenant's catalog from the PUBLIC Store API."""
+    """Background thread: fetch a tenant's catalog from whichever PUBLIC endpoint
+    the platform exposes — WooCommerce Store API first, then Shopify products.json.
+    Both are keyless, so catalog stays turnkey on every platform."""
     sid = tenant["store_id"]
     base = tenant["website_url"].rstrip("/")
     products = []
@@ -656,6 +680,16 @@ def _fetch_tenant_products_background(tenant: dict):
             products = _normalize_products(r.json())
     except Exception as e:
         logger.warning(f"Store API products fetch failed for {sid}: {e}")
+    if not products:
+        # Shopify (and Shopify-powered custom domains) expose a public catalog.
+        try:
+            r = http_requests.get(f"{base}/products.json?limit=100", timeout=12)
+            if r.ok and "application/json" in (r.headers.get("Content-Type") or ""):
+                products = _normalize_shopify_products((r.json() or {}).get("products", []), base)
+                if products:
+                    logger.info(f"Loaded {len(products)} Shopify products for {sid}")
+        except Exception as e:
+            logger.warning(f"Shopify products fetch failed for {sid}: {e}")
     with _products_lock:
         _tenant_products[sid] = {"products": products, "fetched_at": time.time()}
 

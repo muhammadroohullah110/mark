@@ -31,20 +31,27 @@ The only per-host differences are: **how the script tag gets on the page** and
 ```
 That's the whole "custom-site embed." Paste one line, Mark appears — no plugin, no key.
 
-## Shopify adapter — NEXT (scoped, needs a Partner app to build/test)
-A Shopify app is just a **host** for the same core. Two thin pieces:
-1. **Inject the loader** — a **Theme App Extension (app embed block)** or a `ScriptTag`
-   that adds the exact `<script src=".../embed.js" data-site="{shop}.myshopify.com">`.
-   OAuth install → we call `/api/embed/config` to provision the store. No new widget code.
-2. **Catalog provider** — mirror the existing WooCommerce provider
-   (`_normalize_products` / `_fetch_tenant_products_background`) with a
-   `_fetch_shopify_products(shop, token)` that hits the Shopify **Storefront API**
-   and returns the SAME flat shape `{name, price, description, stock_status, permalink}`.
-   Drop it behind the same `format_products_context`. (This is the api-connector-builder
-   move: a new *provider*, not a new architecture.)
+## Shopify adapter — WORKS TODAY (manual), Partner app = later polish
+Key discovery: Shopify stores expose a **public, keyless** catalog at
+`https://{shop}/products.json` — the exact analogue of the public WooCommerce
+Store API the code already uses. So **no OAuth is required for the catalog.**
 
-Build order: (a) Shopify Partner app + OAuth + ScriptTag inject, (b) Storefront catalog
-provider, (c) billing via Shopify's own billing API or keep Stripe. Test on a dev store.
+1. **Catalog provider — DONE.** `_fetch_tenant_products_background` now falls back
+   to `products.json` when the WooCommerce endpoint isn't there, normalized by
+   `_normalize_shopify_products` into the SAME flat shape
+   `{name, price, description, stock_status, permalink}`. Auto-detects platform —
+   zero config. (Caveat: stores with storefront password protection block this;
+   those need the Partner-app path.)
+2. **Inject the loader — manual today.** Shopify admin → Online Store → Themes →
+   **Edit code** → `theme.liquid`, paste before `</body>`:
+   ```html
+   <script src="https://mark-udfz.onrender.com/embed.js" data-site="{{ shop.permanent_domain }}" async></script>
+   ```
+   Mark appears; the backend provisions + crawls + pulls the catalog automatically.
+3. **Partner app — LATER (distribution upgrade, not a functional need).** One-click
+   install (OAuth) + Theme App Extension that injects the same tag + optional
+   Shopify Billing. Build when going for the App Store listing; needs a Partner
+   account + dev store to test.
 
 ## Notes / trade-offs
 - **CORS:** the widget runs on arbitrary customer domains, so the public endpoints
