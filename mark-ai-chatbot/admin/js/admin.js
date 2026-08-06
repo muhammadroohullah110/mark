@@ -25,7 +25,6 @@
     let currentStore   = null;
     let dashboardStats = {};
     let globalSettings = {};
-    let activeTab      = 'settings';
     let currentPage    = 'dashboard';
     let chartInstances = {};  // Track Chart.js instances for cleanup
 
@@ -333,17 +332,6 @@
     /* ================================================================
        RENDER: STAT CARD
        ================================================================ */
-    function renderStatCard(label, value, icon) {
-        return `
-        <div class="mark-stat-card" style="${T.glass}padding:28px 28px 30px;min-height:158px;display:flex;flex-direction:column;justify-content:space-between;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-                <span style="${T.label}margin-bottom:0;text-transform:uppercase;letter-spacing:0.1em;font-size:11px;">${esc(label)}</span>
-                <span class="mark-icon-chip"><span class="material-symbols-outlined">${icon}</span></span>
-            </div>
-            <div style="${T.statValue}">${formatNum(value)}</div>
-        </div>`;
-    }
-
     function renderMiniStat(label, value, icon) {
         return `
         <div class="mark-stat-card" style="${T.glassLight}padding:20px;display:flex;flex-direction:column;justify-content:space-between;">
@@ -975,7 +963,14 @@
             $('#mark-page-content').innerHTML = _pageHead('Appearance', 'Your store profile, how Mark looks, and where he appears.')
                 + renderSettingsTab(s)
                 + `<div style="height:24px;"></div>`
-                + _globalSettingsCards(g);
+                + _globalSettingsCards(g)
+                + `<div style="margin-top:48px;padding:24px;border:1px solid rgba(239,68,68,0.25);border-radius:12px;background:rgba(239,68,68,0.06);">
+                       <h3 style="${T.headline}font-size:20px;color:#ff7a7a;margin:0 0 8px;">Danger Zone</h3>
+                       <p style="color:#C7CDD4;font-size:14px;margin:0 0 16px;">Permanently delete this store and all its data.</p>
+                       <button style="${T.btnDanger}" onclick="markAdmin.confirmDelete()">
+                           <span class="material-symbols-outlined" style="font-size:18px;">delete_forever</span> Delete Store
+                       </button>
+                   </div>`;
         });
     }
 
@@ -983,69 +978,69 @@
     //    Free · Premium($49, Recommended) · live Usage meter + Contact Sales, then Billing History.
     async function loadPlanPage() {
         withStore(async (s) => {
-            const premium = (s.plan === 'premium');
-            // Real MONTHLY usage from the backend (honest — the actual quota counter,
-            // not all-time conversations against a hardcoded cap).
+            const plan = (s.plan || 'free').toLowerCase();
+            const isPaid = plan !== 'free';
+            const planLabel = isPaid ? (plan.charAt(0).toUpperCase() + plan.slice(1)) : 'Free';
+            // Real MONTHLY usage from the backend (the actual quota counter, not all-time).
             let used = 0, cap = 500;
             try {
                 const d = await maieFetch(s, '/conversations');
                 used = (d.monthly_used != null ? d.monthly_used : (d.total_conversations || 0));
-                cap = d.monthly_limit || 500;
+                cap = (d.monthly_limit != null ? d.monthly_limit : 500);
             } catch (_) {}
-            const pct = (premium || !cap) ? 0 : Math.min(100, Math.round((used / cap) * 100));
-            const feat = (txt, on) => `<li style="display:flex;align-items:center;gap:10px;font-size:14px;color:${on ? '#F5F7FA' : '#9AA3AD'};padding:7px 0;"><span class="material-symbols-outlined" style="font-size:18px;color:${on ? '#4ade80' : '#9AA3AD'};">${on ? 'check_circle' : 'remove'}</span>${txt}</li>`;
+            const unlimited = !cap;
+            const pct = unlimited ? 0 : Math.min(100, Math.round((used / cap) * 100));
+            const feat = (txt, on) => `<li style="display:flex;align-items:center;gap:10px;font-size:13.5px;color:${on ? '#F5F7FA' : '#9AA3AD'};padding:6px 0;"><span class="material-symbols-outlined" style="font-size:17px;color:${on ? '#4ade80' : '#9AA3AD'};">${on ? 'check_circle' : 'remove'}</span>${txt}</li>`;
+
+            // One tier table drives the cards — quota + label match the backend PLAN_QUOTAS.
+            const TIERS = [
+                { id:'free',     name:'Free',     price:'$0',   note:'Everything to get Mark selling.',
+                  feats:[['AI chat + recommendations',1],['Free Edge voice',1],['Auto-learning & analytics',1],['500 chats / month',1],['Ultra-realistic voices',0]] },
+                { id:'starter',  name:'Starter',  price:'$19',  note:'For growing stores.',
+                  feats:[['Everything in Free',1],['Ultra-realistic premium voices',1],['2,000 chats / month',1],['Multi-lingual support',1],['Sales Boost closing',1]] },
+                { id:'pro',      name:'Pro',      price:'$49',  note:'Professional-grade selling.', recommended:true,
+                  feats:[['Everything in Starter',1],['10,000 chats / month',1],['Advanced objection handling',1],['Premium voice tonality',1],['Priority responses',1]] },
+                { id:'business', name:'Business', price:'$149', note:'Unlimited scale.',
+                  feats:[['Everything in Pro',1],['Unlimited chats',1],['Priority support',1],['Dedicated onboarding',1],['Early access to new features',1]] },
+            ];
+            const isCurrent = (id) => (id === plan) || (plan === 'premium' && id === 'business');
+            const card = (t) => `
+                <div class="mark-lift" style="${T.glass}padding:26px;position:relative;${t.recommended ? 'border:1.5px solid rgba(45,226,230,0.55);box-shadow:0 0 0 1px rgba(45,226,230,0.15),0 18px 50px rgba(45,226,230,0.12);' : (isCurrent(t.id) ? 'border:1px solid rgba(45,226,230,0.28);' : '')}">
+                    ${t.recommended ? `<span style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#2DE2E6,#06B6C7);color:#04181A;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 11px;border-radius:999px;white-space:nowrap;">Recommended</span>` : ''}
+                    <h3 style="${T.headline}font-size:20px;margin:0 0 2px;">${t.name}</h3>
+                    <div style="font-size:30px;font-weight:800;color:#F5F7FA;margin:6px 0 2px;">${t.price}<span style="font-size:13px;color:#9AA3AD;font-weight:500;">/mo</span></div>
+                    <p style="color:#9AA3AD;font-size:13px;margin:0 0 14px;min-height:34px;">${t.note}</p>
+                    <ul style="list-style:none;padding:0;margin:0 0 18px;">${t.feats.map(f => feat(f[0], !!f[1])).join('')}</ul>
+                    ${isCurrent(t.id)
+                        ? `<span style="${T.badgeActive}">&#10022; Current plan</span>`
+                        : (t.id === 'free'
+                            ? `<span style="${T.badgeInactive}white-space:nowrap;">Base plan</span>`
+                            : `<button style="${T.btnPrimary}width:100%;justify-content:center;" onclick="markAdmin.upgradePlan('${t.id}')"><span class="material-symbols-outlined" style="font-size:18px;">bolt</span> ${isPaid ? 'Switch to ' + t.name : 'Upgrade'}</button>`)}
+                </div>`;
             $('#mark-page-content').innerHTML = `
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:32px;">
                 <div>
                     <h1 style="${T.headline}font-size:48px;line-height:56px;letter-spacing:-0.02em;font-weight:300;margin:0 0 8px;">Manage Your Plan</h1>
-                    <p style="color:#C7CDD4;font-size:18px;margin:0;">View your tier, upgrade, and manage billing.</p>
+                    <p style="color:#C7CDD4;font-size:18px;margin:0;">Pick the tier that fits your volume. Upgrade or switch anytime.</p>
                 </div>
-                <span style="${premium ? T.badgeActive : T.badgeInactive}white-space:nowrap;">Current plan: ${premium ? '&#10022; Premium' : 'Free'}</span>
+                <span style="${isPaid ? T.badgeActive : T.badgeInactive}white-space:nowrap;">Current plan: ${isPaid ? '&#10022; ' + planLabel : 'Free'}</span>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:24px;margin-bottom:32px;align-items:start;">
-                <div class="mark-lift" style="${T.glass}padding:32px;${!premium ? 'border:1px solid rgba(45,226,230,0.25);' : ''}">
-                    <h3 style="${T.headline}font-size:22px;margin:0 0 2px;">Free Tier</h3>
-                    <div style="font-size:34px;font-weight:800;color:#F5F7FA;margin:6px 0 2px;">$0<span style="font-size:14px;color:#9AA3AD;font-weight:500;">/mo</span></div>
-                    <p style="color:#9AA3AD;font-size:14px;margin:0 0 18px;">Everything to get Mark selling.</p>
-                    <ul style="list-style:none;padding:0;margin:0 0 22px;">
-                        ${feat('AI chat + product recommendations', true)}
-                        ${feat('Free Edge voice', true)}
-                        ${feat('Auto-learning &amp; analytics', true)}
-                        ${feat('500 chats / month', true)}
-                        ${feat('Realistic premium voices', false)}
-                    </ul>
-                    ${!premium ? `<span style="${T.badgeInactive}">Current plan</span>` : ''}
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-bottom:24px;align-items:start;">
+                ${TIERS.map(card).join('')}
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;margin-bottom:32px;">
+                <div style="${T.glass}padding:28px;">
+                    <span style="${T.label}">Current usage — this month</span>
+                    <div style="font-size:34px;font-weight:800;color:#F5F7FA;margin:4px 0 2px;">${formatNum(used)}<span style="font-size:14px;color:#9AA3AD;font-weight:500;"> ${unlimited ? 'chats' : '/ ' + formatNum(cap)}</span></div>
+                    ${unlimited
+                        ? `<p style="color:#9AA3AD;font-size:13px;margin:8px 0 0;">Unlimited chats on ${planLabel}.</p>`
+                        : `<div style="height:8px;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;margin:14px 0 8px;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#2DE2E6,#06B6C7);border-radius:999px;"></div></div>
+                           <p style="color:#9AA3AD;font-size:13px;margin:0;">${pct}% of your ${planLabel} monthly chats used.</p>`}
                 </div>
-                <div class="mark-lift" style="${T.glass}padding:32px;border:1.5px solid rgba(45,226,230,0.55);position:relative;box-shadow:0 0 0 1px rgba(45,226,230,0.15),0 18px 50px rgba(45,226,230,0.12);">
-                    <span style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#2DE2E6,#06B6C7);color:#04181A;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 12px;border-radius:999px;white-space:nowrap;">Recommended</span>
-                    <h3 style="${T.headline}font-size:22px;margin:0 0 2px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-outlined" style="color:#2DE2E6;">workspace_premium</span>Premium</h3>
-                    <div style="font-size:34px;font-weight:800;color:#F5F7FA;margin:6px 0 2px;">$49<span style="font-size:14px;color:#9AA3AD;font-weight:500;">/mo</span></div>
-                    <p style="color:#9AA3AD;font-size:14px;margin:0 0 18px;">Professional-grade selling, unlimited.</p>
-                    <ul style="list-style:none;padding:0;margin:0 0 22px;">
-                        ${feat('Everything in Free', true)}
-                        ${feat('Ultra-realistic voices', true)}
-                        ${feat('Advanced objection handling', true)}
-                        ${feat('Unlimited chats', true)}
-                        ${feat('Multi-lingual support', true)}
-                    </ul>
-                    ${premium
-                        ? `<span style="${T.badgeActive}">&#10022; Active</span>`
-                        : `<button style="${T.btnPrimary}width:100%;justify-content:center;" onclick="markAdmin.upgradePlan()"><span class="material-symbols-outlined" style="font-size:18px;">bolt</span> Upgrade to Premium</button>`}
-                </div>
-                <div style="display:flex;flex-direction:column;gap:24px;">
-                    <div style="${T.glass}padding:28px;">
-                        <span style="${T.label}">Current usage</span>
-                        <div style="font-size:34px;font-weight:800;color:#F5F7FA;margin:4px 0 2px;">${formatNum(used)}<span style="font-size:14px;color:#9AA3AD;font-weight:500;"> ${premium ? 'chats' : '/ ' + cap}</span></div>
-                        ${premium
-                            ? `<p style="color:#9AA3AD;font-size:13px;margin:8px 0 0;">Unlimited on Premium.</p>`
-                            : `<div style="height:8px;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;margin:14px 0 8px;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#2DE2E6,#06B6C7);border-radius:999px;"></div></div>
-                               <p style="color:#9AA3AD;font-size:13px;margin:0;">${pct}% of your monthly free chats used.</p>`}
-                    </div>
-                    <div style="${T.glassLight}padding:28px;">
-                        <h4 style="${T.headline}font-size:17px;margin:0 0 6px;">Need custom volume?</h4>
-                        <p style="color:#9AA3AD;font-size:13px;margin:0 0 16px;line-height:1.5;">Enterprise limits and dedicated account management.</p>
-                        <a href="mailto:hello@markai.shop?subject=Mark%20AI%20Enterprise" style="${T.btnSecondary}text-decoration:none;display:inline-flex;"><span class="material-symbols-outlined" style="font-size:18px;">mail</span> Contact Sales</a>
-                    </div>
+                <div style="${T.glassLight}padding:28px;">
+                    <h4 style="${T.headline}font-size:17px;margin:0 0 6px;">Need custom volume?</h4>
+                    <p style="color:#9AA3AD;font-size:13px;margin:0 0 16px;line-height:1.5;">Enterprise limits and dedicated account management.</p>
+                    <a href="mailto:hello@markai.shop?subject=Mark%20AI%20Enterprise" style="${T.btnSecondary}text-decoration:none;display:inline-flex;"><span class="material-symbols-outlined" style="font-size:18px;">mail</span> Contact Sales</a>
                 </div>
             </div>
             <div style="${T.glass}padding:28px 32px;">
@@ -1059,142 +1054,12 @@
                             <th style="padding:10px 12px;font-weight:700;">Status</th>
                         </tr></thead>
                         <tbody>
-                            <tr><td colspan="4" style="padding:28px 12px;text-align:center;color:#9AA3AD;">${premium ? 'Your invoices will appear here.' : "No invoices yet — you're on the Free plan."}</td></tr>
+                            <tr><td colspan="4" style="padding:28px 12px;text-align:center;color:#9AA3AD;">${isPaid ? 'Your invoices will appear here.' : "No invoices yet — you're on the Free plan."}</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>`;
         });
-    }
-
-    /* ================================================================
-       PAGE: STORE (legacy single-store detail — kept for openStore/delete)
-       ================================================================ */
-    async function loadStorePage() {
-        const content = $('#mark-page-content');
-        content.innerHTML = robotLoader('Loading store...');
-
-        try {
-            const data = await api('GET', 'dashboard');
-            stores = data.stores || [];
-            const store = getMainStore();
-
-            if (!store) {
-                content.innerHTML = `<div style="text-align:center;padding:60px;">
-                    <span class="material-symbols-outlined" style="font-size:48px;color:#9AA3AD;opacity:0.5;margin-bottom:12px;">storefront</span>
-                    <h3 style="${T.headline}font-size:20px;">No store found</h3>
-                    <p style="color:#C7CDD4;margin:0 0 20px;">Your store was deleted or hasn't been created yet.</p>
-                    <button style="${T.btnPrimary}" onclick="markAdmin.navigate('dashboard')">
-                        <span class="material-symbols-outlined" style="font-size:18px;">add</span> Set Up a New Store
-                    </button>
-                </div>`;
-                return;
-            }
-
-            const storeData = await api('GET', 'stores/' + store.store_id);
-            currentStore = storeData.store || storeData;
-            if (!activeTab) activeTab = 'settings';
-            renderStoreDetail();
-        } catch (e) {
-            toast('Failed to load store: ' + e.message, 'error');
-        }
-    }
-
-    async function openStore(storeId) {
-        const content = $('#mark-page-content');
-        content.innerHTML = robotLoader('Loading store...');
-        try {
-            const data = await api('GET', 'stores/' + storeId);
-            currentStore = data.store || data;
-            activeTab = 'settings';
-            renderStoreDetail();
-        } catch (e) {
-            toast('Failed to load store: ' + e.message, 'error');
-            navigate('dashboard');
-        }
-    }
-
-    function renderStoreDetail() {
-        const s = currentStore;
-        const content = $('#mark-page-content');
-
-        const isSettings = (activeTab === 'settings');
-        const tabTitles = { settings:'Store Settings', analytics:'Analytics', learning:'Auto-Learning', training:'Mark Training', sales:'Sales Skills', voice:'Voice', ai:'AI Config' };
-
-        content.innerHTML = `
-        <!-- Store Header -->
-        <div style="margin-bottom:32px;">
-            <div style="font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#9AA3AD;margin-bottom:6px;">${esc(tabTitles[activeTab] || 'Store')}</div>
-            <h2 style="${T.headline}font-size:42px;line-height:50px;letter-spacing:-0.025em;font-weight:600;margin:0 0 4px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-                <span class="mark-gradient-text">${esc(s.store_name)}</span>
-                ${renderBadge(s.is_active)}
-            </h2>
-            <a style="font-size:15px;color:#C7CDD4;text-decoration:none;display:inline-flex;align-items:center;gap:4px;"
-               href="${esc(s.website_url)}" target="_blank"
-               onmouseenter="this.style.color='#9AA3AD'" onmouseleave="this.style.color='#C7CDD4'">
-                ${esc(s.website_url)}
-                <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
-            </a>
-        </div>
-
-        ${isSettings ? `<div id="store-analytics" class="mark-stagger" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:24px;margin-bottom:48px;">
-            ${renderMiniStat('Total Chats', '--', 'forum')}
-            ${renderMiniStat('Today', '--', 'today')}
-            ${renderMiniStat('This Week', '--', 'date_range')}
-            ${renderMiniStat('Unique Visitors', '--', 'person')}
-        </div>` : ''}
-
-        <div id="tab-content"></div>
-
-        ${isSettings ? `<div style="margin-top:64px;padding:24px;border:1px solid rgba(186,26,26,0.2);border-radius:12px;background:rgba(239,68,68,0.1);">
-            <h3 style="${T.headline}font-size:20px;color:#ff7a7a;margin:0 0 8px;">Danger Zone</h3>
-            <p style="color:#C7CDD4;font-size:14px;margin:0 0 16px;">Permanently delete this store and all its data.</p>
-            <button style="${T.btnDanger}" onclick="markAdmin.confirmDelete()">
-                <span class="material-symbols-outlined" style="font-size:18px;">delete_forever</span> Delete Store
-            </button>
-        </div>` : ''}`;
-
-        if (isSettings) loadStoreAnalytics(s.store_id);
-        renderTab(activeTab);
-    }
-
-    // Render one tab's content into #tab-content (sidebar drives which tab).
-    function renderTab(tab) {
-        const container = $('#tab-content');
-        if (!container) return;
-        const s = currentStore;
-        switch (tab) {
-            case 'settings':  container.innerHTML = renderSettingsTab(s); break;
-            case 'analytics': container.innerHTML = renderAnalyticsTab(s); loadEventAnalytics(s); break;
-            case 'learning':  container.innerHTML = renderLearningTab(s); loadPlaybook(s); break;
-            case 'training':  container.innerHTML = renderTrainingTab(s); initTrainingTab(s); break;
-            case 'sales':     container.innerHTML = renderSalesTab(s); break;
-            case 'voice':     container.innerHTML = renderVoiceTab(s); break;
-            case 'ai':        container.innerHTML = renderAITab(s); break;
-            default:          container.innerHTML = renderSettingsTab(s); break;
-        }
-    }
-
-    async function loadStoreAnalytics(storeId) {
-        try {
-            const data = await api('GET', 'stores/' + storeId + '/analytics');
-            const container = $('#store-analytics');
-            if (container) {
-                container.innerHTML = `
-                    ${renderMiniStat('Total Chats', data.total_conversations, 'forum')}
-                    ${renderMiniStat('Today', data.today, 'today')}
-                    ${renderMiniStat('This Week', data.this_week, 'date_range')}
-                    ${renderMiniStat('Unique Visitors', data.unique_visitors, 'person')}`;
-            }
-        } catch (e) { /* analytics are supplementary */ }
-    }
-
-    /* ================================================================
-       TAB SWITCHING
-       ================================================================ */
-    function switchTab(tab) {
-        activeTab = tab;
-        renderTab(tab);
     }
 
     /* ================================================================
@@ -1536,273 +1401,6 @@
         } catch (e) {
             toast('Failed to save training data.', 'error');
         }
-    }
-
-    /* ================================================================
-       TAB: ANALYTICS (Event-driven insights)
-       ================================================================ */
-    function renderAnalyticsTab(s) {
-        return `
-        <div style="margin-bottom:32px;">
-            <h3 style="${T.headline}font-size:24px;font-weight:400;margin:0 0 8px;">
-                <span class="material-symbols-outlined" style="font-size:24px;vertical-align:middle;margin-right:8px;color:#2DE2E6;">analytics</span>
-                Event Analytics
-            </h3>
-            <p style="color:#C7CDD4;font-size:14px;margin:0;">Track how visitors interact with Mark on your site.</p>
-        </div>
-
-        <!-- Event Stat Cards -->
-        <div id="analytics-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:40px;">
-            ${renderMiniStat('Widget Opens', '--', 'widgets')}
-            ${renderMiniStat('Chats Started', '--', 'chat_bubble')}
-            ${renderMiniStat('Messages', '--', 'forum')}
-            ${renderMiniStat('Voice Used', '--', 'mic')}
-            ${renderMiniStat('Links Clicked', '--', 'link')}
-            ${renderMiniStat('Leads', '--', 'contact_mail')}
-        </div>
-
-        <!-- Conversion Funnel -->
-        <div style="${T.glass}padding:32px;margin-bottom:32px;">
-            <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0 0 24px;">
-                <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">filter_alt</span>
-                Conversion Funnel (30 days)
-            </h4>
-            <div id="analytics-funnel" style="display:flex;flex-direction:column;gap:0;">
-                ${renderFunnelStep('Widget Opened', '--', 100, '#2DE2E6')}
-                ${renderFunnelStep('Chat Started', '--', 0, '#e88a5e')}
-                ${renderFunnelStep('Message Sent', '--', 0, '#d47a50')}
-                ${renderFunnelStep('Lead Captured', '--', 0, '#2DE2E6')}
-            </div>
-        </div>
-
-        <!-- Daily Trends Chart -->
-        <div style="${T.glass}padding:32px;margin-bottom:32px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-                <h4 style="${T.headline}font-size:18px;font-weight:600;margin:0;">
-                    <span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;color:#2DE2E6;">trending_up</span>
-                    Daily Trends (14 days)
-                </h4>
-                <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#C7CDD4;">
-                        <span style="width:12px;height:3px;border-radius:2px;background:#2DE2E6;display:inline-block;"></span> Widget Opens
-                    </span>
-                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#C7CDD4;">
-                        <span style="width:12px;height:3px;border-radius:2px;background:#9AA3AD;display:inline-block;"></span> Chats
-                    </span>
-                    <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#C7CDD4;">
-                        <span style="width:12px;height:3px;border-radius:2px;background:#16a34a;display:inline-block;"></span> Voice
-                    </span>
-                </div>
-            </div>
-            <div style="height:260px;position:relative;">
-                <canvas id="analytics-trend-chart"></canvas>
-            </div>
-        </div>
-
-        <!-- Unique Visitors -->
-        <div style="${T.glassLight}padding:24px;display:flex;align-items:center;gap:16px;">
-            <span class="material-symbols-outlined" style="font-size:32px;color:#9AA3AD;">group</span>
-            <div>
-                <div style="font-size:14px;color:#C7CDD4;font-weight:600;">Unique Visitors (30 days)</div>
-                <div id="analytics-unique" style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:300;color:#F5F7FA;">--</div>
-            </div>
-        </div>`;
-    }
-
-    function renderFunnelStep(label, value, pct, color) {
-        const width = Math.max(pct, 8);
-        return `
-        <div style="display:flex;align-items:center;gap:16px;padding:8px 0;">
-            <div style="width:140px;font-size:13px;color:#C7CDD4;font-weight:500;text-align:right;flex-shrink:0;">${label}</div>
-            <div style="flex:1;position:relative;height:36px;background:rgba(194,199,202,0.1);border-radius:6px;overflow:hidden;">
-                <div style="height:100%;width:${width}%;background:${color};border-radius:6px;transition:width 0.6s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:12px;">
-                    <span style="font-size:14px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.2);" class="funnel-val">${formatNum(value)}</span>
-                </div>
-            </div>
-            <div style="width:50px;font-size:12px;color:#9AA3AD;text-align:right;flex-shrink:0;" class="funnel-pct">${pct > 0 ? pct + '%' : '--'}</div>
-        </div>`;
-    }
-
-    async function loadEventAnalytics(s) {
-        // Ensure globalSettings is loaded (may not be if user navigated directly to store page)
-        if (!globalSettings || !globalSettings.api_token) {
-            try { globalSettings = await api('GET', 'settings'); } catch (e) {}
-        }
-        const backendUrl = globalSettings.backend_url || 'https://mark-udfz.onrender.com';
-        const settings = globalSettings || {};
-        const token = settings.api_token || '';
-        const remoteStoreId = settings.remote_store_id || s.store_id;
-
-        try {
-            const resp = await fetch(backendUrl + '/api/stores/' + remoteStoreId + '/event-analytics?days=30', {
-                headers: { 'X-Store-Token': token }
-            });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            const data = await resp.json();
-
-            const totals = data.totals || {};
-            const daily = data.daily || {};
-            const leads = data.lead_count || 0;
-            const unique = data.unique_visitors || 0;
-
-            // Update stat cards
-            const cardValues = [
-                totals.widget_open || 0,
-                totals.chat_start || 0,
-                totals.chat_message || 0,
-                totals.voice_used || 0,
-                totals.link_clicked || 0,
-                leads
-            ];
-            const cards = document.querySelectorAll('#analytics-cards > div');
-            cards.forEach((card, i) => {
-                const numEl = card.querySelector('div:last-child');
-                if (numEl && cardValues[i] !== undefined) numEl.textContent = formatNum(cardValues[i]);
-            });
-
-            // Update funnel
-            const funnelData = [
-                totals.widget_open || 0,
-                totals.chat_start || 0,
-                totals.chat_message || 0,
-                leads
-            ];
-            const funnelMax = Math.max(funnelData[0], 1);
-            const funnelContainer = document.getElementById('analytics-funnel');
-            if (funnelContainer) {
-                const steps = funnelContainer.querySelectorAll(':scope > div');
-                steps.forEach((step, i) => {
-                    const pct = Math.round((funnelData[i] / funnelMax) * 100);
-                    const bar = step.querySelector('div:nth-child(2) > div');
-                    const valEl = step.querySelector('.funnel-val');
-                    const pctEl = step.querySelector('.funnel-pct');
-                    if (bar) bar.style.width = Math.max(pct, 8) + '%';
-                    if (valEl) valEl.textContent = formatNum(funnelData[i]);
-                    if (pctEl) pctEl.textContent = pct + '%';
-                });
-            }
-
-            // Update unique visitors
-            const uniqueEl = document.getElementById('analytics-unique');
-            if (uniqueEl) uniqueEl.textContent = formatNum(unique);
-
-            // Render daily trends chart
-            renderAnalyticsTrendChart(daily);
-
-        } catch (e) {
-            console.warn('Event analytics load error:', e);
-            // Show a subtle error message in the cards area
-            const cards = document.getElementById('analytics-cards');
-            if (cards) {
-                cards.insertAdjacentHTML('afterend',
-                    `<p style="color:#9AA3AD;font-size:13px;margin:-24px 0 24px;font-style:italic;">
-                        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">info</span>
-                        Event analytics unavailable — backend may be starting up. Try again in a moment.
-                    </p>`);
-            }
-        }
-    }
-
-    function renderAnalyticsTrendChart(dailyData) {
-        const canvas = document.getElementById('analytics-trend-chart');
-        if (!canvas || typeof Chart === 'undefined') return;
-
-        if (chartInstances.analyticsTrend) {
-            try { chartInstances.analyticsTrend.destroy(); } catch (e) {}
-        }
-
-        // Build sorted date labels from daily data
-        const dates = Object.keys(dailyData).sort();
-        const labels = dates.map(d => {
-            const dt = new Date(d + 'T00:00:00');
-            return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        });
-
-        const widgetOpens = dates.map(d => (dailyData[d] || {}).widget_open || 0);
-        const chatStarts = dates.map(d => (dailyData[d] || {}).chat_start || 0);
-        const voiceUsed = dates.map(d => (dailyData[d] || {}).voice_used || 0);
-
-        chartInstances.analyticsTrend = new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [
-                    {
-                        label: 'Widget Opens',
-                        data: widgetOpens,
-                        borderColor: '#2DE2E6',
-                        backgroundColor: 'rgba(45,226,230,0.08)',
-                        borderWidth: 2.5,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        pointBackgroundColor: '#2DE2E6',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                    },
-                    {
-                        label: 'Chats',
-                        data: chatStarts,
-                        borderColor: '#9AA3AD',
-                        backgroundColor: 'rgba(79,97,105,0.06)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        pointBackgroundColor: '#9AA3AD',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                    },
-                    {
-                        label: 'Voice',
-                        data: voiceUsed,
-                        borderColor: '#16a34a',
-                        backgroundColor: 'rgba(22,163,74,0.06)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
-                        pointBackgroundColor: '#16a34a',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: 'rgba(26,28,28,0.92)',
-                        titleFont: { family: "'Space Grotesk', sans-serif", size: 12 },
-                        bodyFont: { family: "'Space Grotesk', sans-serif", size: 13 },
-                        padding: 12,
-                        cornerRadius: 8,
-                        callbacks: {
-                            label: function(ctx) {
-                                return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y;
-                            }
-                        }
-                    },
-                },
-                scales: {
-                    x: {
-                        grid: { color: 'rgba(194,199,202,0.12)' },
-                        ticks: { font: { family: "'Space Grotesk', sans-serif", size: 11 }, color: '#9AA3AD', maxRotation: 45 },
-                    },
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(194,199,202,0.12)' },
-                        ticks: { font: { family: "'Space Grotesk', sans-serif", size: 11 }, color: '#9AA3AD', stepSize: 1 },
-                    },
-                },
-            },
-        });
     }
 
     /* ================================================================
@@ -2218,7 +1816,9 @@
        TAB: VOICE
        ================================================================ */
     function renderVoiceTab(s) {
-        const isPremium = (s.plan === 'premium');
+        // Any paid tier (starter/pro/business/premium) unlocks premium voices —
+        // must match the backend's plan_is_paid(), else paying stores lose the picker.
+        const isPremium = (s.plan || 'free').toLowerCase() !== 'free';
         const pv = s.premium_voice || 'onyx';
         const pvoices = [
             ['onyx','Onyx — deep male'], ['echo','Echo — calm male'], ['fable','Fable — expressive male'],
@@ -2317,7 +1917,8 @@
     }
 
     // E1/E4 — start the premium upgrade (Stripe checkout via backend).
-    async function upgradePlan() {
+    async function upgradePlan(plan) {
+        plan = plan || 'premium';
         try {
             const s = globalSettings || {};
             const backendUrl = s.backend_url || (markAI || {}).backendUrl || 'https://mark-udfz.onrender.com';
@@ -2328,12 +1929,12 @@
             const res = await fetch(backendUrl + '/api/billing/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Store-ID': remoteId, 'X-Store-Token': token },
-                body: JSON.stringify({})
+                body: JSON.stringify({ plan })
             });
             const d = await res.json();
             if (d && d.url) { window.open(d.url, '_blank'); }
-            else if (d && d.already_premium) { toast('You are already on Premium!', 'success'); }
-            else { toast((d && d.message) || 'Premium upgrade is coming soon.', 'info'); }
+            else if (d && d.already_on_plan) { toast("You're already on this plan!", 'success'); }
+            else { toast((d && d.message) || 'Upgrade is coming soon.', 'info'); }
         } catch (e) { toast('Could not start upgrade. Please try again.', 'error'); }
     }
 
@@ -2781,7 +2382,7 @@
        PUBLIC API
        ================================================================ */
     window.markAdmin = {
-        navigate, openStore, switchTab,
+        navigate,
         saveStoreSettings, saveSalesSettings, saveVoice, testVoice, saveAI,
         saveTraining, syncProducts,
         confirmDelete, deleteStore,

@@ -37,8 +37,10 @@ services:
       - { key: MOONSHOT_API_KEY, sync: false }
       - { key: OPENAI_API_KEY, sync: false }
       - { key: STRIPE_SECRET_KEY, sync: false }
-      - { key: STRIPE_PRICE_ID, sync: false }
+      - { key: STRIPE_PRICE_ID, sync: false }          # legacy single premium price (still works)
+      - { key: STRIPE_PRICE_TIERS, sync: false }       # JSON {price_id: plan} for self-serve Starter/Pro/Business
       - { key: STRIPE_WEBHOOK_SECRET, sync: false }
+      - { key: OPS_METRICS_KEY, sync: false }          # gates GET /api/ops/metrics (fleet cost dashboard)
 
   # ---------- STAGING ----------
   - type: web

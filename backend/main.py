@@ -106,6 +106,7 @@ FREE_MONTHLY_QUOTA = int(os.getenv("FREE_MONTHLY_QUOTA", "500"))
 PREMIUM_MONTHLY_QUOTA = int(os.getenv("PREMIUM_MONTHLY_QUOTA", "0"))   # 0 = unlimited
 GLOBAL_MONTHLY_CAP = int(os.getenv("GLOBAL_MONTHLY_CAP", "0"))         # 0 = off (global wallet circuit-breaker)
 STORE_RATE_PER_MIN = int(os.getenv("STORE_RATE_PER_MIN", "120"))      # per-store burst guard across IPs
+COST_PER_CHAT_USD = float(os.getenv("COST_PER_CHAT_USD", "0.001"))    # rough LLM spend/chat, for the ops dashboard
 
 # Pricing tiers → monthly chat quota (0 = unlimited). Maps the price card:
 # Free 500 · Starter 2k · Pro 10k · Business/Premium unlimited. Env-tunable.
@@ -1415,7 +1416,13 @@ async def chat_endpoint(request: Request, body: ChatRequest):
     # ── Streaming mode: send tokens as SSE for instant display ──
     if body.stream:
         def stream_generator():
+            # Buffered-scrub streaming: we emit the SCRUBBED cumulative text but always
+            # hold back a short tail, so a fabricated coupon / %-off that only becomes a
+            # full pattern across chunk boundaries is neutralized BEFORE it ever ships —
+            # not merely corrected in the final `done` payload. Lag is ~SAFE_TAIL chars.
             full_reply = []
+            emitted = 0                 # chars of the scrubbed reply already sent
+            SAFE_TAIL = 48              # > any coupon/%-off literal, so patterns can't straddle the cut
             try:
                 for token in router.stream(
                     messages=messages_for_api,
@@ -1424,11 +1431,16 @@ async def chat_endpoint(request: Request, body: ChatRequest):
                     temperature=temperature,
                 ):
                     full_reply.append(token)
-                    yield f"data: {json.dumps({'token': token})}\n\n"
+                    safe = sales_boost.scrub(''.join(full_reply), tenant)
+                    flush_to = len(safe) - SAFE_TAIL
+                    if flush_to > emitted:
+                        yield f"data: {json.dumps({'token': safe[emitted:flush_to]})}\n\n"
+                        emitted = flush_to
 
-                complete = ''.join(full_reply)
-                complete = sales_boost.scrub(complete, tenant)   # safety net on the final/cached/logged copy
+                complete = sales_boost.scrub(''.join(full_reply), tenant)   # final/cached/logged copy
                 if complete:
+                    if len(complete) > emitted:      # flush the held-back tail
+                        yield f"data: {json.dumps({'token': complete[emitted:]})}\n\n"
                     yield f"data: {json.dumps({'done': True, 'response': complete})}\n\n"
                     log_conversation(ip, cleaned, body.user_language, complete, body.store_id, body.visitor_name or "")
                     capture_learning_async(tenant, ip, cleaned, complete, body.user_language)
@@ -1499,8 +1511,12 @@ async def sync_voice(body: SyncVoiceRequest,
     return {"status": "ok", "updated": list(updates.keys())}
 
 
-# ── Billing: premium tier (Stripe) ──────────────────────────
+# ── Billing: paid plans (Stripe) ────────────────────────────
+_PAID_PLANS = ("starter", "pro", "business", "premium")
+
+
 class CheckoutRequest(BaseModel):
+    plan: Optional[str] = None          # starter | pro | business | premium (default premium)
     success_url: Optional[str] = None
     cancel_url: Optional[str] = None
 
@@ -1508,17 +1524,19 @@ class CheckoutRequest(BaseModel):
 @app.post("/api/billing/checkout")
 async def billing_checkout(body: CheckoutRequest, x_store_id: Optional[str] = Header(None),
                            user=Depends(verify_store_token_or_user)):
-    """Start a Stripe Checkout for the premium voice tier. Store-token authed."""
+    """Start a Stripe Checkout for a paid plan. Store-token authed."""
     store_id = _sync_store_id(user, x_store_id)
     if not billing.is_configured():
-        return {"configured": False, "message": "Premium upgrade is coming soon."}
+        return {"configured": False, "message": "Upgrade is coming soon."}
+    plan = body.plan if body.plan in _PAID_PLANS else "premium"
     tenant = resolve_tenant(store_id)
-    if tenant and tenant.get("plan") == "premium":
-        return {"configured": True, "already_premium": True}
+    if tenant and tenant.get("plan") == plan:
+        return {"configured": True, "already_on_plan": True, "plan": plan}
     try:
         url = billing.create_checkout_session(
             store_id=store_id,
             store_name=(tenant or {}).get("store_name", ""),
+            plan=plan,
             success_url=body.success_url or "",
             cancel_url=body.cancel_url or "",
         )
@@ -1759,6 +1777,56 @@ async def get_store_conversations(store_id: str, user=Depends(verify_store_token
     except Exception:
         pass
     return data
+
+
+# ── Observability: platform-owner fleet metrics ─────────────
+OPS_METRICS_KEY = os.getenv("OPS_METRICS_KEY", "")
+
+
+@app.get("/api/ops/metrics")
+async def ops_metrics(x_ops_key: Optional[str] = Header(None)):
+    """Fleet-wide cost/usage snapshot for the platform owner (Power Admin feeds off this).
+
+    Gated by the OPS_METRICS_KEY env (header ``X-Ops-Key``); disabled — 404 — when
+    unset, so it never leaks tenant data by default. Reuses the same store_usage the
+    cost firewall writes, so the numbers match what actually throttles chats.
+    """
+    import secrets as _secrets
+    if not OPS_METRICS_KEY:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not x_ops_key or not _secrets.compare_digest(x_ops_key, OPS_METRICS_KEY):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    period = time.strftime("%Y-%m", time.gmtime())
+    rows = []
+    total_chats = 0
+    for s in get_all_active_stores():
+        sid = s.get("store_id", "")
+        plan = s.get("plan", "free")
+        used = get_usage(sid, period)
+        limit = plan_quota(plan)
+        total_chats += used
+        rows.append({
+            "store_id": sid,
+            "store_name": s.get("store_name", ""),
+            "website_url": s.get("website_url", ""),
+            "plan": plan,
+            "monthly_used": used,
+            "monthly_limit": limit,                                  # 0 = unlimited
+            "pct": (round(used / limit * 100, 1) if limit else None),
+            "over_quota": bool(limit and used >= limit),
+            "est_cost_usd": round(used * COST_PER_CHAT_USD, 2),      # rough LLM spend
+        })
+    rows.sort(key=lambda r: r["monthly_used"], reverse=True)         # cost hotspots first
+    return {
+        "period": period,
+        "store_count": len(rows),
+        "total_chats": total_chats,
+        "est_total_cost_usd": round(total_chats * COST_PER_CHAT_USD, 2),
+        "global_used": get_usage("__global__", period) if GLOBAL_MONTHLY_CAP else None,
+        "global_cap": GLOBAL_MONTHLY_CAP or None,
+        "stores": rows,
+    }
 
 
 # ── MAIE: Adaptive Learning (playbook) endpoints ─────────────
