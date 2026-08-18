@@ -3,6 +3,9 @@
 *.env
 .env.*
 backend/.env
+# …but DO track the annotated template
+!.env.example
+!**/.env.example
 
 # ─── Python ───
 __pycache__/
